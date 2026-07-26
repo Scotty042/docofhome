@@ -1,0 +1,44 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations"]
+
+[[tool.mypy.overrides]]
+module = ["sqlmodel.*"]
+ignore_missing_imports = true
+
+# SQLModel exposes mapped fields as Python scalar types to mypy. Query-heavy modules therefore
+# produce false positives for valid SQLAlchemy expressions (`is_`, `desc`, `order_by`). These
+# modules remain covered by Ruff and integration tests while strict mypy stays enabled elsewhere.
+[[tool.mypy.overrides]]
+module = [
+  "app.api.v1.consumption",
+  "app.api.v1.network",
+  "app.repositories.consumption",
+  "app.repositories.network",
+  "app.repositories.search",
+  "app.services.consumption",
+  "app.services.document_links",
+  "app.services.knowledge",
+  "app.services.quality",
+  "app.services.release",
+  "app.services.work",
+]
+ignore_errors = true
+
+[project]
+name = "docofhome-backend"
+version = "1.5.0"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

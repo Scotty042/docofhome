@@ -1,0 +1,32 @@
+{
+  "name": "jarvis-frontend",
+  "private": true,
+  "version": "1.5.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "node scripts/check-mdi-icons.mjs && vue-tsc --noEmit && vite build",
+    "test": "node scripts/check-mdi-icons.mjs && vitest run",
+    "check:icons": "node scripts/check-mdi-icons.mjs",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@mdi/font": "7.4.47",
+    "@tanstack/vue-query": "5.83.0",
+    "@vueuse/core": "13.5.0",
+    "pinia": "3.0.3",
+    "vue": "3.5.17",
+    "vue-router": "4.5.1",
+    "vuetify": "3.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.0",
+    "typescript": "5.8.3",
+    "vite": "7.0.5",
+    "vitest": "3.2.4",
+    "vue-tsc": "3.0.1"
+  }
+}
