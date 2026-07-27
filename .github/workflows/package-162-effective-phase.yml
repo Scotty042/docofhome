@@ -1,0 +1,149 @@
+name: Package corrected DocOfHome 1.6.2 effective phases
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - artifacts/**
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Apply read-path and frontend fallback correction
+        run: python3 scripts/apply_162_phase_fix_v2.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff changed phase files
+        working-directory: backend
+        run: |
+          ruff check \
+            app/api/v1/electrical_topology.py \
+            app/services/electrical_topology.py \
+            app/services/electrical_topology_effective.py \
+            tests/test_effective_connection_phases.py \
+            tests/test_effective_topology_service.py
+
+      - name: Mypy changed phase service
+        working-directory: backend
+        run: |
+          mypy \
+            app/api/v1/electrical_topology.py \
+            app/services/electrical_topology_effective.py
+
+      - name: Full backend tests and migration
+        working-directory: backend
+        run: |
+          python -m pytest -q
+          JARVIS_DATA_DIR="$RUNNER_TEMP/jarvis-data" alembic upgrade head
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Full frontend tests and production build
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run build
+
+      - name: Docker production build
+        run: docker build -t docofhome:1.6.2 .
+
+      - name: Create verified release files
+        shell: bash
+        run: |
+          rm -rf frontend/node_modules frontend/dist
+          find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
+          rm -rf artifacts
+          rm -f .github/workflows/build-162-effective-phase.yml
+          rm -f .github/workflows/build-162-effective-phase-v2.yml
+          rm -f .github/workflows/build-162-effective-phase-pr.yml
+          rm -f .github/workflows/diagnose-ruff.yml
+          rm -f .github/workflows/package-162-effective-phase.yml
+          rm -f scripts/apply_162_phase_fix.py scripts/apply_162_phase_fix_v2.py
+          rm -f backend/tests/test_effective_connection_phases.py
+          mkdir -p artifacts
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          excluded = {
+              '.git', 'artifacts', 'node_modules', 'dist', '__pycache__',
+              '.pytest_cache', '.mypy_cache', '.ruff_cache'
+          }
+          files = sorted(
+              path for path in Path('.').rglob('*')
+              if path.is_file() and not any(part in excluded for part in path.parts)
+          )
+          lines = [
+              '# DocOfHome 1.6.2 – Release-Manifest',
+              '# Format: SHA256  SIZE_BYTES  PATH',
+              f'# Dateien: {len(files)}',
+          ]
+          for path in files:
+              data = path.read_bytes()
+              lines.append(
+                  f'{hashlib.sha256(data).hexdigest()}  {len(data)}  {path.as_posix()}'
+              )
+          Path('artifacts/DocOfHome-1.6.2-MANIFEST.txt').write_text(
+              '\n'.join(lines) + '\n', encoding='utf-8'
+          )
+          Path('artifacts/DocOfHome-1.6.2-VALIDATION.md').write_text(
+              '# DocOfHome 1.6.2 – Validierungsbericht\n\n'
+              '## Korrektur\n\n'
+              '- Bei einer Sicherung unter einer Sammel-/Phasenschiene ersetzt die aus '
+              'Startphase und TE-Position berechnete Außenleiterphase alte gespeicherte '
+              'L1/L2/L3-Werte vollständig.\n'
+              '- N und PE bleiben erhalten.\n'
+              '- Die Topologieanzeige fällt nicht mehr auf alte gespeicherte Phasen zurück.\n\n'
+              '## Ausgeführte Prüfungen\n\n'
+              '- Ruff für alle geänderten Phasen-/Topologiedateien: erfolgreich\n'
+              '- mypy für den geänderten API-/Servicepfad: erfolgreich\n'
+              '- vollständige Pytest-Suite: erfolgreich\n'
+              '- Alembic Upgrade bis Head: erfolgreich\n'
+              '- vollständige Frontendtests: erfolgreich\n'
+              '- npm production build: erfolgreich\n'
+              '- Docker production build: erfolgreich\n',
+              encoding='utf-8',
+          )
+          PY
+          zip -q -r "$RUNNER_TEMP/DocOfHome-1.6.2.zip" . \
+            -x '.git/*' 'artifacts/*' 'frontend/node_modules/*' 'frontend/dist/*' \
+               '*/__pycache__/*' '*/.pytest_cache/*' '*/.mypy_cache/*' '*/.ruff_cache/*'
+          cp "$RUNNER_TEMP/DocOfHome-1.6.2.zip" artifacts/DocOfHome-1.6.2.zip
+          (cd artifacts && sha256sum DocOfHome-1.6.2.zip > DocOfHome-1.6.2.zip.sha256)
+          unzip -tq artifacts/DocOfHome-1.6.2.zip
+
+      - name: Publish verified package to head branch
+        run: |
+          git config user.name 'DocOfHome Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -f artifacts/DocOfHome-1.6.2.zip \
+            artifacts/DocOfHome-1.6.2.zip.sha256 \
+            artifacts/DocOfHome-1.6.2-MANIFEST.txt \
+            artifacts/DocOfHome-1.6.2-VALIDATION.md
+          git commit -m 'Add verified corrected DocOfHome 1.6.2 package [skip ci]'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
