@@ -2,7 +2,7 @@
 =================================== FAILURES ===================================
 _________ test_busbar_phase_is_forced_when_wiring_a_protective_device __________
 
-topology_client = <starlette.testclient.TestClient object at 0x7fa6c6329f30>
+topology_client = <starlette.testclient.TestClient object at 0x7fba0bd37ce0>
 
     def test_busbar_phase_is_forced_when_wiring_a_protective_device(
         topology_client: TestClient,
@@ -55,9 +55,9 @@ topology_client = <starlette.testclient.TestClient object at 0x7fa6c6329f30>
 tests/test_electrical_topology.py:510: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-client = <starlette.testclient.TestClient object at 0x7fa6c6329f30>
+client = <starlette.testclient.TestClient object at 0x7fba0bd37ce0>
 endpoint = 'electrical/distributions'
-payload = {'asset_id': '0a6b8b6d-d4f3-43b5-baa3-b611490b8798', 'description': None, 'designation': 'HV', 'distribution_type': 'main', ...}
+payload = {'asset_id': 'f3ce79da-0b12-4cab-87ba-cd7f7ad22e88', 'description': None, 'designation': 'HV', 'distribution_type': 'main', ...}
 
     def create(client: TestClient, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         response = client.post(f"/api/v1/{endpoint}", json=payload)
@@ -71,4 +71,4 @@ tests/test_electrical_topology.py:33: AssertionError
 FAILED tests/test_electrical_topology.py::test_busbar_phase_is_forced_when_wiring_a_protective_device - AssertionError: {"detail":"Für diese Rolle ist ein Asset vom Typ „Elektrische Verteilung“ erforderlich"}
 assert 422 == 201
  +  where 422 = <Response [422 Unprocessable Entity]>.status_code
-1 failed, 9 passed in 4.51s
+1 failed, 9 passed in 4.21s
