@@ -1,0 +1,5 @@
+app/schemas/electrical.py:7: error: Module "app.schemas.electrical_layout" does not explicitly export attribute "ElectricalPhase"  [attr-defined]
+app/repositories/electrical_topology.py:288: error: Incompatible types in assignment (expression has type "ElectricalDistribution | None", variable has type "ElectricalDistribution")  [assignment]
+app/services/smart_meter.py:109: error: Argument 1 to "where" of "DMLWhereBase" has incompatible type "bool"; expected "ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement"  [arg-type]
+app/services/smart_meter.py:193: error: Argument 1 to "where" of "DMLWhereBase" has incompatible type "bool"; expected "ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement"  [arg-type]
+Found 4 errors in 3 files (checked 2 source files)
