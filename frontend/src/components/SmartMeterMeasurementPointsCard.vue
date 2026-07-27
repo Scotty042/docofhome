@@ -58,7 +58,7 @@ const roleItems: Array<{ title: string; value: SmartMeterMeasurementEntityRole }
 const connectionItems = computed(() => connections.value.map((connection) => ({
   value: connection.id,
   title: connection.label || `${connection.source.name} → ${connection.target.name}`,
-  subtitle: [connection.source.type_name, connection.target.type_name, connection.phases.join(', ')]
+  subtitle: [connection.source.type_name, connection.target.type_name, connection.effective_phases.join(', ')]
     .filter(Boolean).join(' · ')
 })))
 const entityItems = computed(() => entities.value.map((entity) => ({

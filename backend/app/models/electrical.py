@@ -37,7 +37,7 @@ class ElectricalDistribution(SQLModel, table=True):
             name="ck_electrical_distributions_type_parent",
         ),
         CheckConstraint(
-            "layout_mode IN ('rows', 'sections')",
+            "layout_mode IN ('rows', 'sections', 'junction_box')",
             name="ck_electrical_distributions_layout_mode",
         ),
         CheckConstraint(
@@ -298,6 +298,10 @@ class ElectricalCabinetComponent(SQLModel, table=True):
             "start_phase IS NULL OR start_phase IN ('L1', 'L2', 'L3')",
             name="ck_electrical_cabinet_components_start_phase",
         ),
+        CheckConstraint(
+            "mounting_side IS NULL OR mounting_side IN ('above', 'below')",
+            name="ck_electrical_cabinet_components_mounting_side",
+        ),
         Index(
             "ix_electrical_cabinet_components_area_row",
             "area_id",
@@ -336,6 +340,7 @@ class ElectricalCabinetComponent(SQLModel, table=True):
         index=True,
     )
     start_phase: str | None = Field(default=None, max_length=2)
+    mounting_side: str | None = Field(default=None, max_length=10)
     description: str | None = None
     notes: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

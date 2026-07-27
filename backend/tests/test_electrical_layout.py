@@ -773,6 +773,140 @@ def test_din_asset_can_use_width_from_asset_or_asset_type_without_product(
     assert "DIN-Breite" in rejected.text
 
 
+def test_busbar_overlays_din_assets_and_only_conflicts_on_same_mounting_side(
+    layout_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = layout_client
+    room, distribution_assets = setup_assets(client, count=1)
+    distribution = create(
+        client,
+        "electrical/distributions",
+        {
+            "asset_id": distribution_assets[0]["id"],
+            "parent_distribution_id": None,
+            "distribution_type": "main",
+            "layout_mode": "rows",
+            "designation": "HV mit Kammschiene",
+            "rows": 1,
+            "modules_per_row": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+    din_type = create(
+        client,
+        "asset-types",
+        {
+            "name": "DIN-Hutschienengerät",
+            "description": "Vier TE breites Gerät",
+            "module_width": 4,
+        },
+    )
+    din_asset = create(
+        client,
+        "assets",
+        {
+            "name": "Sicherungsreihe",
+            "asset_type_id": din_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    placed = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{din_asset['id']}/placement",
+        json={"area_id": None, "row_number": 1, "start_position": 1},
+    )
+    assert placed.status_code == 200, placed.text
+
+    below = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        "/cabinet-components",
+        json={
+            "name": "Kammschiene unterhalb",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert below.status_code == 201, below.text
+
+    above = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        "/cabinet-components",
+        json={
+            "name": "Kammschiene oberhalb",
+            "component_type": "busbar",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "above",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert above.status_code == 201, above.text
+
+    later_asset = create(
+        client,
+        "assets",
+        {
+            "name": "Nachträglich platziertes DIN-Gerät",
+            "asset_type_id": din_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    later_placement = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{later_asset['id']}/placement",
+        json={"area_id": None, "row_number": 1, "start_position": 5},
+    )
+    assert later_placement.status_code == 200, later_placement.text
+
+    duplicate_below = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        "/cabinet-components",
+        json={
+            "name": "Zweite Kammschiene unterhalb",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 4,
+            "module_width": 4,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 4,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert duplicate_below.status_code == 409
+    assert "Montageebene unterhalb" in duplicate_below.text
+
+
 def test_protective_device_inherits_din_width_from_asset_type(
     layout_client: tuple[TestClient, Engine],
 ) -> None:

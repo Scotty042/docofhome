@@ -17,8 +17,15 @@ vollständigeren PV-Auswertung und konsistenter technischer Dokumentation.
   Werte werden für Periodenvergleiche zusammengeführt.
 - Wikimedia Commons und DuckDuckGo Images lassen sich einzeln aktivieren. Das
   Backend setzt diese Auswahl durch und führt relevante Treffer zusammen.
-- Direkte elektrische Verbindungen werden am Asset angezeigt. Abgänge eines
-  Phasenverteilers sind nach Phase gruppiert.
+- Direkte elektrische Verbindungen werden am Asset angezeigt. Ab einem
+  Phasenverteilerblock sind die vollständigen Versorgungswege bis zum jeweiligen
+  Endpunkt in Anschlussreihenfolge nach L1, L2, L3, mehrphasig und nicht
+  zugeordnet gruppiert. Die Wege sind in der Elektro-Topologie und direkt im
+  Zähler-/Sicherungsschrank aufklappbar; fehlende Phasenangaben, Phasenwechsel
+  und Zyklen werden gekennzeichnet.
+- In der kompakten Zähler-/Sicherungsschrankansicht werden Namen von Geräten mit
+  einer Teilungseinheit vollständig hochkant dargestellt; Kurzwerte wie `B16`
+  bleiben am Kartenfuß horizontal lesbar.
 - Schutzgeräte werden über eine zentrale Klassifikation erkannt, auch wenn sie
   als allgemeine DIN-Platzierung dokumentiert sind.
 - Netzwerkschnittstellen besitzen eine eindeutige primäre Schnittstelle je Gerät.

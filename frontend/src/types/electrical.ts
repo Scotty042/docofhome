@@ -4,10 +4,12 @@ export type { Page, SortOrder } from './assets'
 
 export type ElectricalRole = 'distribution' | 'protective_device'
 export type DistributionType = 'main' | 'sub'
-export type DistributionLayoutMode = 'rows' | 'sections'
+export type DistributionLayoutMode = 'rows' | 'sections' | 'junction_box'
 export type DistributionAreaType = 'device_rows' | 'meter' | 'connection' | 'neutral_rail' | 'protective_earth_rail' | 'technology' | 'reserve' | 'cover'
 export type DistributionAreaWidth = 'full' | 'half'
 export type DistributionAreaSide = 'left' | 'right'
+export type ElectricalRailMountingSide = 'above' | 'below'
+
 export type ElectricalCabinetComponentType = 'phase_distribution_block' | 'busbar' | 'phase_rail' | 'neutral_rail' | 'protective_earth_rail' | 'terminal_block' | 'connection_block' | 'potential_distribution' | 'other'
 export type ProtectiveDeviceType = 'fuse' | 'rcd' | 'mcb' | 'rcbo' | 'spd'
 
@@ -203,6 +205,7 @@ export interface ElectricalCabinetComponent {
   linked_rcd_device_id: string | null
   linked_rcd_name: string | null
   start_phase: ElectricalPhase | null
+  mounting_side: ElectricalRailMountingSide | null
   description: string | null
   notes: string | null
   created_at: string
@@ -223,6 +226,7 @@ export interface ElectricalCabinetComponentWrite {
   outgoing_connections: number | null
   linked_rcd_device_id: string | null
   start_phase: ElectricalPhase | null
+  mounting_side: ElectricalRailMountingSide | null
   description: string | null
   notes: string | null
 }
@@ -341,6 +345,7 @@ export interface ElectricalEndpoint {
   type_name: string
   location_name: string | null
   device_type: ProtectiveDeviceType | ElectricalCabinetComponentType | null
+  effective_phases: ElectricalPhase[] | null
   deleted_at: string | null
 }
 
@@ -367,6 +372,8 @@ export interface ElectricalConnection {
   connection_type: ElectricalConnectionType
   label: string | null
   phases: ElectricalPhase[]
+  effective_phases: ElectricalPhase[]
+  phase_warnings: string[]
   cable_type: string | null
   cores: number | null
   cross_section_mm2: number | null

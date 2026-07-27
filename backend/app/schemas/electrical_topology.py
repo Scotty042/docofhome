@@ -41,6 +41,7 @@ class ElectricalEndpointRead(BaseModel):
     type_name: str
     location_name: str | None
     device_type: str | None = None
+    effective_phases: list[ElectricalPhase] | None = None
     deleted_at: datetime | None = None
 
 
@@ -95,6 +96,8 @@ class ElectricalConnectionRead(BaseModel):
     connection_type: ElectricalConnectionType
     label: str | None
     phases: list[ElectricalPhase]
+    effective_phases: list[ElectricalPhase]
+    phase_warnings: list[str] = Field(default_factory=list)
     cable_type: str | None
     cores: int | None
     cross_section_mm2: float | None

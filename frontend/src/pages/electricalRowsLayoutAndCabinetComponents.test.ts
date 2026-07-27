@@ -39,6 +39,26 @@ describe('simple electrical rows and passive cabinet components', () => {
     expect(layout).toContain('assetPlacementsForArea(area.id).filter')
     expect(layout).toContain('Noch nicht platzierte DIN-Assets')
     expect(layout).toContain('asset.effective_module_width')
+    expect(layout).toContain('excludeDeviceId !== null || excludeAssetId !== null')
+  })
+
+  it('renders one-TE devices with a reliable vertical compact label', () => {
+    expect(layout).toContain(
+      "'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1"
+    )
+    expect(layout).toContain(
+      "'narrow-module-device': viewMode === 'compact' && placement.module_width === 1"
+    )
+    expect(layout).toContain('class="module-device-name"')
+    expect(layout).toContain('writing-mode: vertical-rl')
+    expect(layout).toContain('transform: rotate(180deg)')
+  })
+
+  it('keeps cabinet component validation errors inside the open dialog', () => {
+    expect(layout).toContain('const cabinetComponentError = ref<string | null>(null)')
+    expect(layout).toContain('v-if="cabinetComponentError"')
+    expect(layout).toContain('{{ cabinetComponentError }}')
+    expect(layout).toContain('cabinetComponentError.value = reason instanceof Error')
   })
 
 })

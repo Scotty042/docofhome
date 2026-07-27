@@ -14,7 +14,7 @@ from app.models.electrical import (
 from app.models.electrical_circuit import ElectricalCircuit
 from app.models.electrical_topology import ElectricalConnection
 from app.models.energy import EnergyConfiguration
-from app.schemas.electrical_topology import ElectricalEndpointKind
+from app.schemas.electrical_topology import ElectricalEndpointKind, ElectricalPhase
 
 
 GRID_CONNECTION_ENDPOINT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -30,6 +30,7 @@ class ElectricalEndpointProjection:
     location_name: str | None
     device_type: str | None
     deleted_at: datetime | None
+    effective_phases: tuple[ElectricalPhase, ...] | None = None
 
     @property
     def key(self) -> str:
@@ -135,6 +136,9 @@ class ElectricalEndpointRepository:
         components = {
             item.id: item for item in self.session.exec(select(ElectricalComponent)).all()
         }
+        cabinet_components = list(
+            self.session.exec(select(ElectricalCabinetComponent)).all()
+        )
         distributions = {
             item.id: item
             for item in self.session.exec(select(ElectricalDistribution)).all()
@@ -155,6 +159,13 @@ class ElectricalEndpointRepository:
             location_name=(energy.grid_operator if energy else None),
             device_type=None,
             deleted_at=None,
+            effective_phases=(
+                ElectricalPhase.L1,
+                ElectricalPhase.L2,
+                ElectricalPhase.L3,
+                ElectricalPhase.N,
+                ElectricalPhase.PE,
+            ),
         )
         projections[grid.key] = grid
 
@@ -169,6 +180,52 @@ class ElectricalEndpointRepository:
                 asset.jarvis_code,
                 asset.deleted_at,
             )
+
+        def protective_device_phases(
+            device: ElectricalProtectiveDevice,
+        ) -> tuple[ElectricalPhase, ...] | None:
+            if device.row_number is None or device.start_position is None:
+                return None
+            candidates = [
+                component
+                for component in cabinet_components
+                if component.deleted_at is None
+                and component.distribution_id == device.distribution_id
+                and component.area_id == device.area_id
+                and component.row_number == device.row_number
+                and component.component_type in {"busbar", "phase_rail"}
+                and component.start_position <= device.start_position
+                <= component.start_position + component.module_width - 1
+            ]
+            candidates.sort(
+                key=lambda item: (item.module_width, item.start_position, item.name.casefold())
+            )
+            if not candidates:
+                return None
+            rail = candidates[0]
+            enabled = [
+                phase
+                for phase, selected in (
+                    (ElectricalPhase.L1, rail.phase_l1),
+                    (ElectricalPhase.L2, rail.phase_l2),
+                    (ElectricalPhase.L3, rail.phase_l3),
+                )
+                if selected
+            ]
+            if not enabled:
+                return None
+            standard = [ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3]
+            start = (
+                ElectricalPhase(rail.start_phase)
+                if rail.start_phase in {item.value for item in standard}
+                else enabled[0]
+            )
+            rotated = standard[standard.index(start):] + standard[:standard.index(start)]
+            pattern = [phase for phase in rotated if phase in enabled]
+            offset = device.start_position - rail.start_position
+            count = min(3, device.poles or 1)
+            phases = [pattern[(offset + index) % len(pattern)] for index in range(count)]
+            return tuple(dict.fromkeys(phases))
 
         for asset in assets.values():
             if asset.id in component_asset_ids:
@@ -223,12 +280,11 @@ class ElectricalEndpointRepository:
                 location_name=location_name,
                 device_type=device.device_type,
                 deleted_at=component.deleted_at or asset_deleted_at,
+                effective_phases=protective_device_phases(device),
             )
             projections[item.key] = item
 
-        for cabinet_component in self.session.exec(
-            select(ElectricalCabinetComponent)
-        ).all():
+        for cabinet_component in cabinet_components:
             distribution = distributions.get(cabinet_component.distribution_id)
             distribution_role = (
                 components.get(distribution.id) if distribution is not None else None
@@ -266,6 +322,17 @@ class ElectricalEndpointRepository:
                     cabinet_component.deleted_at
                     or (distribution_role.deleted_at if distribution_role else None)
                     or (distribution_asset.deleted_at if distribution_asset else None)
+                ),
+                effective_phases=tuple(
+                    phase
+                    for phase, selected in (
+                        (ElectricalPhase.L1, cabinet_component.phase_l1),
+                        (ElectricalPhase.L2, cabinet_component.phase_l2),
+                        (ElectricalPhase.L3, cabinet_component.phase_l3),
+                        (ElectricalPhase.N, cabinet_component.neutral),
+                        (ElectricalPhase.PE, cabinet_component.protective_earth),
+                    )
+                    if selected
                 ),
             )
             projections[item.key] = item

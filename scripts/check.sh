@@ -4,16 +4,11 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 cd "$ROOT_DIR"
-python scripts/check-release-1.2.4.py
-python scripts/check-release-1.3.0.py
-python scripts/check-release-1.3.1.py
-python scripts/check-release-1.3.2.py
-python scripts/check-release-1.4.0.py
-python scripts/check-release-1.4.1.py
-python scripts/check-release-1.4.2.py
-python scripts/check-release-1.5.0.py
-python scripts/check-release-1.6.0.py
-python scripts/check-release-1.6.1.py
+python scripts/check-version.py
+python scripts/check-branding.py
+python scripts/check-collected-fixes.py
+python scripts/check-reading-reminders.py
+python scripts/check-release-1.6.2.py
 python scripts/check-migration-0030.py
 python scripts/check-migration-0031.py
 python scripts/check-migration-0032.py
@@ -22,6 +17,7 @@ python scripts/check-migration-0034.py
 python scripts/check-migration-0035.py
 python scripts/check-migration-0036.py
 python scripts/check-migration-0037.py
+python scripts/check-migration-0039.py
 
 cd "$ROOT_DIR/backend"
 ruff check app tests

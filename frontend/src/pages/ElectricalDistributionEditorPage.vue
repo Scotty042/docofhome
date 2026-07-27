@@ -41,7 +41,8 @@ const typeItems = [
 ]
 const layoutItems = [
   { title: 'Einfache Reihen', value: 'rows' },
-  { title: 'Felder und Bereiche', value: 'sections' }
+  { title: 'Felder und Bereiche', value: 'sections' },
+  { title: 'Verteilerdose', value: 'junction_box' }
 ]
 const requiredRule = (value: string | null) => Boolean(value) || 'Dieses Feld ist erforderlich.'
 const parentRule = (value: string | null) => (
@@ -105,16 +106,17 @@ async function save() {
   try {
     const distributionType = form.value.distribution_type as DistributionType
     const structured = form.value.layout_mode === 'sections'
+    const rowLayout = form.value.layout_mode === 'rows'
     const payload: DistributionWrite = {
       ...form.value,
       distribution_type: distributionType,
-      layout_mode: structured ? 'sections' : 'rows',
+      layout_mode: form.value.layout_mode,
       parent_distribution_id: distributionType === 'main'
         ? null
         : form.value.parent_distribution_id,
       designation: optionalText(form.value.designation),
-      rows: structured ? null : optionalNumber(form.value.rows),
-      modules_per_row: structured ? null : optionalNumber(form.value.modules_per_row),
+      rows: rowLayout ? optionalNumber(form.value.rows) : null,
+      modules_per_row: rowLayout ? optionalNumber(form.value.modules_per_row) : null,
       description: optionalText(form.value.description),
       notes: optionalText(form.value.notes)
     }
@@ -255,6 +257,9 @@ async function save() {
               <v-alert type="info" variant="tonal" density="compact">
                 <template v-if="form.layout_mode === 'sections'">
                   Nach dem Speichern legst du Felder wie „Links“, „Mitte“ und „Rechts“ sowie deren Bereiche an.
+                </template>
+                <template v-else-if="form.layout_mode === 'junction_box'">
+                  Eine Verteilerdose ist ein struktureller Behälter für Klemmen und direkte Verbindungen. Sie besitzt keine fiktiven TE-Reihen.
                 </template>
                 <template v-else>
                   Unbekannte Kapazitäten bleiben leer; DocOfHome erzeugt keine technischen Annahmen.

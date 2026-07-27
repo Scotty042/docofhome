@@ -153,3 +153,42 @@ def test_current_month_is_complete_after_a_reading_today(
     assert result.value == pytest.approx(12.0)
     assert result.incomplete is False
     assert end < service._add_months(start.astimezone(service._timezone()), 1).astimezone(UTC)
+
+
+def test_dashboard_separates_pv_generation_and_feed_in_and_hides_unselected_pv(
+    consumption_session: Session,
+) -> None:
+    service = ConsumptionService(consumption_session)
+    service.create_meter(
+        ConsumptionMeterWrite(
+            name="PV Garage nicht im Dashboard",
+            meter_type=ConsumptionMeterType.ELECTRICITY_PV,
+            unit="kWh",
+            primary_for_dashboard=False,
+        )
+    )
+    media = {item.medium for item in service.dashboard_comparisons()}
+    assert "pv_generation" not in media
+    assert "pv_feed_in" not in media
+
+    service.create_meter(
+        ConsumptionMeterWrite(
+            name="PV Dach",
+            meter_type=ConsumptionMeterType.ELECTRICITY_PV,
+            unit="kWh",
+            primary_for_dashboard=True,
+        )
+    )
+    service.create_meter(
+        ConsumptionMeterWrite(
+            name="Netzeinspeisung",
+            meter_type=ConsumptionMeterType.ELECTRICITY_FEED_IN,
+            unit="kWh",
+            primary_for_dashboard=True,
+        )
+    )
+    rows = {item.medium: item for item in service.dashboard_comparisons()}
+    assert rows["pv_generation"].name == "PV-Erzeugung"
+    assert rows["pv_feed_in"].name == "PV eingespeist"
+    assert rows["pv_generation"].meter_id is not None
+    assert rows["pv_feed_in"].meter_id is not None

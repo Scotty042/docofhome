@@ -2,13 +2,13 @@
 
 Stand: 27. Juli 2026
 
-Release: 1.6.1
+Release: 1.6.2
 
-Alembic-Head: `0038`
+Alembic-Head: `0039`
 
-DocOfHome 1.6.1 bündelt Korrekturen für Zählerwechsel, PV-Dashboard,
-Produktbildquellen, elektrische Topologie, Schutzgeräte, Netzwerkschnittstellen
-und smarte DIN-Schaltaktoren.
+DocOfHome 1.6.2 ergänzt idempotente monatliche Ableseaufgaben, getrennte
+PV-/Einspeisekacheln, wirksame Phasenvalidierung, strukturelle Verteilungen,
+Verteilerdosen und paketfeste GitHub-Metadaten.
 
 ## Umgesetzter Funktionsstand
 
@@ -29,11 +29,11 @@ und smarte DIN-Schaltaktoren.
 
 ## Daten- und Updatezustand
 
-Migration `0038` ergänzt optionale Einstellungen, Rollen, Indizes und
-Standard-Stammdaten. Die
+Migration `0039` ergänzt Automationsschlüssel, Schienen-Montageposition und
+den Aufbau Verteilerdose. Migration `0038` bleibt Teil der vollständigen Kette. Die
 bestehenden Assets, Produkte, Verteilungen, Verkabelungen, Zählerstände,
 Home-Assistant-Zuordnungen, Bilder und Dokumente werden nicht ersetzt.
 
 Vor jedem Update ist ein vollständiges Backup des persistenten `data`-Ordners
-erforderlich. Details stehen in `RELEASE_NOTES_1.6.1.md` und den Dokumenten unter
+erforderlich. Details stehen in `RELEASE_NOTES_1.6.2.md` und den Dokumenten unter
 `docs/`.

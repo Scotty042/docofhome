@@ -14,7 +14,7 @@ from app.schemas.work import (
     WorkPriority,
     WorkStatus,
 )
-from app.services.work import WorkService, WorkValidationError
+from app.services.work import WorkConflictError, WorkService, WorkValidationError
 
 
 @pytest.fixture
@@ -106,3 +106,119 @@ def test_archived_target_keeps_existing_work_but_rejects_new_entries(
                 target_id=asset.id,
             )
         )
+
+
+def test_monthly_meter_task_is_idempotent_and_completed_by_reading(
+    work_session: Session,
+) -> None:
+    from app.models.consumption import ConsumptionMeter, ConsumptionReading
+
+    now = datetime.now(UTC)
+    meter = ConsumptionMeter(
+        name="Strombezug Haus",
+        meter_type="electricity_grid",
+        unit="kWh",
+        reading_schedule_day=now.day,
+    )
+    work_session.add(meter)
+    work_session.commit()
+
+    service = WorkService(work_session)
+    first = [item for item in service.list() if item.generated]
+    second = [item for item in service.list() if item.generated]
+    assert len(first) == 1
+    assert [item.id for item in second] == [first[0].id]
+    assert first[0].automation_key == f"meter-reading:{meter.id}:{now:%Y-%m}"
+    assert first[0].target_route == f"/consumption?read={meter.id}"
+    assert first[0].status == WorkStatus.OPEN
+
+    work_session.add(
+        ConsumptionReading(
+            meter_id=meter.id,
+            measured_at=now,
+            value=1234.5,
+        )
+    )
+    work_session.commit()
+
+    completed = next(item for item in service.list() if item.id == first[0].id)
+    assert completed.status == WorkStatus.COMPLETED
+    assert completed.completed_at is not None
+    assert service.events(completed.id)[0].note == (
+        "Automatisch durch gespeicherte Zählerablesung erledigt."
+    )
+
+
+def test_disabling_monthly_meter_plan_cancels_open_generated_task(
+    work_session: Session,
+) -> None:
+    from app.models.consumption import ConsumptionMeter
+
+    meter = ConsumptionMeter(
+        name="Gaszähler",
+        meter_type="gas",
+        unit="m³",
+        reading_schedule_last_day=True,
+    )
+    work_session.add(meter)
+    work_session.commit()
+    service = WorkService(work_session)
+    generated = next(item for item in service.list() if item.generated)
+
+    meter.reading_schedule_last_day = False
+    work_session.add(meter)
+    work_session.commit()
+
+    cancelled = next(item for item in service.list() if item.id == generated.id)
+    assert cancelled.status == WorkStatus.CANCELLED
+
+
+def test_reenabling_monthly_plan_reopens_generated_task(work_session: Session) -> None:
+    from app.models.consumption import ConsumptionMeter
+
+    meter = ConsumptionMeter(
+        name="Wasser Hauptzähler",
+        meter_type="water",
+        unit="m³",
+        reading_schedule_last_day=True,
+    )
+    work_session.add(meter)
+    work_session.commit()
+    service = WorkService(work_session)
+    generated = next(item for item in service.list() if item.generated)
+
+    meter.reading_schedule_last_day = False
+    work_session.add(meter)
+    work_session.commit()
+    assert next(item for item in service.list() if item.id == generated.id).status == (
+        WorkStatus.CANCELLED
+    )
+
+    meter.reading_schedule_day = 15
+    work_session.add(meter)
+    work_session.commit()
+    reopened = next(item for item in service.list() if item.id == generated.id)
+    assert reopened.status == WorkStatus.OPEN
+    assert service.events(reopened.id)[0].event_type == "reopened"
+
+
+def test_generated_meter_task_cannot_be_changed_manually(work_session: Session) -> None:
+    from app.models.consumption import ConsumptionMeter
+
+    meter = ConsumptionMeter(
+        name="PV-Erzeugung",
+        meter_type="electricity_pv",
+        unit="kWh",
+        reading_schedule_last_day=True,
+    )
+    work_session.add(meter)
+    work_session.commit()
+    service = WorkService(work_session)
+    generated = next(item for item in service.list() if item.generated)
+
+    with pytest.raises(WorkConflictError):
+        service.complete(generated.id, WorkCompletionWrite())
+    with pytest.raises(WorkConflictError):
+        service.cancel(generated.id)
+    with pytest.raises(WorkConflictError):
+        service.delete(generated.id)

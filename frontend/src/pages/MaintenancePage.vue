@@ -248,6 +248,7 @@ onMounted(() => void load())
           <v-list-item-title class="d-flex flex-wrap align-center ga-2">
             <span>{{ item.title }}</span>
             <v-chip size="x-small" variant="tonal">{{ typeLabel(item.item_type) }}</v-chip>
+            <v-chip v-if="item.generated" size="x-small" color="info" variant="tonal">Automatisch</v-chip>
             <v-chip size="x-small" :color="item.overdue ? 'error' : undefined" variant="tonal">{{ statusLabel(item.status) }}</v-chip>
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -263,11 +264,12 @@ onMounted(() => void load())
           </v-list-item-subtitle>
           <template #append>
             <div class="d-flex flex-wrap ga-1">
-              <v-btn v-if="item.status === 'open'" icon="mdi-pencil" size="small" variant="text" aria-label="Bearbeiten" @click="startEdit(item)" />
-              <v-btn v-if="item.status === 'open'" icon="mdi-check" size="small" color="success" variant="tonal" :loading="actionId === item.id" aria-label="Erledigen" @click="act(item, 'complete')" />
-              <v-btn v-if="item.status === 'open'" icon="mdi-close" size="small" variant="text" aria-label="Abbrechen" @click="act(item, 'cancel')" />
-              <v-btn v-else icon="mdi-refresh" size="small" variant="text" aria-label="Wieder öffnen" @click="act(item, 'reopen')" />
-              <v-btn icon="mdi-delete-outline" size="small" color="error" variant="text" aria-label="Löschen" @click="act(item, 'delete')" />
+              <v-btn v-if="item.generated && item.target_route && item.status === 'open'" icon="mdi-counter" size="small" color="primary" variant="tonal" aria-label="Zähler ablesen" :to="item.target_route" />
+              <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-pencil" size="small" variant="text" aria-label="Bearbeiten" @click="startEdit(item)" />
+              <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-check" size="small" color="success" variant="tonal" :loading="actionId === item.id" aria-label="Erledigen" @click="act(item, 'complete')" />
+              <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-close" size="small" variant="text" aria-label="Abbrechen" @click="act(item, 'cancel')" />
+              <v-btn v-else-if="!item.generated" icon="mdi-refresh" size="small" variant="text" aria-label="Wieder öffnen" @click="act(item, 'reopen')" />
+              <v-btn v-if="!item.generated" icon="mdi-delete-outline" size="small" color="error" variant="text" aria-label="Löschen" @click="act(item, 'delete')" />
             </div>
           </template>
         </v-list-item>

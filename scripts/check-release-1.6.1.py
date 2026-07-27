@@ -52,7 +52,19 @@ def main() -> int:
     )
     require(
         "frontend/src/services/electricalTopology.ts",
-        ("phaseDistributionGroups", "Mehrphasig"),
+        ("phaseDistributionGroups", "walkPath", "cycleDetected", "Mehrphasig"),
+    )
+    require(
+        "frontend/src/components/PhaseSupplyPathsCard.vue",
+        (
+            "Vollständige Reihenfolge ab Phasenverteilerblock",
+            "phase-supply-flow",
+            "Phasenwechsel oder Phasenerweiterung im dokumentierten Weg",
+        ),
+    )
+    require(
+        "frontend/src/pages/ElectricalDistributionLayoutPage.vue",
+        ("PhaseSupplyPathsCard", "Versorgungswege im Zählerschrank"),
     )
     migrations = sorted((ROOT / "backend/migrations/versions").glob("*.py"))
     if not migrations[-1].name.startswith("0038_"):

@@ -112,6 +112,25 @@ def prepare_topology(client: TestClient) -> dict[str, dict[str, Any]]:
         },
     )
 
+    phase_block = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Haupt-Phasenverteiler",
+            "component_type": "phase_distribution_block",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 3,
+            "phases": ["L1", "L2", "L3", "N", "PE"],
+            "rated_current_a": 125,
+            "max_cross_section_mm2": 35,
+            "outgoing_connections": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+
     def device(asset_record: dict[str, Any], device_type: str) -> dict[str, Any]:
         return create(
             client,
@@ -164,6 +183,7 @@ def prepare_topology(client: TestClient) -> dict[str, dict[str, Any]]:
             item for item in endpoints if item["kind"] == kind and item["id"] == endpoint_id
         )
 
+    assert not any(item["kind"] == "distribution" for item in endpoints)
     assert not any(
         item["kind"] == "asset" and item["id"] == distribution_asset["id"] for item in endpoints
     )
@@ -172,7 +192,8 @@ def prepare_topology(client: TestClient) -> dict[str, dict[str, Any]]:
         "meter": endpoint("asset", meter["id"]),
         "pv": endpoint("asset", pv["id"]),
         "load": endpoint("asset", load["id"]),
-        "distribution": endpoint("distribution", distribution["id"]),
+        "distribution": distribution,
+        "phase_block": endpoint("cabinet_component", phase_block["id"]),
         "rcd": endpoint("protective_device", rcd["id"]),
         "mcb_one": endpoint("protective_device", mcb_one["id"]),
         "mcb_two": endpoint("protective_device", mcb_two["id"]),
@@ -187,8 +208,8 @@ def test_supply_topology_paths_phases_cable_and_rcd_counts(
     endpoint = prepare_topology(client)
     chain = (
         ("grid", "meter", ["L1", "L2", "L3", "N", "PE"], "cable"),
-        ("meter", "distribution", ["L1", "L2", "L3", "N", "PE"], "internal"),
-        ("distribution", "rcd", ["L1", "L2", "L3", "N"], "busbar"),
+        ("meter", "phase_block", ["L1", "L2", "L3", "N", "PE"], "internal"),
+        ("phase_block", "rcd", ["L1", "L2", "L3", "N"], "busbar"),
         ("rcd", "mcb_one", ["L2", "N"], "busbar"),
         ("rcd", "mcb_two", ["L3", "N"], "busbar"),
         ("mcb_one", "circuit", ["L2", "N", "PE"], "wire"),
@@ -217,7 +238,7 @@ def test_supply_topology_paths_phases_cable_and_rcd_counts(
     pv_supply = create(
         client,
         "electrical/connections",
-        connection_payload(endpoint["pv"], endpoint["distribution"], phases=["L1", "L2", "L3"]),
+        connection_payload(endpoint["pv"], endpoint["phase_block"], phases=["L1", "L2", "L3"]),
     )
     topology = client.get("/api/v1/electrical/topology")
     assert topology.status_code == 200, topology.text
@@ -235,7 +256,7 @@ def test_supply_topology_paths_phases_cable_and_rcd_counts(
 
     duplicate_supply = client.post(
         "/api/v1/electrical/connections",
-        json=connection_payload(endpoint["pv"], endpoint["distribution"], phases=["L1"]),
+        json=connection_payload(endpoint["pv"], endpoint["phase_block"], phases=["L1"]),
     )
     cycle = client.post(
         "/api/v1/electrical/connections",
@@ -257,7 +278,7 @@ def test_supply_topology_paths_phases_cable_and_rcd_counts(
     assert updated.json()["phases"] == ["L1", "N"]
     assert client.delete(f"/api/v1/electrical/connections/{created[4]['id']}").status_code == 204
     assert len(client.get("/api/v1/electrical/connections").json()) == 7
-    assert pv_supply["target"]["id"] == endpoint["distribution"]["id"]
+    assert pv_supply["target"]["id"] == endpoint["phase_block"]["id"]
 
 
 def test_archived_endpoints_cannot_receive_new_connections(
@@ -328,7 +349,7 @@ def test_cabinet_component_accepts_multiple_feeds_and_preserves_phases(
             "component_type": "phase_distribution_block",
             "area_id": None,
             "row_number": 1,
-            "start_position": 1,
+            "start_position": 5,
             "module_width": 3,
             "phases": ["L1", "L2", "L3"],
             "rated_current_a": 125,
@@ -452,3 +473,128 @@ def test_cabinet_component_accepts_multiple_feeds_and_preserves_phases(
     assert invalid_component_phase.status_code == 422
     assert "unterstützt" in invalid_component_phase.text
 
+
+
+def test_busbar_phase_is_forced_when_wiring_a_protective_device(
+    topology_client: TestClient,
+) -> None:
+    client = topology_client
+    building = create(client, "locations", {"name": "House", "location_type": "building"})
+    room = create(
+        client,
+        "locations",
+        {"name": "Utility", "location_type": "room", "parent_id": building["id"]},
+    )
+    distribution_type = create(
+        client,
+        "asset-types",
+        {"name": "Electrical distribution"},
+    )
+    device_type = create(client, "asset-types", {"name": "Electrical device"})
+
+    def asset(name: str, asset_type_id: str) -> dict[str, Any]:
+        return create(
+            client,
+            "assets",
+            {
+                "name": name,
+                "asset_type_id": asset_type_id,
+                "location_id": room["id"],
+                "status": "active",
+            },
+        )
+
+    distribution_asset = asset("Main distribution", distribution_type["id"])
+    breaker_asset = asset("Dryer breaker", device_type["id"])
+    dryer_asset = asset("Dryer", device_type["id"])
+    distribution = create(
+        client,
+        "electrical/distributions",
+        {
+            "asset_id": distribution_asset["id"],
+            "parent_distribution_id": None,
+            "distribution_type": "main",
+            "layout_mode": "rows",
+            "designation": "HV",
+            "rows": 1,
+            "modules_per_row": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+    breaker = create(
+        client,
+        "electrical/protective-devices",
+        {
+            "asset_id": breaker_asset["id"],
+            "distribution_id": distribution["id"],
+            "area_id": None,
+            "device_type": "mcb",
+            "row_number": 1,
+            "start_position": 3,
+            "module_width": 1,
+            "rated_current_a": 16,
+            "residual_current_ma": None,
+            "characteristic": "B",
+            "poles": 1,
+            "breaking_capacity_ka": 6,
+            "rcd_type": None,
+            "fuse_type": None,
+            "spd_type": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Comb busbar",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 6,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 6,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    endpoint_response = client.get(
+        "/api/v1/electrical/connection-endpoints",
+        params={"page_size": 100},
+    )
+    assert endpoint_response.status_code == 200, endpoint_response.text
+    endpoints = endpoint_response.json()["items"]
+    breaker_endpoint = next(
+        item
+        for item in endpoints
+        if item["kind"] == "protective_device" and item["id"] == breaker["id"]
+    )
+    dryer_endpoint = next(
+        item
+        for item in endpoints
+        if item["kind"] == "asset" and item["id"] == dryer_asset["id"]
+    )
+    assert breaker_endpoint["effective_phases"] == ["L3"]
+
+    response = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            breaker_endpoint,
+            dryer_endpoint,
+            phases=["L1", "N", "PE"],
+            connection_type="cable",
+        ),
+    )
+    assert response.status_code == 201, response.text
+    stored = response.json()
+    assert stored["phases"] == ["L3", "N", "PE"]
+    assert stored["effective_phases"] == ["L3", "N", "PE"]
+    assert stored["phase_warnings"] == []

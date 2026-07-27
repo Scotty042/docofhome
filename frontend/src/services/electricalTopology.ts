@@ -14,12 +14,23 @@ export interface ElectricalTopologyRow {
   incomingConnections: ElectricalConnection[]
 }
 
+export type PhaseSupplyGroupKey = 'L1' | 'L2' | 'L3' | 'multi' | 'unassigned'
+
+export interface PhaseSupplyPath {
+  id: string
+  connections: ElectricalConnection[]
+  effectivePhases: Array<'L1' | 'L2' | 'L3'>
+  phaseMismatch: boolean
+  missingPhaseData: boolean
+  cycleDetected: boolean
+}
+
 export interface PhaseDistributionGroup {
   block: ElectricalTopologyNode
   groups: Array<{
-    key: 'L1' | 'L2' | 'L3' | 'multi' | 'unassigned'
+    key: PhaseSupplyGroupKey
     label: string
-    connections: ElectricalConnection[]
+    paths: PhaseSupplyPath[]
   }>
 }
 
@@ -97,7 +108,7 @@ export function phaseConnectionCounts(
   return Object.fromEntries(
     (['L1', 'L2', 'L3'] as const).map((phase) => [
       phase,
-      topology.connections.filter((connection) => connection.phases.includes(phase)).length
+      topology.connections.filter((connection) => connection.effective_phases.includes(phase)).length
     ])
   ) as Record<'L1' | 'L2' | 'L3', number>
 }
@@ -105,33 +116,90 @@ export function phaseConnectionCounts(
 export function phaseDistributionGroups(
   topology: ElectricalTopology
 ): PhaseDistributionGroup[] {
+  const activeConnections = topology.connections.filter(
+    (connection) => connection.deleted_at === null
+  )
+  const outgoing = new Map<string, ElectricalConnection[]>()
+  for (const connection of activeConnections) {
+    const entries = outgoing.get(connection.source.key) ?? []
+    entries.push(connection)
+    outgoing.set(connection.source.key, entries)
+  }
+  const electricalPhases = (
+    connection: ElectricalConnection
+  ): Array<'L1' | 'L2' | 'L3'> => connection.effective_phases.filter(
+    (phase): phase is 'L1' | 'L2' | 'L3' => phase === 'L1' || phase === 'L2' || phase === 'L3'
+  )
+  const completePath = (
+    connections: ElectricalConnection[],
+    cycleDetected: boolean
+  ): PhaseSupplyPath => {
+    let expectedPhases: Array<'L1' | 'L2' | 'L3'> | null = null
+    let phaseMismatch = false
+    let missingPhaseData = false
+    for (const connection of connections) {
+      const phases = electricalPhases(connection)
+      if (!phases.length) {
+        missingPhaseData = true
+        continue
+      }
+      if (expectedPhases && phases.some((phase) => !expectedPhases?.includes(phase))) {
+        phaseMismatch = true
+      }
+      expectedPhases = phases
+    }
+    return {
+      id: connections.map((connection) => connection.id).join('>'),
+      connections,
+      effectivePhases: expectedPhases ?? [],
+      phaseMismatch,
+      missingPhaseData,
+      cycleDetected
+    }
+  }
+  const walkPath = (
+    connection: ElectricalConnection,
+    path: ElectricalConnection[],
+    visitedEndpoints: Set<string>
+  ): PhaseSupplyPath[] => {
+    const nextPath = [...path, connection]
+    if (visitedEndpoints.has(connection.target.key)) {
+      return [completePath(nextPath, true)]
+    }
+    const nextVisited = new Set(visitedEndpoints)
+    nextVisited.add(connection.target.key)
+    const nextConnections = outgoing.get(connection.target.key) ?? []
+    if (!nextConnections.length) {
+      return [completePath(nextPath, false)]
+    }
+    return nextConnections.flatMap((nextConnection) => (
+      walkPath(nextConnection, nextPath, nextVisited)
+    ))
+  }
+  const groupForPath = (path: PhaseSupplyPath): PhaseSupplyGroupKey => {
+    if (path.effectivePhases.length === 1) return path.effectivePhases[0]
+    if (path.effectivePhases.length > 1) return 'multi'
+    return 'unassigned'
+  }
+  const definitions: Array<{ key: PhaseSupplyGroupKey; label: string }> = [
+    { key: 'L1', label: 'L1' },
+    { key: 'L2', label: 'L2' },
+    { key: 'L3', label: 'L3' },
+    { key: 'multi', label: 'Mehrphasig' },
+    { key: 'unassigned', label: 'Nicht zugeordnet' }
+  ]
   return topology.nodes
     .filter((node) => node.endpoint.device_type === 'phase_distribution_block')
     .map((block) => {
-      const outgoing = topology.connections.filter(
-        (connection) => connection.source.key === block.endpoint.key
-      )
-      const phaseGroup = (connection: ElectricalConnection) => {
-        const phases = connection.phases.filter(
-          (phase): phase is 'L1' | 'L2' | 'L3' => phase === 'L1' || phase === 'L2' || phase === 'L3'
-        )
-        if (phases.length === 1) return phases[0]
-        if (phases.length > 1) return 'multi'
-        return 'unassigned'
-      }
-      const definitions = [
-        { key: 'L1' as const, label: 'L1' },
-        { key: 'L2' as const, label: 'L2' },
-        { key: 'L3' as const, label: 'L3' },
-        { key: 'multi' as const, label: 'Mehrphasig' },
-        { key: 'unassigned' as const, label: 'Nicht zugeordnet' }
-      ]
+      const paths = (outgoing.get(block.endpoint.key) ?? []).flatMap((connection) => (
+        walkPath(connection, [], new Set([block.endpoint.key]))
+      ))
       return {
         block,
         groups: definitions.map((definition) => ({
           ...definition,
-          connections: outgoing.filter((connection) => phaseGroup(connection) === definition.key)
-        })).filter((group) => group.connections.length)
+          paths: paths.filter((path) => groupForPath(path) === definition.key)
+        })).filter((group) => group.paths.length)
       }
     })
     .filter((item) => item.groups.length)

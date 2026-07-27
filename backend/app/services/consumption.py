@@ -783,16 +783,25 @@ class ConsumptionService:
         rows: list[ConsumptionComparisonRead] = []
         for meter_type, medium, label in (
             (ConsumptionMeterType.WATER, "water", "Hauptwasser"),
-            (ConsumptionMeterType.ELECTRICITY_GRID, "electricity", "Strom"),
+            (ConsumptionMeterType.ELECTRICITY_GRID, "electricity", "Strombezug"),
             (ConsumptionMeterType.ELECTRICITY_PV, "pv_generation", "PV-Erzeugung"),
+            (ConsumptionMeterType.ELECTRICITY_FEED_IN, "pv_feed_in", "PV eingespeist"),
             (ConsumptionMeterType.GAS, "gas", "Gas"),
         ):
             dashboard_meters = self.repository.active_dashboard_meters(meter_type.value)
             meter = dashboard_meters[0] if dashboard_meters else None
             if meter is None and meter_type == ConsumptionMeterType.WATER:
                 meter = self.repository.active_main_water_meter()
-            if meter is None and meter_type != ConsumptionMeterType.ELECTRICITY_PV:
+            if meter is None and meter_type not in {
+                ConsumptionMeterType.ELECTRICITY_PV,
+                ConsumptionMeterType.ELECTRICITY_FEED_IN,
+            }:
                 meter = self.repository.first_active_meter_by_type(meter_type.value)
+            if meter is None and meter_type in {
+                ConsumptionMeterType.ELECTRICITY_PV,
+                ConsumptionMeterType.ELECTRICITY_FEED_IN,
+            }:
+                continue
             if meter is None:
                 rows.append(
                     ConsumptionComparisonRead(
@@ -813,7 +822,10 @@ class ConsumptionService:
                 continue
             selected_meters = (
                 dashboard_meters
-                if meter_type == ConsumptionMeterType.ELECTRICITY_PV and dashboard_meters
+                if meter_type in {
+                    ConsumptionMeterType.ELECTRICITY_PV,
+                    ConsumptionMeterType.ELECTRICITY_FEED_IN,
+                } and dashboard_meters
                 else [meter]
             )
             current_results = [

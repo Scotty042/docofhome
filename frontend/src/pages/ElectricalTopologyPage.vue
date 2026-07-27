@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import PhaseSupplyPathsCard from '../components/PhaseSupplyPathsCard.vue'
 import { electricalApi, loadAllConnectionEndpoints } from '../services/electricalApi'
 import {
   endpointKindIcons,
@@ -28,6 +29,7 @@ const endpoints = ref<ElectricalEndpoint[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
+const dialogError = ref<string | null>(null)
 const success = ref<string | null>(null)
 const dialogOpen = ref(false)
 const editingConnection = ref<ElectricalConnection | null>(null)
@@ -71,6 +73,38 @@ const rootCount = computed(() => rows.value.filter((row) => row.depth === 0).len
 const showCableDetails = computed(() => (
   form.value.connection_type === 'cable' || form.value.connection_type === 'wire'
 ))
+const linePhases: ElectricalPhase[] = ['L1', 'L2', 'L3']
+const selectedConnectionEndpoints = computed(() => [
+  endpointByKey(sourceKey.value),
+  endpointByKey(targetKey.value)
+].filter((endpoint): endpoint is ElectricalEndpoint => Boolean(endpoint)))
+const protectivePhaseRequirements = computed(() => selectedConnectionEndpoints.value
+  .filter((endpoint) => endpoint.kind === 'protective_device')
+  .map((endpoint) => (endpoint.effective_phases ?? []).filter(
+    (phase): phase is ElectricalPhase => linePhases.includes(phase)
+  ))
+  .filter((phases) => phases.length > 0))
+const forcedLinePhases = computed<ElectricalPhase[]>(() => (
+  protectivePhaseRequirements.value[0] ?? []
+))
+const forcedPhaseConflict = computed(() => {
+  if (protectivePhaseRequirements.value.length < 2) return false
+  const expected = forcedLinePhases.value.join('|')
+  return protectivePhaseRequirements.value.some((phases) => phases.join('|') !== expected)
+})
+const connectionPhaseItems = computed(() => phaseItems.map((item) => ({
+  ...item,
+  props: {
+    disabled: forcedLinePhases.value.length > 0 && linePhases.includes(item.value)
+  }
+})))
+const forcedPhaseHint = computed(() => {
+  if (forcedPhaseConflict.value) {
+    return 'Die ausgewählten Schutzgeräte besitzen widersprüchliche wirksame Phasen.'
+  }
+  if (!forcedLinePhases.value.length) return null
+  return `Durch Sammel-/Phasenschiene fest vorgegeben: ${forcedLinePhases.value.join(', ')}`
+})
 
 function optionalText(value: string | null): string | null {
   return value?.trim() || null
@@ -78,6 +112,21 @@ function optionalText(value: string | null): string | null {
 
 function endpointByKey(key: string): ElectricalEndpoint | undefined {
   return endpoints.value.find((endpoint) => endpoint.key === key)
+}
+
+function enforceCalculatedLinePhases(): void {
+  if (!forcedLinePhases.value.length) return
+  const preserved = form.value.phases.filter((phase) => !linePhases.includes(phase))
+  form.value.phases = [...forcedLinePhases.value, ...preserved]
+}
+
+function updateConnectionPhases(value: ElectricalPhase[]): void {
+  if (!forcedLinePhases.value.length) {
+    form.value.phases = value
+    return
+  }
+  const preserved = value.filter((phase) => !linePhases.includes(phase))
+  form.value.phases = [...forcedLinePhases.value, ...preserved]
 }
 
 function endpointRoute(endpoint: ElectricalEndpoint): string | null {
@@ -90,6 +139,10 @@ function endpointRoute(endpoint: ElectricalEndpoint): string | null {
   }
   if (endpoint.kind === 'circuit') return `/electrical/circuits/${endpoint.id}`
   return null
+}
+
+function displayPhases(connection: ElectricalConnection): ElectricalPhase[] {
+  return connection.effective_phases.length ? connection.effective_phases : connection.phases
 }
 
 function phaseColor(phase: ElectricalPhase): string {
@@ -138,6 +191,7 @@ async function load() {
 }
 
 function openCreate(preselectedTarget = '') {
+  dialogError.value = null
   editingConnection.value = null
   sourceKey.value = ''
   targetKey.value = preselectedTarget
@@ -172,6 +226,7 @@ async function initialize() {
 }
 
 function openEdit(connection: ElectricalConnection) {
+  dialogError.value = null
   editingConnection.value = connection
   sourceKey.value = connection.source.key
   targetKey.value = connection.target.key
@@ -190,6 +245,7 @@ function openEdit(connection: ElectricalConnection) {
     route: connection.route,
     notes: connection.notes
   }
+  enforceCalculatedLinePhases()
   dialogOpen.value = true
 }
 
@@ -197,11 +253,11 @@ async function saveConnection() {
   const source = endpointByKey(sourceKey.value)
   const target = endpointByKey(targetKey.value)
   if (!source || !target) {
-    error.value = 'Bitte Quelle und versorgtes Ziel auswählen.'
+    dialogError.value = 'Bitte Quelle und versorgtes Ziel auswählen.'
     return
   }
   saving.value = true
-  error.value = null
+  dialogError.value = null
   try {
     const payload: ElectricalConnectionWrite = {
       ...form.value,
@@ -226,7 +282,7 @@ async function saveConnection() {
     success.value = 'Versorgungsverbindung wurde gespeichert.'
     await load()
   } catch (reason) {
-    error.value = reason instanceof Error
+    dialogError.value = reason instanceof Error
       ? reason.message
       : 'Versorgungsverbindung konnte nicht gespeichert werden.'
   } finally {
@@ -249,6 +305,11 @@ async function removeConnection(connection: ElectricalConnection) {
       : 'Versorgungsverbindung konnte nicht entfernt werden.'
   }
 }
+
+watch([sourceKey, targetKey], () => {
+  dialogError.value = null
+  enforceCalculatedLinePhases()
+})
 
 onMounted(() => void initialize())
 </script>
@@ -316,33 +377,11 @@ onMounted(() => void initialize())
         </v-card-text>
       </v-card>
 
-      <v-card v-if="phaseBlocks.length" class="mb-5" title="Phasenabgänge" prepend-icon="mdi-call-split">
-        <v-card-text>
-          <v-expansion-panels multiple>
-            <v-expansion-panel v-for="item in phaseBlocks" :key="item.block.endpoint.key">
-              <v-expansion-panel-title>{{ item.block.endpoint.name }}</v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <v-row dense>
-                  <v-col v-for="group in item.groups" :key="group.key" cols="12" md="4">
-                    <v-card variant="outlined" height="100%">
-                      <v-card-title class="text-body-1">{{ group.label }}</v-card-title>
-                      <v-list density="compact">
-                        <v-list-item
-                          v-for="connection in group.connections"
-                          :key="connection.id"
-                          :title="connection.target.name"
-                          :subtitle="connection.phases.length ? connection.phases.join(', ') : 'Phase fehlt'"
-                          :to="endpointRoute(connection.target) ?? undefined"
-                        />
-                      </v-list>
-                    </v-card>
-                  </v-col>
-                </v-row>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </v-card-text>
-      </v-card>
+      <PhaseSupplyPathsCard
+        v-if="phaseBlocks.length"
+        class="mb-5"
+        :blocks="phaseBlocks"
+      />
 
       <v-card title="Versorgungstopologie" prepend-icon="mdi-file-tree-outline">
         <v-card-text v-if="rows.length === 0" class="text-center py-12">
@@ -382,10 +421,11 @@ onMounted(() => void initialize())
                     <div v-for="connection in row.incomingConnections" :key="connection.id" class="mb-2">
                       <div class="text-caption font-weight-medium">von {{ connection.source.name }}</div>
                       <div class="d-flex flex-wrap ga-1 mb-1">
-                        <v-chip v-for="phase in connection.phases" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
-                        <v-chip v-if="!connection.phases.length" size="x-small" variant="tonal">Phase unbekannt</v-chip>
+                        <v-chip v-for="phase in displayPhases(connection)" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
+                        <v-chip v-if="!displayPhases(connection).length" size="x-small" variant="tonal">Phase unbekannt</v-chip>
                       </div>
                       <div class="text-caption text-medium-emphasis">{{ connectionDetails(connection) }}</div>
+                      <v-alert v-for="warning in connection.phase_warnings" :key="warning" type="warning" variant="tonal" density="compact" class="mt-1">{{ warning }}</v-alert>
                       <div v-if="measurementPointsForConnection(connection.id).length" class="d-flex flex-wrap ga-1 mt-1">
                         <v-chip
                           v-for="point in measurementPointsForConnection(connection.id)"
@@ -441,7 +481,7 @@ onMounted(() => void initialize())
               <div v-for="connection in row.incomingConnections" :key="connection.id" class="mb-2">
                 <div class="text-caption font-weight-medium">von {{ connection.source.name }}</div>
                 <div class="d-flex flex-wrap ga-1">
-                  <v-chip v-for="phase in connection.phases" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
+                  <v-chip v-for="phase in displayPhases(connection)" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
                   <span class="text-caption">{{ connectionDetails(connection) }}</span>
                 </div>
                 <div v-if="measurementPointsForConnection(connection.id).length" class="d-flex flex-wrap ga-1 mt-1">
@@ -495,17 +535,30 @@ onMounted(() => void initialize())
               <v-text-field v-model="form.label" label="Bezeichnung (optional)" placeholder="z. B. Zuleitung HV" maxlength="150" />
             </v-col>
             <v-col cols="12">
+              <v-alert
+                v-if="forcedPhaseHint"
+                :type="forcedPhaseConflict ? 'error' : 'info'"
+                variant="tonal"
+                density="compact"
+                class="mb-3"
+              >
+                {{ forcedPhaseHint }} Die Außenleiterphase kann in dieser Verbindung nicht manuell geändert werden.
+              </v-alert>
               <v-select
-                v-model="form.phases"
+                :model-value="form.phases"
                 label="Leiter / Phasen"
-                :items="phaseItems"
+                :items="connectionPhaseItems"
                 item-title="title"
                 item-value="value"
                 multiple
                 chips
                 closable-chips
-                hint="Jeder Leiter bleibt von Quelle bis Ziel identisch: L1 wird mit L1, L2 mit L2 verbunden. Bei Schrankkomponenten sind die Leiter Pflicht."
+                :error="forcedPhaseConflict"
+                :hint="forcedLinePhases.length
+                  ? 'L1/L2/L3 werden aus Position und Startphase der Schiene berechnet. N und PE bleiben auswählbar.'
+                  : 'Jeder Leiter bleibt von Quelle bis Ziel identisch: L1 wird mit L1, L2 mit L2 verbunden. Bei Schrankkomponenten sind die Leiter Pflicht.'"
                 persistent-hint
+                @update:model-value="updateConnectionPhases"
               />
             </v-col>
             <template v-if="showCableDetails">
@@ -518,10 +571,21 @@ onMounted(() => void initialize())
             <v-col cols="12"><v-textarea v-model="form.notes" label="Notizen (optional)" rows="2" auto-grow /></v-col>
           </v-row>
         </v-card-text>
+        <v-alert
+          v-if="dialogError"
+          type="error"
+          variant="tonal"
+          density="compact"
+          closable
+          class="mx-6 mb-2"
+          @click:close="dialogError = null"
+        >
+          {{ dialogError }}
+        </v-alert>
         <v-card-actions>
           <v-spacer />
           <v-btn @click="dialogOpen = false">Abbrechen</v-btn>
-          <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="saveConnection">Speichern</v-btn>
+          <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" :disabled="forcedPhaseConflict" @click="saveConnection">Speichern</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

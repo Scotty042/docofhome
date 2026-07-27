@@ -110,6 +110,8 @@ class WorkItemRead(BaseModel):
     target_id: UUID | None
     target_label: str | None
     target_route: str | None
+    automation_key: str | None = None
+    generated: bool = False
     due_at: datetime | None
     recurrence_days: int | None
     recurrence_mode: RecurrenceMode

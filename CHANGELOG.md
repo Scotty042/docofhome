@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.2 – 2026-07-27
+
+### Behoben
+
+- monatliche Zählerpläne erzeugen idempotente Aufgaben und werden durch eine
+  gespeicherte Ablesung automatisch abgeschlossen;
+- PV-Erzeugung und Netzeinspeisung sind im Dashboard getrennt und nur bei
+  ausgewählten Zählern sichtbar;
+- Topologieansichten verwenden wirksame Phasen und kennzeichnen alte
+  Abweichungen, statt sie still auszublenden;
+- GitHub-/Release-/Support-Verweise bleiben in lokalen und offiziellen ZIPs
+  erhalten.
+- Verteilerdosen werden im Dialog zur fortlaufenden DIN-Serienplatzierung
+  ausgeschlossen; dadurch ist der Vue-TSC-Build wieder typkonsistent.
+- Kamm-/Phasenschienen können bestehende Schutzgeräte und normale
+  DIN-Asset-Platzierungen überspannen, ohne eine TE-Kollision auszulösen. Nur
+  überlappende Schienen auf derselben Montageseite werden abgewiesen.
+- Verkabelungen an Schutzgeräten unter einer Sammel-/Phasenschiene übernehmen
+  die aus Schienenstart und TE-Position berechnete Phase automatisch. Eine freie
+  abweichende Auswahl von L1/L2/L3 ist im Dialog und über die API ausgeschlossen.
+- Fehler beim Speichern von Schrankkomponenten und Versorgungsverbindungen werden
+  im jeweils geöffneten Dialog angezeigt und nicht mehr hinter dem Overlay.
+
+### Hinzugefügt
+
+- Verteilerdose als struktureller Behälter ohne sichtbares TE-Raster;
+- Kamm-/Phasenschienen als TE-freies Overlay mit Montage oberhalb/unterhalb;
+- Migration `0039_release_1_6_2_integrity`;
+- paketfeste Projektmetadaten in `SOURCE_INFO.json`.
+
 ## 1.6.1 – 2026-07-27
 
 ### Geändert
@@ -10,8 +40,15 @@
 - Mehrere ausgewählte PV-Zähler werden im Dashboard gemeinsam ausgewertet.
 - Online-Produktbildquellen sind einzeln konfigurierbar; Ergebnisse aktivierter
   Quellen werden kombiniert, dedupliziert und nach Relevanz sortiert.
-- Asset-Details zeigen direkte elektrische Einspeisungen und Weiterführungen;
-  Phasenabgänge werden nach L1, L2, L3, mehrphasig und nicht zugeordnet gruppiert.
+- Asset-Details zeigen direkte elektrische Einspeisungen und Weiterführungen.
+  Versorgungswege ab Phasenverteilerblock werden vollständig und in
+  Anschlussreihenfolge nach L1, L2, L3, mehrphasig und nicht zugeordnet
+  dargestellt – sowohl in der Elektro-Topologie als auch direkt in der
+  Zähler-/Sicherungsschrankansicht. Fehlende Phasenangaben, Phasenwechsel und
+  Zyklen werden sichtbar gekennzeichnet.
+- Ein-TE-Geräte und -Assets erhalten in der kompakten Schrankansicht eine
+  zuverlässige, vollständig lesbare Hochkantbeschriftung; technische Kurzwerte
+  wie `B16` bleiben separat horizontal sichtbar.
 - Sicherungs-/Schutzgeräte werden zentral klassifiziert und einheitlich gezählt.
 - Netzwerkschnittstellen können als primär markiert werden.
 

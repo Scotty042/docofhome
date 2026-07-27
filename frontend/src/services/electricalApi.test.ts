@@ -169,6 +169,7 @@ describe('electrical API', () => {
       type_name: 'Electrical',
       location_name: null,
       device_type: null,
+      effective_phases: null,
       deleted_at: null
     })
     const loadPage = vi.fn((page = 1): Promise<Page<ElectricalEndpoint>> => (

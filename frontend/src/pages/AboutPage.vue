@@ -157,7 +157,7 @@ onMounted(async () => {
                   />
                 </v-list>
                 <v-card-text v-else class="text-medium-emphasis">
-                  Die GitHub-Verweise werden nach Veröffentlichung des Projekts fest im Quellcode ergänzt.
+                  Im Paket sind derzeit keine externen Projektverweise hinterlegt.
                 </v-card-text>
               </v-card>
             </v-col>

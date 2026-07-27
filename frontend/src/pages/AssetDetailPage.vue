@@ -103,7 +103,7 @@ function endpointRoute(endpoint: ElectricalEndpoint): string | null {
 }
 
 function connectionSubtitle(connection: ElectricalConnection): string {
-  const phases = connection.phases.length ? connection.phases.join(', ') : 'Phase nicht zugeordnet'
+  const phases = connection.effective_phases.length ? connection.effective_phases.join(', ') : 'Phase nicht zugeordnet'
   return [phases, connection.label, connection.cable_type].filter(Boolean).join(' · ')
 }
 </script>

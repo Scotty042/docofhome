@@ -10,6 +10,7 @@ from app.models.electrical import (
     ElectricalCabinetComponent,
     ElectricalComponent,
     ElectricalDistribution,
+    ElectricalDistributionSection,
     ElectricalProtectiveDevice,
 )
 from app.repositories.asset_engine import LocationRepository
@@ -369,6 +370,34 @@ class ElectricalDistributionService(ElectricalServiceBase):
         new_mode: str,
     ) -> None:
         if current_mode == new_mode:
+            return
+        if "junction_box" in {current_mode, new_mode}:
+            has_devices = bool(
+                self.devices.for_distribution(distribution_id, include_deleted=False)
+            )
+            has_assets = self.session.exec(
+                select(ElectricalAssetPlacement).where(
+                    ElectricalAssetPlacement.distribution_id == distribution_id,
+                    col(ElectricalAssetPlacement.deleted_at).is_(None),
+                )
+            ).first() is not None
+            has_components = self.session.exec(
+                select(ElectricalCabinetComponent).where(
+                    ElectricalCabinetComponent.distribution_id == distribution_id,
+                    col(ElectricalCabinetComponent.deleted_at).is_(None),
+                )
+            ).first() is not None
+            has_sections = self.session.exec(
+                select(ElectricalDistributionSection).where(
+                    ElectricalDistributionSection.distribution_id == distribution_id,
+                    col(ElectricalDistributionSection.deleted_at).is_(None),
+                )
+            ).first() is not None
+            if has_devices or has_assets or has_components or has_sections:
+                raise ElectricalConflictError(
+                    "Vor dem Wechsel zur oder von der Verteilerdose müssen Schutzgeräte, "
+                    "Platzierungen, Schrankkomponenten und Felder entfernt werden."
+                )
             return
         if new_mode == "sections":
             for projection in self.devices.for_distribution(
@@ -829,7 +858,7 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         if record.row_number is not None and record.start_position is not None:
             for component in components:
                 if (
-                    component.component_type != "busbar"
+                    component.component_type not in {"busbar", "phase_rail"}
                     or component.area_id != record.area_id
                     or component.row_number != record.row_number
                 ):
@@ -837,19 +866,27 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                 end = component.start_position + component.module_width - 1
                 if component.start_position <= record.start_position <= end:
                     busbars.append(component)
-        busbars.sort(key=lambda item: (item.module_width, item.start_position, item.name.casefold()))
+        busbars.sort(
+            key=lambda item: (
+                item.module_width,
+                item.start_position,
+                item.name.casefold(),
+            )
+        )
         busbar = busbars[0] if busbars else None
         if len(busbars) > 1:
-            warnings.append("Mehrere Sammelschienen überdecken die Position dieses Geräts.")
+            warnings.append("Mehrere Kamm-/Phasenschienen überdecken die Position dieses Geräts.")
 
-        effective_rcd_id = record.assigned_rcd_id or (busbar.linked_rcd_device_id if busbar else None)
+        effective_rcd_id = record.assigned_rcd_id or (
+            busbar.linked_rcd_device_id if busbar else None
+        )
         if (
             record.assigned_rcd_id is not None
             and busbar is not None
             and busbar.linked_rcd_device_id is not None
             and record.assigned_rcd_id != busbar.linked_rcd_device_id
         ):
-            warnings.append("Manuelle FI-Zuordnung weicht von der Sammelschiene ab.")
+            warnings.append("Manuelle FI-Zuordnung weicht von der Kamm-/Phasenschiene ab.")
 
         explicit_neutral_rail = (
             self.session.get(ElectricalCabinetComponent, record.neutral_rail_id)
@@ -863,7 +900,13 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                 if item.component_type == "neutral_rail"
                 and item.linked_rcd_device_id == effective_rcd_id
             ]
-            matches.sort(key=lambda item: (item.area_id is None, item.row_number, item.name.casefold()))
+            matches.sort(
+                key=lambda item: (
+                    item.area_id is None,
+                    item.row_number,
+                    item.name.casefold(),
+                )
+            )
             neutral_rail = matches[0] if matches else None
             if len(matches) > 1:
                 warnings.append("Mehrere N-Schienen sind demselben FI/RCD zugeordnet.")
@@ -893,7 +936,7 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                     and record.start_position + record.module_width - 1
                     > busbar.start_position + busbar.module_width - 1
                 ):
-                    warnings.append("Das Gerät ragt über das Ende der Sammelschiene hinaus.")
+                    warnings.append("Das Gerät ragt über das Ende der Kamm-/Phasenschiene hinaus.")
 
         return {
             "assigned_rcd_id": record.assigned_rcd_id,

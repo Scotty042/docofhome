@@ -220,7 +220,7 @@ export interface ConsumptionDefaultSeed {
 }
 
 export interface ConsumptionComparison {
-  medium: 'water' | 'electricity' | 'pv_generation' | 'gas'
+  medium: 'water' | 'electricity' | 'pv_generation' | 'pv_feed_in' | 'gas'
   name: string
   meter_id: string | null
   unit: string | null

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ElectricalWiringSummary from '../components/ElectricalWiringSummary.vue'
+import PhaseSupplyPathsCard from '../components/PhaseSupplyPathsCard.vue'
 import { assetApi } from '../services/assetApi'
 import { consumptionApi } from '../services/consumptionApi'
 import { electricalApi } from '../services/electricalApi'
@@ -20,6 +21,7 @@ import {
   isElectricalConsumptionMeterType,
   isNonElectricalMeterAssetType
 } from '../services/electricalPresentation'
+import { phaseDistributionGroups } from '../services/electricalTopology'
 import type { Asset } from '../types/assets'
 import type { ConsumptionMeter } from '../types/consumption'
 import type {
@@ -46,6 +48,7 @@ const notifications = useNotificationStore()
 const distributionId = computed(() => String(route.params.id ?? ''))
 const distribution = ref<DistributionDetail | null>(null)
 const structuredLayout = computed(() => distribution.value?.layout_mode === 'sections')
+const junctionBoxLayout = computed(() => distribution.value?.layout_mode === 'junction_box')
 const simpleDeviceGroups = computed(() => {
   const groups = groupProtectiveDevices(
     distribution.value?.protective_devices ?? [],
@@ -94,6 +97,15 @@ const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measureme
 const meterPlacements = ref<ElectricalMeterPlacement[]>([])
 const assetPlacements = ref<ElectricalAssetPlacement[]>([])
 const cabinetComponents = ref<ElectricalCabinetComponent[]>([])
+const cabinetPhaseComponents = computed(() => cabinetComponents.value.filter(
+  (component) => component.component_type === 'phase_distribution_block'
+))
+const cabinetPhaseBlocks = computed(() => {
+  const componentIds = new Set(cabinetPhaseComponents.value.map((component) => component.id))
+  return phaseDistributionGroups(topology.value).filter(
+    (block) => componentIds.has(block.block.endpoint.id)
+  )
+})
 const consumptionMeters = ref<ConsumptionMeter[]>([])
 const assets = ref<Asset[]>([])
 const loading = ref(true)
@@ -154,6 +166,7 @@ const assetPlacementForm = ref<ElectricalAssetPlacementWrite>({
 })
 
 const cabinetComponentDialog = ref(false)
+const cabinetComponentError = ref<string | null>(null)
 const editingCabinetComponentId = ref<string | null>(null)
 const cabinetComponentForm = ref<ElectricalCabinetComponentWrite>({
   name: '',
@@ -168,11 +181,12 @@ const cabinetComponentForm = ref<ElectricalCabinetComponentWrite>({
   outgoing_connections: null,
   linked_rcd_device_id: null,
   start_phase: 'L1',
+  mounting_side: null,
   description: null,
   notes: null
 })
 
-const cabinetComponentTypeOptions: Array<{
+const allCabinetComponentTypeOptions: Array<{
   title: string
   value: ElectricalCabinetComponentType
   icon: string
@@ -187,8 +201,14 @@ const cabinetComponentTypeOptions: Array<{
   { title: 'Potentialverteiler', value: 'potential_distribution', icon: 'mdi-source-branch' },
   { title: 'Sonstige passive Komponente', value: 'other', icon: 'mdi-view-grid-plus-outline' }
 ]
+const cabinetComponentTypeOptions = computed(() => (junctionBoxLayout.value
+  ? allCabinetComponentTypeOptions.filter((item) => [
+      'terminal_block', 'connection_block', 'potential_distribution', 'other'
+    ].includes(item.value))
+  : allCabinetComponentTypeOptions
+))
 const cabinetComponentTypeMeta = Object.fromEntries(
-  cabinetComponentTypeOptions.map((item) => [item.value, item])
+  allCabinetComponentTypeOptions.map((item) => [item.value, item])
 ) as Record<ElectricalCabinetComponentType, {
   title: string
   value: ElectricalCabinetComponentType
@@ -338,7 +358,7 @@ const occupiedModuleCount = computed(() => {
     add(placement.area_id, placement.row_number, placement.start_position, placement.module_width)
   }
   for (const component of cabinetComponents.value) {
-    if (component.component_type !== 'busbar') {
+    if (!['busbar', 'phase_rail'].includes(component.component_type)) {
       add(component.area_id, component.row_number, component.start_position, component.module_width)
     }
   }
@@ -351,7 +371,7 @@ const layoutWarnings = computed(() => {
     device.group_warnings.forEach((message) => messages.add(`${device.asset.name}: ${message}`))
   }
   for (const component of cabinetComponents.value) {
-    if (component.component_type === 'busbar' && !component.linked_rcd_device_id) {
+    if (['busbar', 'phase_rail'].includes(component.component_type) && !component.linked_rcd_device_id) {
       messages.add(`${component.name}: noch keinem FI/RCD zugeordnet.`)
     }
     if (component.component_type === 'neutral_rail' && !component.linked_rcd_device_id) {
@@ -682,9 +702,11 @@ function devicePhaseText(device: ProtectiveDevice): string {
 }
 
 function componentGridStyle(component: ElectricalCabinetComponent) {
+  const isBusbar = ['busbar', 'phase_rail'].includes(component.component_type)
   return {
     gridColumn: `${component.start_position} / span ${component.module_width}`,
-    gridRow: component.component_type === 'busbar' ? '3' : '2'
+    gridRow: isBusbar ? '3' : '2',
+    alignSelf: isBusbar ? 'stretch' : 'stretch'
   }
 }
 
@@ -786,6 +808,7 @@ function openCabinetComponent(
   row?: number,
   start?: number
 ) {
+  cabinetComponentError.value = null
   editingCabinetComponentId.value = component?.id ?? null
   cabinetComponentForm.value = component
     ? {
@@ -801,24 +824,26 @@ function openCabinetComponent(
         outgoing_connections: component.outgoing_connections,
         linked_rcd_device_id: component.linked_rcd_device_id,
         start_phase: component.start_phase,
+        mounting_side: component.mounting_side,
         description: component.description,
         notes: component.notes
       }
     : {
-        name: 'Phasenverteilerblock L1/L2/L3',
-        component_type: 'phase_distribution_block',
+        name: junctionBoxLayout.value ? 'Verbindungsklemme' : 'Phasenverteilerblock L1/L2/L3',
+        component_type: junctionBoxLayout.value ? 'terminal_block' : 'phase_distribution_block',
         area_id: structuredLayout.value
           ? area?.id ?? deviceAreaOptions.value[0]?.id ?? null
           : null,
         row_number: row ?? 1,
-        start_position: start ?? 1,
-        module_width: 4,
-        phases: ['L1', 'L2', 'L3'],
+        start_position: start ?? (junctionBoxLayout.value ? cabinetComponents.value.length + 1 : 1),
+        module_width: junctionBoxLayout.value ? 1 : 4,
+        phases: junctionBoxLayout.value ? [] : ['L1', 'L2', 'L3'],
         rated_current_a: null,
         max_cross_section_mm2: null,
         outgoing_connections: null,
         linked_rcd_device_id: null,
-        start_phase: 'L1',
+        start_phase: junctionBoxLayout.value ? null : 'L1',
+        mounting_side: null,
         description: null,
         notes: null
       }
@@ -830,9 +855,11 @@ function applyCabinetComponentPhaseSuggestion() {
   if (cabinetComponentForm.value.component_type === 'neutral_rail') {
     cabinetComponentForm.value.phases = ['N']
     cabinetComponentForm.value.start_phase = null
+    cabinetComponentForm.value.mounting_side = null
   } else if (cabinetComponentForm.value.component_type === 'protective_earth_rail') {
     cabinetComponentForm.value.phases = ['PE']
     cabinetComponentForm.value.start_phase = null
+    cabinetComponentForm.value.mounting_side = null
     cabinetComponentForm.value.linked_rcd_device_id = null
   } else if (
     cabinetComponentForm.value.component_type === 'phase_distribution_block'
@@ -840,12 +867,14 @@ function applyCabinetComponentPhaseSuggestion() {
     || cabinetComponentForm.value.component_type === 'phase_rail'
   ) {
     cabinetComponentForm.value.phases = ['L1', 'L2', 'L3']
-    cabinetComponentForm.value.start_phase = cabinetComponentForm.value.component_type === 'busbar' ? 'L1' : null
-    if (cabinetComponentForm.value.component_type !== 'busbar') {
+    cabinetComponentForm.value.start_phase = ['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type) ? 'L1' : null
+    cabinetComponentForm.value.mounting_side = ['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type) ? 'below' : null
+    if (!['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type)) {
       cabinetComponentForm.value.linked_rcd_device_id = null
     }
   } else {
     cabinetComponentForm.value.start_phase = null
+    cabinetComponentForm.value.mounting_side = null
     cabinetComponentForm.value.linked_rcd_device_id = null
   }
 }
@@ -855,18 +884,23 @@ async function saveCabinetComponent() {
     !cabinetComponentForm.value.name.trim()
     || (structuredLayout.value && !cabinetComponentForm.value.area_id)
   ) {
-    error.value = structuredLayout.value
+    cabinetComponentError.value = structuredLayout.value
       ? 'Bitte Bezeichnung und Gerätebereich angeben.'
       : 'Bitte eine Bezeichnung angeben.'
     return
   }
   saving.value = true
-  error.value = null
+  cabinetComponentError.value = null
   try {
     const payload: ElectricalCabinetComponentWrite = {
       ...cabinetComponentForm.value,
       name: cabinetComponentForm.value.name.trim(),
       area_id: structuredLayout.value ? cabinetComponentForm.value.area_id : null,
+      row_number: junctionBoxLayout.value ? 1 : cabinetComponentForm.value.row_number,
+      start_position: junctionBoxLayout.value
+        ? (editingCabinetComponentId.value ? cabinetComponentForm.value.start_position : cabinetComponents.value.length + 1)
+        : cabinetComponentForm.value.start_position,
+      module_width: junctionBoxLayout.value ? 1 : cabinetComponentForm.value.module_width,
       description: optionalText(cabinetComponentForm.value.description),
       notes: optionalText(cabinetComponentForm.value.notes)
     }
@@ -879,13 +913,14 @@ async function saveCabinetComponent() {
     } else {
       await electricalApi.createCabinetComponent(distributionId.value, payload)
     }
+    cabinetComponentError.value = null
     cabinetComponentDialog.value = false
     success.value = editingCabinetComponentId.value
       ? 'Schrankkomponente wurde aktualisiert.'
       : 'Schrankkomponente wurde angelegt.'
     await load()
   } catch (reason) {
-    error.value = reason instanceof Error
+    cabinetComponentError.value = reason instanceof Error
       ? reason.message
       : 'Schrankkomponente konnte nicht gespeichert werden.'
   } finally {
@@ -1106,7 +1141,10 @@ function placementProblem(
     }
   }
   for (const component of cabinetComponents.value) {
-    if (component.component_type === 'busbar' && excludeDeviceId !== null) continue
+    if (
+      ['busbar', 'phase_rail'].includes(component.component_type)
+      && (excludeDeviceId !== null || excludeAssetId !== null)
+    ) continue
     if (component.area_id !== areaId || component.row_number !== row) continue
     const otherEnd = component.start_position + component.module_width - 1
     if (start <= otherEnd && end >= component.start_position) {
@@ -1257,21 +1295,23 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <p class="text-medium-emphasis mb-0">
             {{ structuredLayout
               ? 'Felder nebeneinander, Bereiche innerhalb des Feldes untereinander.'
-              : 'Einfache Reihen mit Modulpositionen und zugeordneten Schutzgeräten.' }}
+              : junctionBoxLayout
+                ? 'Verbindungsklemmen und direkte elektrische Verbindungen ohne TE-Raster.'
+                : 'Einfache Reihen mit Modulpositionen und zugeordneten Schutzgeräten.' }}
           </p>
         </div>
         <div class="d-flex flex-wrap ga-2">
           <v-btn v-if="structuredLayout" prepend-icon="mdi-view-column-outline" color="primary" @click="openSection()">Feld anlegen</v-btn>
-          <v-btn prepend-icon="mdi-shield-plus-outline" variant="tonal" title="Sicherung, LS, FI/RCD, FI/LS oder Überspannungsschutz platzieren" @click="openPlacement()">Sicherungs-/Schutzgerät platzieren</v-btn>
+          <v-btn v-if="!junctionBoxLayout" prepend-icon="mdi-shield-plus-outline" variant="tonal" title="Sicherung, LS, FI/RCD, FI/LS oder Überspannungsschutz platzieren" @click="openPlacement()">Sicherungs-/Schutzgerät platzieren</v-btn>
           <v-btn
             prepend-icon="mdi-call-split"
             variant="tonal"
             :disabled="structuredLayout && !deviceAreaOptions.length"
             @click="openCabinetComponent()"
           >
-            Schrankkomponente
+            {{ junctionBoxLayout ? 'Klemme / Verbindung' : 'Schrankkomponente' }}
           </v-btn>
-          <v-btn prepend-icon="mdi-memory" variant="tonal" :disabled="structuredLayout && !deviceAreaOptions.length" @click="openAssetPlacement()">DIN-Asset platzieren</v-btn>
+          <v-btn v-if="!junctionBoxLayout" prepend-icon="mdi-memory" variant="tonal" :disabled="structuredLayout && !deviceAreaOptions.length" @click="openAssetPlacement()">DIN-Asset platzieren</v-btn>
           <v-btn v-if="structuredLayout" prepend-icon="mdi-meter-electric-outline" variant="tonal" :disabled="!meterAreaOptions.length" @click="openMeterPlacement()">Zähler platzieren</v-btn>
           <v-btn prepend-icon="mdi-pencil" variant="text" :to="`/electrical/distributions/${distributionId}/edit`">Verteilung</v-btn>
         </div>
@@ -1284,7 +1324,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
       </v-alert>
       <v-alert v-if="success" type="success" variant="tonal" closable class="mb-4" @click:close="success = null">{{ success }}</v-alert>
       <v-alert
-        v-if="!structuredLayout && !simpleLayoutConfigured"
+        v-if="!structuredLayout && !junctionBoxLayout && !simpleLayoutConfigured"
         type="info"
         variant="tonal"
         class="mb-5"
@@ -1304,7 +1344,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         </template>
       </v-alert>
 
-      <v-card class="mb-5 layout-summary" variant="outlined">
+      <v-card v-if="!junctionBoxLayout" class="mb-5 layout-summary" variant="outlined">
         <v-card-text>
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">
             <div class="summary-metrics">
@@ -1351,6 +1391,68 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               <li v-for="message in layoutWarnings" :key="message">{{ message }}</li>
             </ul>
           </v-alert>
+        </v-card-text>
+      </v-card>
+
+      <PhaseSupplyPathsCard
+        v-if="!junctionBoxLayout && cabinetPhaseBlocks.length"
+        class="mb-5"
+        :blocks="cabinetPhaseBlocks"
+        compact
+        title="Versorgungswege im Zählerschrank"
+      />
+      <v-alert
+        v-else-if="!junctionBoxLayout && cabinetPhaseComponents.length && !topologyError"
+        type="info"
+        variant="tonal"
+        class="mb-5"
+        title="Phasenverteiler ohne dokumentierte Abgänge"
+      >
+        Der Phasenverteilerblock ist platziert, besitzt aber noch keinen dokumentierten
+        Versorgungsweg. Lege in der Versorgungstopologie Verbindungen mit L1, L2 oder L3 an.
+        <template #append>
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-source-branch"
+            to="/electrical/topology"
+          >
+            Topologie öffnen
+          </v-btn>
+        </template>
+      </v-alert>
+
+      <v-card
+        v-if="junctionBoxLayout"
+        class="mb-5"
+        title="Komponenten der Verteilerdose"
+        prepend-icon="mdi-source-branch"
+      >
+        <v-card-text>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+            Eine Verteilerdose ist ein struktureller Behälter. Die enthaltenen Klemmen
+            belegen keine Teilungseinheiten; ihre Verkabelung wird direkt in der
+            Versorgungstopologie dokumentiert.
+          </v-alert>
+          <v-list v-if="cabinetComponents.length" lines="three">
+            <v-list-item
+              v-for="component in cabinetComponents"
+              :key="component.id"
+              :title="component.name"
+              :subtitle="`${cabinetComponentTypeMeta[component.component_type]?.title ?? component.component_type}${component.phases.length ? ` · ${component.phases.join(', ')}` : ''}`"
+              :prepend-icon="cabinetComponentTypeMeta[component.component_type]?.icon ?? 'mdi-connection'"
+            >
+              <template #append>
+                <v-btn icon="mdi-pencil" variant="text" title="Bearbeiten" @click="openCabinetComponent(component)" />
+                <v-btn icon="mdi-archive-outline" variant="text" title="Archivieren" @click="archiveCabinetComponent(component)" />
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-empty-state
+            v-else
+            icon="mdi-connection"
+            title="Noch keine Verbindungskomponenten"
+            text="Lege beispielsweise Wago-/Verbindungsklemmen oder Anschlussblöcke an."
+          />
         </v-card-text>
       </v-card>
 
@@ -1418,6 +1520,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     'drag-ready': desktopDragEnabled,
                     'drag-source': draggedDeviceId === placement.device.id,
                     'has-group-warning': placement.device.group_warnings.length > 0,
+                    'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1,
                     [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                   }"
                   variant="tonal"
@@ -1430,11 +1533,19 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 >
                   <v-card-title
                     class="module-device-title text-caption font-weight-bold"
-                    :class="{ 'vertical-device-title': placement.start === placement.end }"
                     :title="placement.device.asset.name"
                   >
-                    {{ placement.device.asset.name }}
+                    <span class="module-device-name">{{ placement.device.asset.name }}</span>
                   </v-card-title>
+                  <div v-if="placement.device.calculated_phases.length" class="device-phase-strip">
+                    <span
+                      v-for="(phase, index) in placement.device.calculated_phases"
+                      :key="`${placement.device.id}-phase-${index}`"
+                      :class="['device-phase-strip-item', `phase-${phase.toLowerCase()}`]"
+                    >
+                      {{ phase }}
+                    </span>
+                  </div>
                   <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
                     {{ placement.device.asset.technical_short_label }}
                   </div>
@@ -1471,7 +1582,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   v-for="component in simpleCabinetComponentsForRow(group.row)"
                   :key="component.id"
                   class="module-device cabinet-component-card"
-                  :class="{ 'busbar-card': component.component_type === 'busbar', [cabinetComponentClass(component.component_type)]: true }"
+                  :class="{ 'busbar-card': ['busbar', 'phase_rail'].includes(component.component_type), [cabinetComponentClass(component.component_type)]: true }"
                   variant="outlined"
                   :style="componentGridStyle(component)"
                   @click="openComponentDetails(component)"
@@ -1479,13 +1590,20 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   <v-card-title class="module-device-title text-caption font-weight-bold">
                     {{ component.name }}
                   </v-card-title>
-                  <v-card-text class="pa-2 text-caption">
+                  <div
+                    v-if="['busbar', 'phase_rail'].includes(component.component_type)"
+                    class="busbar-inline-visual"
+                    :title="`Phasenfolge: ${busbarPhasePattern(component).join(' – ')}`"
+                  >
+                    <div v-for="(phase, index) in busbarPhasePattern(component)" :key="`${component.id}-${index}`" :class="['busbar-inline-segment', `phase-${phase.toLowerCase()}`]">
+                      <span :class="['busbar-inline-label', `phase-${phase.toLowerCase()}`]">{{ phase }}</span>
+                      <span class="busbar-inline-connector" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <v-card-text v-else class="pa-2 text-caption">
                     <div>{{ cabinetComponentTypeMeta[component.component_type].title }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}</div>
                     <div v-if="component.linked_rcd_name" class="mt-1">FI: {{ component.linked_rcd_name }}</div>
-                    <div v-if="component.component_type === 'busbar'" class="busbar-phase-sequence mt-1">
-                      <span v-for="(phase, index) in busbarPhasePattern(component)" :key="`${component.id}-${index}`">{{ phase }}</span>
-                    </div>
-                    <div v-else-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
+                    <div v-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
                     <ElectricalWiringSummary
                       v-if="viewMode === 'expanded'"
                       :topology="topology"
@@ -1506,6 +1624,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   :class="{
                     'drag-ready': desktopDragEnabled,
                     'drag-source': draggedAsset?.assetId === placement.asset_id,
+                    'narrow-module-device': viewMode === 'compact' && placement.module_width === 1,
                     [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                   }"
                   variant="outlined"
@@ -1515,7 +1634,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   @dragstart="beginAssetDrag($event, placement)"
                   @dragend="finishDeviceDrag"
                 >
-                  <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.asset_name }}</v-card-title>
+                  <v-card-title
+                    class="module-device-title text-caption font-weight-bold"
+                    :title="placement.asset_name"
+                  >
+                    <span class="module-device-name">{{ placement.asset_name }}</span>
+                  </v-card-title>
                   <div v-if="placement.primary_live_value || placement.technical_short_label" class="module-compact-value">
                     {{ placement.primary_live_value ? liveValueText(placement) : placement.technical_short_label }}
                   </div>
@@ -1597,7 +1721,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         </v-card-text>
       </v-card>
       <v-alert
-        v-if="desktopDragEnabled && (structuredLayout || simpleLayoutConfigured)"
+        v-if="!junctionBoxLayout && desktopDragEnabled && (structuredLayout || simpleLayoutConfigured)"
         type="info"
         variant="tonal"
         density="compact"
@@ -1682,6 +1806,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                             'drag-ready': desktopDragEnabled,
                             'drag-source': draggedDeviceId === placement.device.id,
                             'has-group-warning': placement.device.group_warnings.length > 0,
+                            'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1,
                             [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                           }"
                           :style="{ gridColumn: placement.gridColumn }"
@@ -1694,9 +1819,19 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         >
                           <v-card-title
                             class="module-device-title text-caption font-weight-bold"
-                            :class="{ 'vertical-device-title': placement.start === placement.end }"
                             :title="placement.device.asset.name"
-                          >{{ placement.device.asset.name }}</v-card-title>
+                          >
+                            <span class="module-device-name">{{ placement.device.asset.name }}</span>
+                          </v-card-title>
+                  <div v-if="placement.device.calculated_phases.length" class="device-phase-strip">
+                    <span
+                      v-for="(phase, index) in placement.device.calculated_phases"
+                      :key="`${placement.device.id}-phase-${index}`"
+                      :class="['device-phase-strip-item', `phase-${phase.toLowerCase()}`]"
+                    >
+                      {{ phase }}
+                    </span>
+                  </div>
                           <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
                             {{ placement.device.asset.technical_short_label }}
                           </div>
@@ -1729,19 +1864,26 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           v-for="component in cabinetComponentsForArea(area.id).filter((item) => item.row_number === group.row)"
                           :key="component.id"
                           class="module-device cabinet-component-card"
-                          :class="{ 'busbar-card': component.component_type === 'busbar', [cabinetComponentClass(component.component_type)]: true }"
+                          :class="{ 'busbar-card': ['busbar', 'phase_rail'].includes(component.component_type), [cabinetComponentClass(component.component_type)]: true }"
                           variant="tonal"
                           :style="componentGridStyle(component)"
                           @click="openComponentDetails(component)"
                         >
                           <v-card-title class="module-device-title text-caption font-weight-bold">{{ component.name }}</v-card-title>
-                          <v-card-text class="pa-2 text-caption">
+                          <div
+                            v-if="['busbar', 'phase_rail'].includes(component.component_type)"
+                            class="busbar-inline-visual"
+                            :title="`Phasenfolge: ${busbarPhasePattern(component).join(' – ')}`"
+                          >
+                            <div v-for="(phase, index) in busbarPhasePattern(component)" :key="`${component.id}-${index}`" :class="['busbar-inline-segment', `phase-${phase.toLowerCase()}`]">
+                              <span :class="['busbar-inline-label', `phase-${phase.toLowerCase()}`]">{{ phase }}</span>
+                              <span class="busbar-inline-connector" aria-hidden="true"></span>
+                            </div>
+                          </div>
+                          <v-card-text v-else class="pa-2 text-caption">
                             <div>{{ cabinetComponentTypeMeta[component.component_type].title }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}</div>
                             <div v-if="component.linked_rcd_name" class="mt-1">FI: {{ component.linked_rcd_name }}</div>
-                            <div v-if="component.component_type === 'busbar'" class="busbar-phase-sequence mt-1">
-                              <span v-for="(phase, index) in busbarPhasePattern(component)" :key="`${component.id}-${index}`">{{ phase }}</span>
-                            </div>
-                            <div v-else-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
+                            <div v-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
                             <ElectricalWiringSummary
                               v-if="viewMode === 'expanded'"
                               :topology="topology"
@@ -1762,6 +1904,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           :class="{
                             'drag-ready': desktopDragEnabled,
                             'drag-source': draggedAsset?.assetId === placement.asset_id,
+                            'narrow-module-device': viewMode === 'compact' && placement.module_width === 1,
                             [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                           }"
                           variant="outlined"
@@ -1771,7 +1914,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           @dragstart="beginAssetDrag($event, placement)"
                           @dragend="finishDeviceDrag"
                         >
-                          <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.asset_name }}</v-card-title>
+                          <v-card-title
+                            class="module-device-title text-caption font-weight-bold"
+                            :title="placement.asset_name"
+                          >
+                            <span class="module-device-name">{{ placement.asset_name }}</span>
+                          </v-card-title>
                           <div v-if="placement.primary_live_value || placement.technical_short_label" class="module-compact-value">
                             {{ placement.primary_live_value ? liveValueText(placement) : placement.technical_short_label }}
                           </div>
@@ -1979,7 +2127,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <v-list density="compact">
             <v-list-item title="Position" :subtitle="`Reihe ${detailComponent.row_number}, TE ${detailComponent.start_position}–${detailComponent.start_position + detailComponent.module_width - 1}`" />
             <v-list-item title="Leiter" :subtitle="detailComponent.phases.join(', ') || 'Keine'" />
-            <v-list-item v-if="detailComponent.component_type === 'busbar'" title="Phasenfolge" :subtitle="busbarPhasePattern(detailComponent).join(' – ')" />
+            <v-list-item v-if="['busbar', 'phase_rail'].includes(detailComponent.component_type)" title="Phasenfolge" :subtitle="busbarPhasePattern(detailComponent).join(' – ')" />
             <v-list-item title="FI/RCD" :subtitle="detailComponent.linked_rcd_name || 'Nicht zugeordnet'" />
             <v-list-item v-if="detailComponent.outgoing_connections" title="Abgänge" :subtitle="String(detailComponent.outgoing_connections)" />
           </v-list>
@@ -2070,11 +2218,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             @update:model-value="applyCabinetComponentPhaseSuggestion"
           />
           <v-select v-if="structuredLayout" v-model="cabinetComponentForm.area_id" label="Gerätebereich" :items="deviceAreaOptions" item-title="title" item-value="id" />
+          <v-alert v-else-if="junctionBoxLayout" type="info" variant="tonal" density="compact" class="mb-3">
+            Die Komponente wird in der Verteilerdose ohne Reihe oder TE-Platz dargestellt.
+          </v-alert>
           <v-alert v-else type="info" variant="tonal" density="compact" class="mb-3">Diese Komponente gehört zur einfachen Reihenaufteilung und ist kein Asset.</v-alert>
-          <v-row>
+          <v-row v-if="!junctionBoxLayout">
             <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.row_number" label="Reihe" type="number" min="1" /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.start_position" label="Startposition (TE)" type="number" min="1" /></v-col>
-            <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.module_width"  :label="cabinetComponentForm.component_type === 'busbar' ? 'Überspannte TE' : 'Breite (TE)'" type="number" min="1" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.module_width"  :label="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type) ? 'Überspannte TE' : 'Breite (TE)'" type="number" min="1" /></v-col>
           </v-row>
           <v-select
             v-model="cabinetComponentForm.phases"
@@ -2088,8 +2239,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             hint="Diese Leiter stehen anschließend bei der Verkabelung zur Verfügung."
             persistent-hint
           />
-          <v-row v-if="cabinetComponentForm.component_type === 'busbar' || cabinetComponentForm.component_type === 'neutral_rail'">
-            <v-col cols="12" :sm="cabinetComponentForm.component_type === 'busbar' ? 8 : 12">
+          <v-row v-if="['busbar', 'phase_rail', 'neutral_rail'].includes(cabinetComponentForm.component_type)">
+            <v-col cols="12" :sm="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type) ? 6 : 12">
               <v-select
                 v-model="cabinetComponentForm.linked_rcd_device_id"
                 label="Zugehöriger FI/RCD"
@@ -2101,7 +2252,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 persistent-hint
               />
             </v-col>
-            <v-col v-if="cabinetComponentForm.component_type === 'busbar'" cols="12" sm="4">
+            <v-col v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" cols="12" sm="3">
               <v-select
                 v-model="cabinetComponentForm.start_phase"
                 label="Startphase"
@@ -2110,9 +2261,20 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 item-value="value"
               />
             </v-col>
+            <v-col v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" cols="12" sm="3">
+              <v-select
+                v-model="cabinetComponentForm.mounting_side"
+                label="Montage"
+                :items="[{ title: 'Oberhalb', value: 'above' }, { title: 'Unterhalb', value: 'below' }]"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
           </v-row>
-          <v-alert v-if="cabinetComponentForm.component_type === 'busbar'" type="info" variant="tonal" density="compact" class="mb-3">
-            Die Breite beschreibt die überspannten TE. Die ausgewählten Phasen werden ab der Startphase wiederholt, zum Beispiel L1 – L2 – L3 – L1.
+          <v-alert v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" type="info" variant="tonal" density="compact" class="mb-3">
+            Die Schiene ist eine Anschlusskomponente ohne eigene TE-Belegung. Die Breite
+            beschreibt die überspannten Schutzgeräte; die Phasen werden ab der Startphase
+            wiederholt, zum Beispiel L1 – L2 – L3 – L1.
           </v-alert>
           <v-alert v-if="cabinetComponentForm.component_type === 'neutral_rail'" type="info" variant="tonal" density="compact" class="mb-3">
             Diese N-Schiene wird der ausgewählten FI-Gruppe zugeordnet. Einzelne Klemmen müssen nicht gepflegt werden.
@@ -2128,9 +2290,21 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             Verteilerblöcke, Sammelschienen und Klemmen sind interne Schrankobjekte. Nach dem Speichern können sie als Quelle oder Ziel einer elektrischen Verbindung ausgewählt werden.
           </v-alert>
         </v-card-text>
+        <v-alert
+          v-if="cabinetComponentError"
+          type="error"
+          variant="tonal"
+          density="compact"
+          closable
+          class="mx-4 mb-2"
+          role="alert"
+          @click:close="cabinetComponentError = null"
+        >
+          {{ cabinetComponentError }}
+        </v-alert>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="cabinetComponentDialog = false">Abbrechen</v-btn>
+          <v-btn variant="text" @click="cabinetComponentError = null; cabinetComponentDialog = false">Abbrechen</v-btn>
           <v-btn color="primary" :loading="saving" @click="saveCabinetComponent">Speichern</v-btn>
         </v-card-actions>
       </v-card>
@@ -2232,32 +2406,56 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
 @media (max-width: 900px) { .area-card.area-half { grid-column: span 2; } .layout-grid { grid-template-columns: minmax(0, 1fr); } }
 .area-placeholder { min-height: 72px; display: grid; place-items: center; border: 1px dashed rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 8px; }
 .module-scroll { overflow-x: auto; padding-bottom: 6px; }
-.module-board { display: grid; gap: 4px; width: 100%; align-items: stretch; grid-template-rows: auto minmax(132px, auto) auto; }
+.module-board { display: grid; gap: 4px; width: 100%; align-items: stretch; grid-template-rows: auto minmax(132px, auto) 44px; }
 .module-cell { grid-row: 1; min-width: 48px; text-align: center; font-size: 0.7rem; opacity: 0.65; border-bottom: 1px solid currentColor; }
-.module-drop-cell { grid-row: 2 / span 2; min-height: 150px; border: 2px dashed transparent; border-radius: 6px; transition: background-color 120ms ease, border-color 120ms ease; }
+.module-drop-cell { grid-row: 2; min-height: 132px; border: 2px dashed transparent; border-radius: 6px; transition: background-color 120ms ease, border-color 120ms ease; }
 .module-board.is-dragging .module-drop-cell { border-color: rgba(var(--v-theme-primary), 0.35); background: rgba(var(--v-theme-primary), 0.06); }
 .module-board.is-dragging .module-device { pointer-events: none; opacity: 0.72; }
 .module-board.is-dragging .drop-target-valid { border-color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.2); }
 .module-board.is-dragging .drop-target-invalid { border-color: rgb(var(--v-theme-error)); background: rgba(var(--v-theme-error), 0.2); }
 .module-device { grid-row: 2; min-width: 0; z-index: 2; overflow: hidden; cursor: pointer; border-width: 2px; }
 .module-device-title { padding: 10px 8px 4px; line-height: 1.2; min-height: 2.8rem; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: normal; overflow-wrap: break-word; hyphens: auto; }
-.vertical-device-title {
+.module-board.compact-view .narrow-module-device {
+  display: flex;
+  flex-direction: column;
+  min-height: 170px;
+}
+.module-board.compact-view .narrow-module-device .module-device-title {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  min-height: 118px;
-  max-height: none;
-  padding: 8px 4px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  overflow: visible;
+  justify-content: center;
+  min-height: 0;
+  padding: 8px 3px 4px;
+  overflow: hidden;
   -webkit-line-clamp: unset;
 }
+.module-board.compact-view .narrow-module-device .module-device-name {
+  display: block;
+  max-height: 128px;
+  max-width: 100%;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.module-board.compact-view .narrow-module-device .module-compact-value {
+  flex: 0 0 auto;
+  padding: 4px 2px 8px;
+  text-align: center;
+}
 .module-compact-value { padding: 0 8px 8px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.device-phase-strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 6px; }
+.device-phase-strip-item { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; padding: 2px 6px; border-radius: 999px; font-size: 0.72rem; line-height: 1; font-weight: 800; background: var(--phase-bg, rgba(var(--v-theme-primary), 0.14)); color: var(--phase-fg, rgb(var(--v-theme-primary))); box-shadow: inset 0 0 0 1px var(--phase-border, rgba(var(--v-theme-primary), 0.22)); }
+.module-board.compact-view .device-phase-strip { justify-content: center; padding: 0 4px 8px; }
+.module-board.compact-view .narrow-module-device .device-phase-strip { flex-direction: column; align-items: center; gap: 2px; padding: 0 2px 6px; }
+.module-board.compact-view .narrow-module-device .device-phase-strip-item { min-width: 26px; padding-inline: 4px; font-size: 0.68rem; }
 .module-board.compact-view .module-device :deep(.v-card-subtitle),
 .module-board.compact-view .module-device :deep(.v-card-text),
 .module-board.compact-view .module-device-actions { display: none; }
-.module-board.compact-view .module-device { min-height: 92px; }
+.module-board.compact-view .module-device { min-height: 170px; }
 .cabinet-legend { display: flex; flex-wrap: wrap; gap: 8px; }
 .legend-item { display: inline-flex; align-items: center; min-height: 30px; padding: 4px 10px; border-radius: 999px; border: 2px solid transparent; font-size: 0.75rem; font-weight: 700; }
 .cabinet-type-fuse, .cabinet-type-mcb { border-color: #607d8b !important; background: rgba(96, 125, 139, 0.16) !important; }
@@ -2278,11 +2476,17 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
 .device-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .has-group-warning { outline: 2px solid rgba(var(--v-theme-warning), 0.65); }
 .cabinet-component-card { border-style: dashed; }
-.busbar-card { min-height: 34px; z-index: 3; border-style: solid; border-width: 2px; background: rgba(var(--v-theme-primary), 0.12); }
-.busbar-card :deep(.v-card-title) { padding-block: 4px; }
-.busbar-card :deep(.v-card-text) { padding-top: 2px !important; padding-bottom: 4px !important; }
-.busbar-phase-sequence { display: grid; grid-template-columns: repeat(auto-fit, minmax(24px, 1fr)); gap: 2px; font-weight: 700; text-align: center; }
-.busbar-phase-sequence span { border-radius: 3px; background: rgba(var(--v-theme-primary), 0.14); padding: 1px 2px; }
+.busbar-card { height: 44px !important; min-height: 44px !important; max-height: 44px !important; z-index: 3; align-self: stretch !important; overflow: hidden; border-style: solid; border-width: 2px; background: rgba(249, 168, 37, 0.10) !important; }
+.busbar-card :deep(.v-card-title) { min-height: 0; padding: 3px 6px 0; line-height: 1; font-size: 0.72rem; }
+.busbar-card :deep(.v-card-text),
+.busbar-card .module-device-actions { display: none; }
+.busbar-inline-visual { display: grid; grid-template-columns: repeat(auto-fit, minmax(18px, 1fr)); gap: 1px; padding: 0 6px 4px; align-items: end; }
+.busbar-inline-segment { display: flex; flex-direction: column; align-items: center; gap: 1px; --phase-bg: rgba(var(--v-theme-primary), 0.9); --phase-fg: #fff; --phase-border: rgba(var(--v-theme-primary), 0.25); }
+.busbar-inline-label { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 1px 4px; border-radius: 999px; font-size: 0.64rem; line-height: 1; font-weight: 800; background: var(--phase-bg); color: var(--phase-fg); box-shadow: inset 0 0 0 1px var(--phase-border); }
+.busbar-inline-connector { display: block; width: 2px; height: 8px; border-radius: 999px; background: var(--phase-bg); }
+.phase-l1 { --phase-bg: #795548; --phase-fg: #ffffff; --phase-border: rgba(121, 85, 72, 0.42); }
+.phase-l2 { --phase-bg: #212121; --phase-fg: #ffffff; --phase-border: rgba(255, 255, 255, 0.20); }
+.phase-l3 { --phase-bg: #9e9e9e; --phase-fg: #111111; --phase-border: rgba(158, 158, 158, 0.46); }
 
 .drag-ready { cursor: grab; }
 .drag-ready:active, .drag-source { cursor: grabbing; }

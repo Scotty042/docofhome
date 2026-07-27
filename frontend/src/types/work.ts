@@ -25,6 +25,8 @@ export interface WorkItemRead extends WorkItemWrite {
   id: string
   target_label: string | null
   target_route: string | null
+  automation_key: string | null
+  generated: boolean
   status: WorkStatus
   overdue: boolean
   due_status: 'upcoming' | 'today' | 'overdue' | null

@@ -10,6 +10,7 @@ from app.schemas.electrical_topology import ElectricalPhase
 class DistributionLayoutMode(StrEnum):
     ROWS = "rows"
     SECTIONS = "sections"
+    JUNCTION_BOX = "junction_box"
 
 
 class DistributionAreaType(StrEnum):
@@ -171,6 +172,11 @@ class ElectricalCabinetComponentType(StrEnum):
     OTHER = "other"
 
 
+class ElectricalRailMountingSide(StrEnum):
+    ABOVE = "above"
+    BELOW = "below"
+
+
 class ElectricalCabinetComponentWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -186,6 +192,7 @@ class ElectricalCabinetComponentWrite(BaseModel):
     outgoing_connections: int | None = Field(default=None, ge=1, le=1000)
     linked_rcd_device_id: UUID | None = None
     start_phase: ElectricalPhase | None = None
+    mounting_side: ElectricalRailMountingSide | None = None
     description: str | None = None
     notes: str | None = None
 
@@ -219,18 +226,28 @@ class ElectricalCabinetComponentWrite(BaseModel):
         line_phases = [phase for phase in self.phases if phase in {
             ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3
         }]
-        if self.component_type == ElectricalCabinetComponentType.BUSBAR:
+        rail_types = {
+            ElectricalCabinetComponentType.BUSBAR,
+            ElectricalCabinetComponentType.PHASE_RAIL,
+        }
+        if self.component_type in rail_types:
             if not line_phases:
-                raise ValueError("Eine Sammelschiene benötigt mindestens eine Phase")
+                raise ValueError("Eine Kamm-/Phasenschiene benötigt mindestens eine Phase")
             if self.start_phase is None:
                 self.start_phase = line_phases[0]
             if self.start_phase not in line_phases:
-                raise ValueError("Die Startphase muss auf der Sammelschiene vorhanden sein")
-        elif self.start_phase is not None:
+                raise ValueError("Die Startphase muss auf der Schiene vorhanden sein")
+            if self.mounting_side is None:
+                self.mounting_side = ElectricalRailMountingSide.BELOW
+        else:
             self.start_phase = None
+            self.mounting_side = None
         if self.component_type == ElectricalCabinetComponentType.NEUTRAL_RAIL:
             if self.phases != [ElectricalPhase.N]:
-                raise ValueError("Eine N-Schiene muss ausschließlich dem Neutralleiter N zugeordnet sein")
+                raise ValueError(
+                    "Eine N-Schiene muss ausschließlich dem Neutralleiter N "
+                    "zugeordnet sein"
+                )
         return self
 
 
@@ -254,6 +271,7 @@ class ElectricalCabinetComponentRead(BaseModel):
     linked_rcd_device_id: UUID | None
     linked_rcd_name: str | None
     start_phase: ElectricalPhase | None
+    mounting_side: ElectricalRailMountingSide | None
     description: str | None
     notes: str | None
     created_at: datetime

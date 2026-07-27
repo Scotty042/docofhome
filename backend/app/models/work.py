@@ -64,6 +64,12 @@ class WorkItem(SQLModel, table=True):
             "due_at",
             sqlite_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_work_items_automation_key",
+            "automation_key",
+            unique=True,
+            sqlite_where=text("automation_key IS NOT NULL AND deleted_at IS NULL"),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -80,6 +86,7 @@ class WorkItem(SQLModel, table=True):
     calendar_month: int | None = Field(default=None, ge=1, le=12)
     calendar_last_day: bool = False
     priority: str = Field(default="normal", index=True, max_length=20)
+    automation_key: str | None = Field(default=None, max_length=255)
     status: str = Field(default="open", index=True, max_length=20)
     completed_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

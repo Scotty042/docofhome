@@ -71,10 +71,12 @@ class DistributionWrite(BaseModel):
             raise ValueError("A main distribution must not have a parent")
         if self.distribution_type == DistributionType.SUB and not self.parent_distribution_id:
             raise ValueError("A subdistribution requires a parent")
-        if self.layout_mode == DistributionLayoutMode.SECTIONS and (
+        if self.layout_mode != DistributionLayoutMode.ROWS and (
             self.rows is not None or self.modules_per_row is not None
         ):
-            raise ValueError("A sections layout stores capacity on its individual areas")
+            raise ValueError(
+                "Nur die einfache Reihenaufteilung speichert Reihen und Module je Reihe"
+            )
         return self
 
 

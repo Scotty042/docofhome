@@ -42,7 +42,10 @@ class ElectricalTopologyService:
         page_size: int,
         search: str | None,
     ) -> Page[ElectricalEndpointRead]:
-        candidates = self.endpoints.list()
+        candidates = [
+            item for item in self.endpoints.list()
+            if item.kind != ElectricalEndpointKind.DISTRIBUTION
+        ]
         normalized = search.strip().casefold() if search else ""
         if normalized:
             candidates = [
@@ -154,7 +157,11 @@ class ElectricalTopologyService:
                 key=str.casefold,
             )
             incoming_phases = sorted(
-                {phase for connection in incoming_connections for phase in connection.phases},
+                {
+                    phase
+                    for connection in incoming_connections
+                    for phase in connection.effective_phases
+                },
                 key=list(ElectricalPhase).index,
             )
             nodes.append(
@@ -196,6 +203,14 @@ class ElectricalTopologyService:
         *,
         exclude_id: UUID | None = None,
     ) -> None:
+        if ElectricalEndpointKind.DISTRIBUTION in {
+            payload.source_kind,
+            payload.target_kind,
+        }:
+            raise ElectricalValidationError(
+                "Verteilungen sind strukturelle Behälter. Verkabelungen werden an ihren "
+                "Einbaugeräten und Klemmen dokumentiert."
+            )
         if payload.target_kind == ElectricalEndpointKind.GRID_CONNECTION:
             raise ElectricalValidationError(
                 "Der Netzanschluss kann nur als Quelle verwendet werden"
@@ -206,6 +221,8 @@ class ElectricalTopologyService:
             raise ElectricalValidationError("Source does not exist or is archived")
         if target is None:
             raise ElectricalValidationError("Target does not exist or is archived")
+        self._enforce_protective_device_line_phases(payload, source, target)
+        self._validate_endpoint_phases(payload, source, target)
         source_key = source.key
         target_key = target.key
         outgoing: dict[str, list[str]] = {}
@@ -228,6 +245,80 @@ class ElectricalTopologyService:
             visited.add(current)
             pending.extend(outgoing.get(current, []))
         self._validate_cabinet_phase_flow(payload, exclude_id=exclude_id)
+
+    @staticmethod
+    def _enforce_protective_device_line_phases(
+        payload: ElectricalConnectionWrite,
+        source: ElectricalEndpointProjection,
+        target: ElectricalEndpointProjection,
+    ) -> None:
+        """Force the line phase derived from a rail onto new or edited wiring.
+
+        N and PE remain user-selectable. Existing contradictory records are still shown
+        with warnings until they are edited; every subsequent save stores the calculated
+        line phase instead of accepting a manual L1/L2/L3 override.
+        """
+        line_phases = {ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3}
+        requirements: list[tuple[ElectricalPhase, ...]] = []
+        for endpoint in (source, target):
+            if (
+                endpoint.kind != ElectricalEndpointKind.PROTECTIVE_DEVICE
+                or endpoint.effective_phases is None
+            ):
+                continue
+            required = tuple(
+                phase for phase in endpoint.effective_phases if phase in line_phases
+            )
+            if required:
+                requirements.append(required)
+        if not requirements:
+            return
+        required = requirements[0]
+        if any(candidate != required for candidate in requirements[1:]):
+            details = " / ".join(
+                ", ".join(phase.value for phase in candidate)
+                for candidate in requirements
+            )
+            raise ElectricalValidationError(
+                "Die beteiligten Schutzgeräte haben widersprüchliche wirksame Phasen: "
+                f"{details}"
+            )
+        preserved = [phase for phase in payload.phases if phase not in line_phases]
+        order = {phase: index for index, phase in enumerate(ElectricalPhase)}
+        payload.phases = sorted(set(required).union(preserved), key=order.__getitem__)
+
+    @staticmethod
+    def _validate_endpoint_phases(
+        payload: ElectricalConnectionWrite,
+        source: ElectricalEndpointProjection,
+        target: ElectricalEndpointProjection,
+    ) -> None:
+        line_phases = {ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3}
+        selected = set(payload.phases) & line_phases
+        for endpoint, role in ((source, "Quelle"), (target, "Ziel")):
+            if endpoint.effective_phases is None:
+                continue
+            allowed = set(endpoint.effective_phases) & line_phases
+            if not allowed:
+                continue
+            invalid = selected - allowed
+            if invalid:
+                names = ", ".join(sorted(item.value for item in invalid))
+                expected = ", ".join(
+                    item.value for item in endpoint.effective_phases if item in line_phases
+                )
+                raise ElectricalValidationError(
+                    f"{role} {endpoint.name} akzeptiert nicht {names}; "
+                    f"wirksame Phase: {expected}"
+                )
+            if endpoint.kind == ElectricalEndpointKind.PROTECTIVE_DEVICE and selected != allowed:
+                expected = ", ".join(
+                    item.value for item in endpoint.effective_phases if item in line_phases
+                )
+                raise ElectricalValidationError(
+                    f"Die Verbindung am Schutzgerät {endpoint.name} muss exakt "
+                    f"{expected} verwenden"
+                )
 
     def _validate_cabinet_phase_flow(
         self,
@@ -351,13 +442,19 @@ class ElectricalTopologyService:
             raise ElectricalValidationError(
                 "Stored electrical connection references a missing endpoint"
             )
+        stored_phases = self._phases(record)
+        effective_phases, warnings = self._effective_connection_phases(
+            source, target, stored_phases
+        )
         return ElectricalConnectionRead(
             id=record.id,
             source=self._endpoint_read(source),
             target=self._endpoint_read(target),
             connection_type=ElectricalConnectionType(record.connection_type),
             label=record.label,
-            phases=self._phases(record),
+            phases=stored_phases,
+            effective_phases=effective_phases,
+            phase_warnings=warnings,
             cable_type=record.cable_type,
             cores=record.cores,
             cross_section_mm2=record.cross_section_mm2,
@@ -382,8 +479,46 @@ class ElectricalTopologyService:
             type_name=endpoint.type_name,
             location_name=endpoint.location_name,
             device_type=endpoint.device_type,
+            effective_phases=(
+                list(endpoint.effective_phases)
+                if endpoint.effective_phases is not None
+                else None
+            ),
             deleted_at=endpoint.deleted_at,
         )
+
+    @staticmethod
+    def _effective_connection_phases(
+        source: ElectricalEndpointProjection,
+        target: ElectricalEndpointProjection,
+        stored: list[ElectricalPhase],
+    ) -> tuple[list[ElectricalPhase], list[str]]:
+        allowed = set(stored)
+        for endpoint in (source, target):
+            if endpoint.effective_phases is None:
+                continue
+            line_allowed = set(endpoint.effective_phases) & {
+                ElectricalPhase.L1,
+                ElectricalPhase.L2,
+                ElectricalPhase.L3,
+            }
+            if line_allowed:
+                allowed -= {
+                    ElectricalPhase.L1,
+                    ElectricalPhase.L2,
+                    ElectricalPhase.L3,
+                } - line_allowed
+        order = {phase: index for index, phase in enumerate(ElectricalPhase)}
+        effective = sorted(allowed, key=order.__getitem__)
+        warnings: list[str] = []
+        if effective != stored:
+            stored_names = ", ".join(item.value for item in stored) or "keine"
+            effective_names = ", ".join(item.value for item in effective) or "keine"
+            warnings.append(
+                "Gespeicherte Verbindung enthält abweichende Phasen: "
+                f"{stored_names}. Wirksam: {effective_names}."
+            )
+        return effective, warnings
 
     @staticmethod
     def _record_values(payload: ElectricalConnectionWrite) -> dict[str, object]:

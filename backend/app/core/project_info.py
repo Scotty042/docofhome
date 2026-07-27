@@ -10,12 +10,20 @@ class ProjectLink:
     icon: str
 
 
-# These links intentionally live in source control. Once the public GitHub
-# repository exists, set the URLs here; empty values remain hidden in the UI.
+# These links intentionally live in source control and are included in every
+# release ZIP. They therefore remain available even outside a Git checkout.
 PROJECT_LINKS: tuple[ProjectLink, ...] = (
-    ProjectLink("Repository", None, "mdi-github"),
-    ProjectLink("Veröffentlichungen", None, "mdi-tag-outline"),
-    ProjectLink("Fehler melden und Wünsche", None, "mdi-message-alert-outline"),
+    ProjectLink("Repository", "https://github.com/Scotty042/docofhome", "mdi-github"),
+    ProjectLink(
+        "Veröffentlichungen",
+        "https://github.com/Scotty042/docofhome/releases",
+        "mdi-tag-outline",
+    ),
+    ProjectLink(
+        "Fehler melden und Wünsche",
+        "https://github.com/Scotty042/docofhome/issues",
+        "mdi-message-alert-outline",
+    ),
 )
 
 LICENSE_NOTICE = "Veröffentlicht unter der GNU Affero General Public License v3.0."

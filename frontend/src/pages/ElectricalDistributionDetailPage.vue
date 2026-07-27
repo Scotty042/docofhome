@@ -33,6 +33,7 @@ const deviceToArchive = ref<ProtectiveDevice | null>(null)
 const distributionId = computed(() => String(route.params.id ?? ''))
 const unavailable = computed(() => errorStatus.value === 0 || (errorStatus.value ?? 0) >= 500)
 const structuredLayout = computed(() => distribution.value?.layout_mode === 'sections')
+const junctionBoxLayout = computed(() => distribution.value?.layout_mode === 'junction_box')
 const deviceGroups = computed(() => groupProtectiveDevices(
   distribution.value?.protective_devices ?? [],
   distribution.value?.rows ?? null
@@ -142,13 +143,14 @@ watch(distributionId, (id) => {
         </div>
         <div v-if="!distribution.deleted_at" class="d-flex flex-wrap ga-2">
           <v-btn
-            prepend-icon="mdi-view-column-outline"
+            :prepend-icon="junctionBoxLayout ? 'mdi-source-branch' : 'mdi-view-column-outline'"
             color="primary"
             :to="`/electrical/distributions/${distribution.id}/layout`"
           >
-            Schrankaufteilung
+            {{ junctionBoxLayout ? 'Komponenten' : 'Schrankaufteilung' }}
           </v-btn>
           <v-btn
+            v-if="!junctionBoxLayout"
             prepend-icon="mdi-shield-plus-outline"
             variant="tonal"
             :to="`/electrical/protective-devices/new?distribution=${distribution.id}`"
@@ -189,10 +191,10 @@ watch(distributionId, (id) => {
                 <v-list-item title="Standort" :subtitle="distribution.asset.location_path" />
                 <v-list-item
                   title="Aufbau"
-                  :subtitle="structuredLayout ? 'Felder und Bereiche' : 'Einfache Reihen'"
+                  :subtitle="junctionBoxLayout ? 'Verteilerdose' : structuredLayout ? 'Felder und Bereiche' : 'Einfache Reihen'"
                 />
                 <v-list-item
-                  v-if="!structuredLayout"
+                  v-if="!structuredLayout && !junctionBoxLayout"
                   title="Kapazität"
                   :subtitle="distributionCapacity(distribution)"
                 />
@@ -222,21 +224,6 @@ watch(distributionId, (id) => {
         </v-col>
       </v-row>
 
-      <v-card class="mb-4" title="Versorgung und Abgänge" prepend-icon="mdi-source-branch">
-        <v-card-text>
-          <v-progress-linear v-if="topologyLoading" indeterminate color="primary" class="mb-3" />
-          <v-alert v-if="topologyError" type="warning" variant="tonal" density="compact" class="mb-3">
-            Phase und Versorgungsweg konnten nicht geladen werden: {{ topologyError }}
-          </v-alert>
-          <ElectricalWiringSummary
-            :topology="topology"
-            endpoint-kind="distribution"
-            :endpoint-id="distribution.id"
-            :show-button="!distribution.deleted_at"
-          />
-        </v-card-text>
-      </v-card>
-
       <ImmichImageLinksCard
         :asset-id="distribution.asset.id"
         :read-only="Boolean(distribution.deleted_at)"
@@ -261,6 +248,27 @@ watch(distributionId, (id) => {
             :to="`/electrical/distributions/${distribution.id}/layout`"
           >
             Schrankaufteilung öffnen
+          </v-btn>
+        </v-card-text>
+      </v-card>
+
+      <v-card
+        v-else-if="junctionBoxLayout"
+        class="mt-4"
+        title="Verbindungskomponenten"
+        prepend-icon="mdi-source-branch"
+      >
+        <v-card-text>
+          <p class="mb-4">
+            Die Verteilerdose enthält Klemmen und Anschlussblöcke ohne fiktive TE-Reihen.
+            Direkte elektrische Verbindungen werden an diesen Komponenten dokumentiert.
+          </p>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-source-branch"
+            :to="`/electrical/distributions/${distribution.id}/layout`"
+          >
+            Komponenten öffnen
           </v-btn>
         </v-card-text>
       </v-card>

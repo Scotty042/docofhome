@@ -39,7 +39,9 @@ const flatDistributions = computed(() => {
   const result: Array<{ id: string; title: string; layoutMode: 'rows' | 'sections' }> = []
   const visit = (nodes: DistributionTreeNode[], depth = 0) => {
     for (const node of nodes) {
-      result.push({ id: node.id, title: `${'— '.repeat(depth)}${node.display_name}`, layoutMode: node.layout_mode })
+      if (node.layout_mode !== 'junction_box') {
+        result.push({ id: node.id, title: `${'— '.repeat(depth)}${node.display_name}`, layoutMode: node.layout_mode })
+      }
       visit(node.children, depth + 1)
     }
   }

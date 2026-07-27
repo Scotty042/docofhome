@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, col, select
 
 from app.models.application_setting import ApplicationSetting
 from app.models.asset_engine import Asset, Location
+from app.models.consumption import ConsumptionMeter, ConsumptionReading
 from app.models.electrical import (
     ElectricalComponent,
     ElectricalDistribution,
@@ -60,6 +62,7 @@ class WorkService:
         target_id: UUID | None = None,
         include_archived: bool = False,
     ) -> list[WorkItemRead]:
+        self._sync_monthly_meter_tasks()
         if (target_type is None) != (target_id is None):
             raise WorkValidationError("Zieltyp und Ziel-ID müssen gemeinsam angegeben werden")
         statement = select(WorkItem)
@@ -119,6 +122,7 @@ class WorkService:
 
     def update(self, item_id: UUID, payload: WorkItemWrite) -> WorkItemRead:
         record = self._require_item(item_id)
+        self._require_user_managed(record)
         if record.status != WorkStatus.OPEN.value:
             raise WorkConflictError("Nur offene Einträge können bearbeitet werden")
         same_target = (
@@ -153,6 +157,7 @@ class WorkService:
 
     def complete(self, item_id: UUID, payload: WorkCompletionWrite) -> WorkItemRead:
         record = self._require_item(item_id)
+        self._require_user_managed(record)
         if record.status != WorkStatus.OPEN.value:
             raise WorkConflictError("Nur offene Einträge können abgeschlossen werden")
         now = datetime.now(UTC)
@@ -195,6 +200,7 @@ class WorkService:
 
     def cancel(self, item_id: UUID) -> WorkItemRead:
         record = self._require_item(item_id)
+        self._require_user_managed(record)
         if record.status != WorkStatus.OPEN.value:
             raise WorkConflictError("Nur offene Einträge können abgebrochen werden")
         now = datetime.now(UTC)
@@ -208,6 +214,7 @@ class WorkService:
 
     def reopen(self, item_id: UUID) -> WorkItemRead:
         record = self._require_item(item_id)
+        self._require_user_managed(record)
         if record.status == WorkStatus.OPEN.value:
             return self._read(record)
         now = datetime.now(UTC)
@@ -222,6 +229,7 @@ class WorkService:
 
     def delete(self, item_id: UUID) -> None:
         record = self._require_item(item_id)
+        self._require_user_managed(record)
         now = datetime.now(UTC)
         record.deleted_at = now
         record.updated_at = now
@@ -249,6 +257,7 @@ class WorkService:
         ]
 
     def summary(self) -> WorkSummaryRead:
+        self._sync_monthly_meter_tasks()
         records = list(
             self.session.exec(select(WorkItem).where(WorkItem.deleted_at.is_(None))).all()
         )
@@ -294,6 +303,150 @@ class WorkService:
             if item.days_remaining is not None and item.days_remaining <= days
         ]
 
+
+    @staticmethod
+    def _automation_meter_id(automation_key: str) -> UUID | None:
+        try:
+            prefix, raw_id, _period = automation_key.split(":", 2)
+            return UUID(raw_id) if prefix == "meter-reading" else None
+        except (ValueError, TypeError):
+            return None
+
+    def _sync_monthly_meter_tasks(self) -> None:
+        """Create exactly one task per active monthly meter plan and month.
+
+        Repeated calls are idempotent through ``automation_key``. A reading in the
+        planned month completes the generated task automatically; disabling a plan
+        cancels an open generated task for the current month.
+        """
+
+        zone = self._timezone()
+        now = datetime.now(UTC)
+        today = now.astimezone(zone).date()
+        period_start_local = datetime(today.year, today.month, 1, tzinfo=zone)
+        if today.month == 12:
+            period_end_local = datetime(today.year + 1, 1, 1, tzinfo=zone)
+        else:
+            period_end_local = datetime(today.year, today.month + 1, 1, tzinfo=zone)
+        period_key = f"{today.year:04d}-{today.month:02d}"
+        prefix = f"meter-reading:"
+        existing = {
+            item.automation_key: item
+            for item in self.session.exec(
+                select(WorkItem).where(WorkItem.deleted_at.is_(None))
+            ).all()
+            if item.automation_key and item.automation_key.startswith(prefix)
+        }
+        active_keys: set[str] = set()
+        changed = False
+        meters = list(
+            self.session.exec(
+                select(ConsumptionMeter).where(ConsumptionMeter.deleted_at.is_(None))
+            ).all()
+        )
+        for meter in meters:
+            if meter.reading_schedule_day is None and not meter.reading_schedule_last_day:
+                continue
+            key = f"meter-reading:{meter.id}:{period_key}"
+            active_keys.add(key)
+            record = existing.get(key)
+            reading = self.session.exec(
+                select(ConsumptionReading).where(
+                    ConsumptionReading.meter_id == meter.id,
+                    ConsumptionReading.measured_at >= period_start_local.astimezone(UTC),
+                    ConsumptionReading.measured_at < period_end_local.astimezone(UTC),
+                    col(ConsumptionReading.deleted_at).is_(None),
+                )
+            ).first()
+            if reading is not None:
+                if record is not None and record.status == WorkStatus.OPEN.value:
+                    record.status = WorkStatus.COMPLETED.value
+                    record.completed_at = now
+                    record.updated_at = now
+                    self.session.add(record)
+                    self.session.add(
+                        WorkItemEvent(
+                            work_item_id=record.id,
+                            event_type="completed",
+                            note="Automatisch durch gespeicherte Zählerablesung erledigt.",
+                            due_at_before=record.due_at,
+                        )
+                    )
+                    changed = True
+                continue
+            maximum = monthrange(today.year, today.month)[1]
+            due_day = maximum if meter.reading_schedule_last_day else min(
+                meter.reading_schedule_day or maximum, maximum
+            )
+            due_at = datetime.combine(
+                date(today.year, today.month, due_day), time(hour=12), tzinfo=zone
+            ).astimezone(UTC)
+            if record is None:
+                record = WorkItem(
+                    item_type=WorkItemType.TASK.value,
+                    title=f"Zähler ablesen: {meter.name}",
+                    description=(
+                        f"Monatliche Ablesung für {meter.name}. "
+                        "Die Aufgabe wird nach einer gespeicherten Ablesung automatisch erledigt."
+                    ),
+                    due_at=due_at,
+                    recurrence_mode=RecurrenceMode.NONE.value,
+                    priority=WorkPriority.NORMAL.value,
+                    automation_key=key,
+                )
+                self.session.add(record)
+                existing[key] = record
+                changed = True
+            else:
+                expected_title = f"Zähler ablesen: {meter.name}"
+                record_changed = False
+                if record.status == WorkStatus.CANCELLED.value:
+                    record.status = WorkStatus.OPEN.value
+                    record.completed_at = None
+                    self.session.add(
+                        WorkItemEvent(
+                            work_item_id=record.id,
+                            event_type="reopened",
+                            note="Ableseplan wurde wieder aktiviert.",
+                            due_at_before=record.due_at,
+                            due_at_after=due_at,
+                        )
+                    )
+                    record_changed = True
+                if record.title != expected_title or record.due_at != due_at:
+                    record.title = expected_title
+                    record.due_at = due_at
+                    record_changed = True
+                if record_changed:
+                    record.updated_at = now
+                    self.session.add(record)
+                    changed = True
+
+        for key, record in existing.items():
+            if not key.endswith(f":{period_key}") or key in active_keys:
+                continue
+            if record.status == WorkStatus.OPEN.value:
+                record.status = WorkStatus.CANCELLED.value
+                record.updated_at = now
+                self.session.add(record)
+                self.session.add(
+                    WorkItemEvent(
+                        work_item_id=record.id,
+                        event_type="cancelled",
+                        note="Ableseplan wurde deaktiviert oder der Zähler archiviert.",
+                        due_at_before=record.due_at,
+                    )
+                )
+                changed = True
+        if changed:
+            try:
+                self.session.commit()
+            except IntegrityError:
+                # Parallel API calls may try to create the same monthly task. The
+                # partial unique index makes the operation idempotent at database
+                # level; a retry on the next read will return the winning row.
+                self.session.rollback()
+
     def _validate_target(
         self,
         target_type: KnowledgeTargetType | None,
@@ -315,6 +468,13 @@ class WorkService:
         except KnowledgeValidationError as exc:
             raise WorkValidationError(str(exc)) from exc
 
+    @staticmethod
+    def _require_user_managed(record: WorkItem) -> None:
+        if record.automation_key is not None:
+            raise WorkConflictError(
+                "Automatisch erzeugte Ableseaufgaben werden durch den Ableseplan verwaltet"
+            )
+
     def _require_item(self, item_id: UUID) -> WorkItem:
         record = self.session.get(WorkItem, item_id)
         if record is None or record.deleted_at is not None:
@@ -324,6 +484,11 @@ class WorkService:
     def _read(self, record: WorkItem) -> WorkItemRead:
         target_type = KnowledgeTargetType(record.target_type) if record.target_type else None
         target_label, target_route = self._target_presentation(target_type, record.target_id)
+        if record.automation_key and record.automation_key.startswith("meter-reading:"):
+            meter_id = self._automation_meter_id(record.automation_key)
+            meter = self.session.get(ConsumptionMeter, meter_id) if meter_id else None
+            target_label = meter.name if meter else "Zählerablesung"
+            target_route = f"/consumption?read={meter_id}" if meter_id else "/consumption"
         due_at = self._aware(record.due_at) if record.due_at else None
         zone = self._timezone()
         days_remaining = (
@@ -343,6 +508,8 @@ class WorkService:
             target_id=record.target_id,
             target_label=target_label,
             target_route=target_route,
+            automation_key=record.automation_key,
+            generated=record.automation_key is not None,
             due_at=due_at,
             recurrence_days=record.recurrence_days,
             recurrence_mode=RecurrenceMode(record.recurrence_mode),

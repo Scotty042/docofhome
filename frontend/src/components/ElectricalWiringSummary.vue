@@ -36,7 +36,7 @@ const incomingConnections = computed(() => incomingTopologyConnections(
 ))
 const connected = computed(() => incomingConnections.value.length > 0)
 const phases = computed(() => {
-  const collected = new Set(incomingConnections.value.flatMap((connection) => connection.phases))
+  const collected = new Set(incomingConnections.value.flatMap((connection) => connection.effective_phases))
   if (collected.size) {
     const phaseOrder: ElectricalPhase[] = ['L1', 'L2', 'L3', 'N', 'PE']
     return phaseOrder.filter((phase) => collected.has(phase))
