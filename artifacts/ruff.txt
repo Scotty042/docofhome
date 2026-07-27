@@ -1,0 +1,370 @@
+I001 [*] Import block is un-sorted or un-formatted
+  --> app/api/v1/asset_engine.py:1:1
+   |
+ 1 | / from typing import Annotated, Any
+ 2 | | from uuid import UUID
+ 3 | |
+ 4 | | from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+ 5 | | from fastapi.responses import FileResponse
+ 6 | | from sqlmodel import Session
+ 7 | |
+ 8 | | from app.db.session import get_session
+ 9 | | from app.schemas.asset_engine import (
+10 | |     AssetDuplicateWrite,
+11 | |     AssetRead,
+12 | |     AssetReplacementRead,
+13 | |     AssetSeriesRead,
+14 | |     AssetSeriesWrite,
+15 | |     AssetReplacementWrite,
+16 | |     AssetStatus,
+17 | |     AssetTypeRead,
+18 | |     AssetTypeWrite,
+19 | |     AssetWrite,
+20 | |     LabelRead,
+21 | |     LabelWrite,
+22 | |     LocationMoveWrite,
+23 | |     LocationRead,
+24 | |     LocationTreeNode,
+25 | |     LocationType,
+26 | |     LocationWrite,
+27 | |     Page,
+28 | |     ProductImageImportWrite,
+29 | |     ProductImageSearchRead,
+30 | |     ProductImageUploadRead,
+31 | |     ProductRead,
+32 | |     ProductWrite,
+33 | |     RelationshipRead,
+34 | |     RelationshipWrite,
+35 | |     SortOrder,
+36 | | )
+37 | | from app.services.asset_engine import (
+38 | |     AssetService,
+39 | |     AssetTypeService,
+40 | |     CrudService,
+41 | |     InvalidReferenceError,
+42 | |     InvalidSortError,
+43 | |     LabelService,
+44 | |     LocationService,
+45 | |     ProductService,
+46 | |     RelationshipService,
+47 | |     ResourceConflictError,
+48 | |     ResourceNotFoundError,
+49 | | )
+50 | | from app.services.product_images import (
+51 | |     ProductImageError,
+52 | |     ProductImageSearchDisabledError,
+53 | |     ProductImageService,
+54 | |     ProductImageUnavailableError,
+55 | |     ProductImageValidationError,
+56 | | )
+   | |_^
+57 |
+58 |   router = APIRouter()
+   |
+help: Organize imports
+   |
+12 |     AssetReplacementRead,
+13 +     AssetReplacementWrite,
+14 |     AssetSeriesRead,
+15 |     AssetSeriesWrite,
+   -     AssetReplacementWrite,
+16 |     AssetStatus,
+   |
+
+B008 Do not perform function call `File` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/v1/asset_engine.py:182:25
+    |
+180 | async def upload_product_image(
+181 |     session: SessionDependency,
+182 |     image: UploadFile = File(...),
+    |                         ^^^^^^^^^
+183 | ) -> ProductImageUploadRead:
+184 |     try:
+    |
+
+UP047 Generic function `_call` should use type parameters
+  --> app/api/v1/energy.py:29:5
+   |
+29 | def _call(callback: Callable[[], T]) -> T:
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+30 |     try:
+31 |         return callback()
+   |
+help: Use type parameters
+
+E501 Line too long (210 > 100)
+  --> app/connectors/fritzbox.py:96:101
+   |
+94 | …
+95 | …
+96 | … Netzwerk > Netzwerkeinstellungen den Zugriff für Anwendungen und verwende die FRITZ!Box-Adresse ohne zusätzlichen Pfad."
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+97 | …
+98 | …
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> app/distribution_layout.py:1:1
+   |
+ 1 | / from datetime import UTC, datetime
+ 2 | | from uuid import UUID
+ 3 | |
+ 4 | | from sqlalchemy.exc import IntegrityError
+ 5 | | from sqlmodel import Session, col, select
+ 6 | |
+ 7 | | from app.models.asset_engine import Asset, AssetType, Location, Product
+ 8 | | from app.models.consumption import ConsumptionMeter, ConsumptionReading
+ 9 | | from app.models.electrical import (
+10 | |     ElectricalAssetPlacement,
+11 | |     ElectricalCabinetComponent,
+12 | |     ElectricalComponent,
+13 | |     ElectricalDistribution,
+14 | |     ElectricalDistributionArea,
+15 | |     ElectricalDistributionSection,
+16 | |     ElectricalMeterPlacement,
+17 | |     ElectricalProtectiveDevice,
+18 | | )
+19 | | from app.models.electrical_topology import ElectricalConnection
+20 | | from app.models.home_assistant import HomeAssistantAssetLink
+21 | | from app.repositories.asset_engine import LocationRepository
+22 | | from app.schemas.electrical import ProtectiveDeviceWrite
+23 | | from app.schemas.electrical_layout import (
+24 | |     DistributionAreaRead,
+25 | |     DistributionAreaSide,
+26 | |     DistributionAreaType,
+27 | |     DistributionAreaWidth,
+28 | |     DistributionAreaWrite,
+29 | |     DistributionLayoutMode,
+30 | |     DistributionSectionRead,
+31 | |     DistributionSectionWrite,
+32 | |     ElectricalAssetPlacementRead,
+33 | |     ElectricalAssetPlacementWrite,
+34 | |     ElectricalCabinetComponentRead,
+35 | |     ElectricalCabinetComponentType,
+36 | |     ElectricalCabinetComponentWrite,
+37 | |     ElectricalLiveValueRead,
+38 | |     ElectricalRailMountingSide,
+39 | |     ElectricalMeterPlacementRead,
+40 | |     ElectricalMeterPlacementWrite,
+41 | | )
+42 | | from app.schemas.electrical_topology import ElectricalPhase
+43 | | from app.schemas.home_assistant import (
+44 | |     HomeAssistantEntityRead,
+45 | |     HomeAssistantEntityRole,
+46 | |     HomeAssistantObjectType,
+47 | | )
+48 | | from app.services.electrical import (
+49 | |     ElectricalConflictError,
+50 | |     ElectricalNotFoundError,
+51 | |     ElectricalValidationError,
+52 | | )
+53 | | from app.services.din_width import effective_asset_module_width
+54 | | from app.services.home_assistant import (
+55 | |     HomeAssistantConfigurationError,
+56 | |     HomeAssistantConnectionError,
+57 | |     HomeAssistantService,
+58 | | )
+   | |_^
+   |
+help: Organize imports
+   |
+37 |     ElectricalLiveValueRead,
+   -     ElectricalRailMountingSide,
+38 |     ElectricalMeterPlacementRead,
+39 |     ElectricalMeterPlacementWrite,
+40 +     ElectricalRailMountingSide,
+41 | )
+--------------------------------------------------------------------------------
+47 | )
+48 + from app.services.din_width import effective_asset_module_width
+49 | from app.services.electrical import (
+--------------------------------------------------------------------------------
+53 | )
+   - from app.services.din_width import effective_asset_module_width
+54 | from app.services.home_assistant import (
+   |
+
+F841 Local variable `product` is assigned to but never used
+   --> app/distribution_layout.py:310:9
+    |
+308 |         if asset is None or asset.deleted_at is not None or asset.status != "active":
+309 |             raise ElectricalNotFoundError
+310 |         product = self.session.get(Product, asset.product_id) if asset.product_id else None
+    |         ^^^^^^^
+311 |         module_width = effective_asset_module_width(self.session, asset)
+312 |         if module_width is None:
+    |
+help: Remove assignment to unused variable `product`
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> app/models/electrical.py:1:1
+  |
+1 | / from datetime import UTC, datetime
+2 | | from uuid import UUID, uuid4
+3 | |
+4 | | from sqlalchemy import CheckConstraint, DDL, Index, event, text
+5 | | from sqlmodel import Field, SQLModel
+  | |____________________________________^
+  |
+help: Organize imports
+  |
+3 |
+  - from sqlalchemy import CheckConstraint, DDL, Index, event, text
+4 + from sqlalchemy import DDL, CheckConstraint, Index, event, text
+5 | from sqlmodel import Field, SQLModel
+  |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> app/repositories/electrical_topology.py:1:1
+   |
+ 1 | / from dataclasses import dataclass
+ 2 | | from datetime import datetime
+ 3 | | from uuid import UUID
+ 4 | |
+ 5 | | from sqlmodel import Session, col, select
+ 6 | |
+ 7 | | from app.models.asset_engine import Asset, AssetType, Location
+ 8 | | from app.models.electrical import (
+ 9 | |     ElectricalCabinetComponent,
+10 | |     ElectricalComponent,
+11 | |     ElectricalDistribution,
+12 | |     ElectricalProtectiveDevice,
+13 | | )
+14 | | from app.models.electrical_circuit import ElectricalCircuit
+15 | | from app.models.electrical_topology import ElectricalConnection
+16 | | from app.models.energy import EnergyConfiguration
+17 | | from app.schemas.electrical_topology import ElectricalEndpointKind, ElectricalPhase
+   | |___________________________________________________________________________________^
+   |
+help: Organize imports
+   |
+18 |
+   -
+19 | GRID_CONNECTION_ENDPOINT_ID = UUID("00000000-0000-0000-0000-000000000001")
+   |
+
+E501 Line too long (103 > 100)
+  --> app/services/integration_checks.py:28:101
+   |
+26 |         setting = self.repository.get_integration(kind.value)
+27 |         if setting is None:
+28 |             return self._result(kind, perf_counter(), False, "Die Integration ist nicht konfiguriert.")
+   |                                                                                                     ^^^
+29 |         payload = IntegrationWrite(
+30 |             kind=kind, enabled=setting.enabled, base_url=setting.base_url, account=setting.account,
+   |
+
+E501 Line too long (117 > 100)
+  --> app/services/integration_checks.py:42:101
+   |
+40 |         if setting is None or not setting.enabled:
+41 |             return self._result(kind, started, False, "Die Integration ist deaktiviert.")
+42 |         secret = setting.secret.get_secret_value() if hasattr(setting.secret, "get_secret_value") else setting.secret
+   |                                                                                                     ^^^^^^^^^^^^^^^^^
+43 |         if not setting.base_url or not secret:
+44 |             return self._result(
+   |
+
+E501 Line too long (101 > 100)
+  --> app/services/integration_checks.py:55:101
+   |
+53 |                 started,
+54 |                 False,
+55 |                 "Für Nextcloud oder FRITZ!Box wird ein Konto beziehungsweise Benutzername benötigt.",
+   |                                                                                                     ^
+56 |             )
+   |
+
+F541 [*] f-string without any placeholders
+   --> app/services/work.py:332:18
+    |
+330 |             period_end_local = datetime(today.year, today.month + 1, 1, tzinfo=zone)
+331 |         period_key = f"{today.year:04d}-{today.month:02d}"
+332 |         prefix = f"meter-reading:"
+    |                  ^^^^^^^^^^^^^^^^^
+333 |         existing = {
+334 |             item.automation_key: item
+    |
+help: Remove extraneous `f` prefix
+    |
+331 |         period_key = f"{today.year:04d}-{today.month:02d}"
+    -         prefix = f"meter-reading:"
+332 +         prefix = "meter-reading:"
+333 |         existing = {
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/test_about_settings_migration.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import importlib.util
+ 4 | | import sqlite3
+ 5 | | from pathlib import Path
+ 6 | | from types import ModuleType
+ 7 | |
+ 8 | | from alembic.migration import MigrationContext
+ 9 | | from alembic.operations import Operations
+10 | | import sqlalchemy as sa
+   | |_______________________^
+11 |
+12 |   ROOT = Path(__file__).resolve().parents[2]
+   |
+help: Organize imports
+   |
+7  |
+8  + import sqlalchemy as sa
+9  | from alembic.migration import MigrationContext
+10 | from alembic.operations import Operations
+   - import sqlalchemy as sa
+11 |
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> tests/test_home_electrical_groups_migration.py:1:1
+  |
+1 | / import importlib.util
+2 | | import sqlite3
+3 | | from pathlib import Path
+4 | |
+5 | | from alembic.migration import MigrationContext
+6 | | from alembic.operations import Operations
+7 | | import sqlalchemy as sa
+  | |_______________________^
+  |
+help: Organize imports
+  |
+4 |
+5 + import sqlalchemy as sa
+6 | from alembic.migration import MigrationContext
+7 | from alembic.operations import Operations
+  - import sqlalchemy as sa
+  -
+8 |
+  |
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> tests/test_topology_multi_source_repair_migration.py:1:1
+  |
+1 | / import importlib.util
+2 | | import sqlite3
+3 | | from pathlib import Path
+4 | |
+5 | | from alembic.migration import MigrationContext
+6 | | from alembic.operations import Operations
+7 | | import sqlalchemy as sa
+  | |_______________________^
+  |
+help: Organize imports
+  |
+4 |
+5 + import sqlalchemy as sa
+6 | from alembic.migration import MigrationContext
+7 | from alembic.operations import Operations
+  - import sqlalchemy as sa
+  -
+8 |
+  |
+
+Found 15 errors.
+[*] 8 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
