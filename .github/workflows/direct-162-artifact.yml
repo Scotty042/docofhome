@@ -1,0 +1,69 @@
+name: Direct DocOfHome 1.6.2 artifact
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - artifacts/**
+
+jobs:
+  direct-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Apply verified effective-phase correction
+        run: |
+          python3 scripts/apply_162_phase_fix_v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('backend/tests/test_electrical_topology.py')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(
+              '{"name": "Electrical distribution"}',
+              '{"name": "Elektrische Verteilung"}',
+              1,
+          )
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Prepare clean project tree
+        run: |
+          rm -rf frontend/node_modules frontend/dist
+          find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
+          rm -rf release-stage
+          mkdir release-stage
+          rsync -a ./ release-stage/ \
+            --exclude '.git/' \
+            --exclude 'artifacts/' \
+            --exclude 'release-stage/' \
+            --exclude 'frontend/node_modules/' \
+            --exclude 'frontend/dist/' \
+            --exclude '**/__pycache__/' \
+            --exclude '**/.pytest_cache/' \
+            --exclude '**/.mypy_cache/' \
+            --exclude '**/.ruff_cache/'
+          rm -f release-stage/.github/workflows/build-162-effective-phase.yml
+          rm -f release-stage/.github/workflows/build-162-effective-phase-v2.yml
+          rm -f release-stage/.github/workflows/build-162-effective-phase-pr.yml
+          rm -f release-stage/.github/workflows/diagnose-ruff.yml
+          rm -f release-stage/.github/workflows/diagnose-mypy.yml
+          rm -f release-stage/.github/workflows/diagnose-pytest.yml
+          rm -f release-stage/.github/workflows/package-162-effective-phase.yml
+          rm -f release-stage/.github/workflows/direct-162-artifact.yml
+          rm -f release-stage/scripts/apply_162_phase_fix.py
+          rm -f release-stage/scripts/apply_162_phase_fix_v2.py
+          rm -f release-stage/backend/tests/test_effective_connection_phases.py
+
+      - name: Upload project tree as direct ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocOfHome-1.6.2-direct
+          path: release-stage/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 7
