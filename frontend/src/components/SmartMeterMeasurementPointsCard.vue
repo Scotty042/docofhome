@@ -195,8 +195,7 @@ onMounted(() => void load())
     </template>
     <v-card-text>
       <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-        CT- oder Stromwandlerklemmen messen eine vorhandene Leitung. Sie erzeugen keine neue
-        stromführende Verbindung und können eigene Home-Assistant-Entitäten erhalten.
+        CT- oder Stromwandlerklemmen messen eine vorhandene Leitung. Sie erzeugen keine neue stromführende Verbindung und können eigene Home-Assistant-Entitäten erhalten.
       </v-alert>
       <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
       <v-skeleton-loader v-if="loading" type="list-item-two-line@2" />
