@@ -1,12 +1,13 @@
 # DocOfHome 1.6.2 – Release-Manifest
 # Format: SHA256  SIZE_BYTES  PATH
-# Dateien: 629
+# Dateien: 630
 174d2e76f27c785dc0e10115af8171b775693730d47928ab647ae113ddc227e7  162  .dockerignore
 fcd6df912d7bbafd746a0966be40f4293d64887e420ffe8b688668b9b4674f8e  46  .env.example
 6206187eab9abb06fb8d78b504cb0bafe968bbe9657a332939de8f922dc9fafb  26  .github/FUNDING.yml
 d5ef4fe6096a6a8d972a02a3db9c8e04f2555eb1b4d133b62e6c8d0397ae2c75  164  .github/ISSUE_TEMPLATE/bug_report.md
 b300d94d2600139a8a0f9f3102eb5c06d9bf5f0203e6794f118f7d650815cae6  189  .github/PULL_REQUEST_TEMPLATE.md
 d1c4190eb2c4806ecc8f05d5bb1242a77bf992d5f0f31f641e6e74da63389cf6  1364  .github/workflows/ci.yml
+95a6a38a9e13717f81629072fd35f7d4279f22602ca283626106bd74a985106c  2661  .github/workflows/direct-162-artifact.yml
 df79d9be4742adcb566a5082edf060fa9251ba9bd5e2c5c06f1c615e7dbaa727  2009  .github/workflows/publish-docker.yml
 14f3cf056c91e29abfda503882166f5bb8bbb463eeccc8d53faa88e09f5b7e4e  197  .gitignore
 44203cca8f0db38b6e2faa433993e9a70889bc234dab062521a50def01be8eb8  1191  AUDIT.md
