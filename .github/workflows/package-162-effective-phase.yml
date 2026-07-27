@@ -152,6 +152,14 @@ jobs:
           (cd artifacts && sha256sum DocOfHome-1.6.2.zip > DocOfHome-1.6.2.zip.sha256)
           unzip -tq artifacts/DocOfHome-1.6.2.zip
 
+      - name: Upload verified release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocOfHome-1.6.2-effective-phase
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Publish verified package to head branch
         run: |
           git config user.name 'DocOfHome Release Bot'
@@ -161,4 +169,7 @@ jobs:
             artifacts/DocOfHome-1.6.2-MANIFEST.txt \
             artifacts/DocOfHome-1.6.2-VALIDATION.md
           git commit -m 'Add verified corrected DocOfHome 1.6.2 package [skip ci]'
+          git reset --hard HEAD
+          git fetch origin ${{ github.event.pull_request.head.ref }}
+          git rebase origin/${{ github.event.pull_request.head.ref }}
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
