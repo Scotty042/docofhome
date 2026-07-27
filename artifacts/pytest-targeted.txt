@@ -1,0 +1,74 @@
+.........F                                                               [100%]
+=================================== FAILURES ===================================
+_________ test_busbar_phase_is_forced_when_wiring_a_protective_device __________
+
+topology_client = <starlette.testclient.TestClient object at 0x7f4617f8df30>
+
+    def test_busbar_phase_is_forced_when_wiring_a_protective_device(
+        topology_client: TestClient,
+    ) -> None:
+        client = topology_client
+        building = create(client, "locations", {"name": "House", "location_type": "building"})
+        room = create(
+            client,
+            "locations",
+            {"name": "Utility", "location_type": "room", "parent_id": building["id"]},
+        )
+        distribution_type = create(
+            client,
+            "asset-types",
+            {"name": "Electrical distribution"},
+        )
+        device_type = create(client, "asset-types", {"name": "Electrical device"})
+    
+        def asset(name: str, asset_type_id: str) -> dict[str, Any]:
+            return create(
+                client,
+                "assets",
+                {
+                    "name": name,
+                    "asset_type_id": asset_type_id,
+                    "location_id": room["id"],
+                    "status": "active",
+                },
+            )
+    
+        distribution_asset = asset("Main distribution", distribution_type["id"])
+        breaker_asset = asset("Dryer breaker", device_type["id"])
+        dryer_asset = asset("Dryer", device_type["id"])
+>       distribution = create(
+            client,
+            "electrical/distributions",
+            {
+                "asset_id": distribution_asset["id"],
+                "parent_distribution_id": None,
+                "distribution_type": "main",
+                "layout_mode": "rows",
+                "designation": "HV",
+                "rows": 1,
+                "modules_per_row": 12,
+                "description": None,
+                "notes": None,
+            },
+        )
+
+tests/test_electrical_topology.py:510: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7f4617f8df30>
+endpoint = 'electrical/distributions'
+payload = {'asset_id': '18cff4f7-b816-460c-a00e-c7418abaeb11', 'description': None, 'designation': 'HV', 'distribution_type': 'main', ...}
+
+    def create(client: TestClient, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = client.post(f"/api/v1/{endpoint}", json=payload)
+>       assert response.status_code == 201, response.text
+E       AssertionError: {"detail":"Für diese Rolle ist ein Asset vom Typ „Elektrische Verteilung“ erforderlich"}
+E       assert 422 == 201
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+
+tests/test_electrical_topology.py:33: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_electrical_topology.py::test_busbar_phase_is_forced_when_wiring_a_protective_device - AssertionError: {"detail":"Für diese Rolle ist ein Asset vom Typ „Elektrische Verteilung“ erforderlich"}
+assert 422 == 201
+ +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+1 failed, 9 passed in 4.96s
