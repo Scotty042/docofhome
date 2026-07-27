@@ -1,6 +1,8 @@
 from app.repositories.electrical_topology import ElectricalEndpointProjection
 from app.schemas.electrical_topology import ElectricalEndpointKind, ElectricalPhase
-from app.services.electrical_topology import ElectricalTopologyService as BaseElectricalTopologyService
+from app.services.electrical_topology import (
+    ElectricalTopologyService as BaseElectricalTopologyService,
+)
 
 
 class ElectricalTopologyService(BaseElectricalTopologyService):
