@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  assetCabinetClass,
   busbarPhasePattern,
+  cabinetComponentClass,
   eligibleParentDistributions,
   filterDistributionTree,
   flattenDistributionTree,
   groupProtectiveDevices,
+  isElectricalConsumptionMeterType,
+  isNonElectricalMeterAssetType,
   moduleBoardStyle,
-  moduleDropConflict
+  moduleDropConflict,
+  protectiveDeviceCabinetClass
 } from './electricalPresentation'
 import type {
   DistributionTreeNode,
@@ -165,8 +170,34 @@ describe('electrical presentation', () => {
 
   it('keeps a twelve-module rail compact enough for a distribution field', () => {
     expect(moduleBoardStyle(12)).toEqual({
-      gridTemplateColumns: 'repeat(12, minmax(34px, 1fr))',
-      minWidth: '452px'
+      gridTemplateColumns: 'repeat(12, minmax(48px, 1fr))',
+      minWidth: '620px'
     })
   })
+
+  it('keeps water and gas meters out of the electrical cabinet candidates', () => {
+    expect(isElectricalConsumptionMeterType('electricity_grid')).toBe(true)
+    expect(isElectricalConsumptionMeterType('electricity_pv')).toBe(true)
+    expect(isElectricalConsumptionMeterType('water')).toBe(false)
+    expect(isElectricalConsumptionMeterType('gas')).toBe(false)
+  })
+
+  it('recognizes non-electrical meter asset types without a linked consumption meter', () => {
+    expect(isNonElectricalMeterAssetType('Wasserzähler')).toBe(true)
+    expect(isNonElectricalMeterAssetType('Gaszähler Keller')).toBe(true)
+    expect(isNonElectricalMeterAssetType('Wärmemengenzähler')).toBe(true)
+    expect(isNonElectricalMeterAssetType('Stromzähler')).toBe(false)
+    expect(isNonElectricalMeterAssetType('Smart Meter')).toBe(false)
+  })
+
+  it('maps cabinet assets and components to stable visual classes', () => {
+    expect(protectiveDeviceCabinetClass('mcb')).toBe('cabinet-type-mcb')
+    expect(assetCabinetClass('Smart Meter')).toBe('cabinet-type-smart-meter')
+    expect(assetCabinetClass('Smartmeter')).toBe('cabinet-type-smart-meter')
+    expect(assetCabinetClass('FI/LS Sicherungsautomat')).toBe('cabinet-type-rcbo')
+    expect(assetCabinetClass('Stromstoßschalter')).toBe('cabinet-type-impulse-switch')
+    expect(cabinetComponentClass('phase_rail')).toBe('cabinet-type-busbar')
+    expect(cabinetComponentClass('neutral_rail')).toBe('cabinet-type-neutral')
+  })
+
 })

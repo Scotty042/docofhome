@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import html
+import ipaddress
 import re
+import socket
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,6 +33,8 @@ ALLOWED_IMAGE_TYPES = {
     "image/gif": ".gif",
 }
 WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
+DUCKDUCKGO_SEARCH = "https://duckduckgo.com/"
+DUCKDUCKGO_IMAGES = "https://duckduckgo.com/i.js"
 ALLOWED_REMOTE_IMAGE_HOSTS = frozenset({"upload.wikimedia.org"})
 ALLOWED_REMOTE_SOURCE_HOSTS = frozenset({"commons.wikimedia.org"})
 
@@ -107,38 +112,122 @@ class ProductImageService:
         normalized = query.strip()
         if len(normalized) < 2:
             raise ProductImageValidationError("Bitte mindestens zwei Suchzeichen eingeben.")
+        bounded_limit = min(max(limit, 1), 24)
+        try:
+            items = self._search_duckduckgo(normalized, bounded_limit)
+            if items:
+                return ProductImageSearchRead(items=items, enabled=True)
+        except (httpx.HTTPError, ValueError, ProductImageUnavailableError):
+            pass
+        try:
+            return ProductImageSearchRead(
+                items=self._search_wikimedia(normalized, bounded_limit),
+                enabled=True,
+            )
+        except (httpx.HTTPError, ValueError, ProductImageUnavailableError) as exc:
+            raise ProductImageUnavailableError(
+                "Die Online-Bildsuche konnte weder DuckDuckGo Images noch Wikimedia erreichen. "
+                "Mögliche Ursachen sind DNS, TLS, Proxy, Firewall oder der externe Dienst."
+            ) from exc
+
+    def _search_duckduckgo(
+        self,
+        query: str,
+        limit: int,
+    ) -> list[ProductImageSearchItemRead]:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; DocOfHome/1.6.0; product image search)",
+            "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+        }
+        with httpx.Client(
+            timeout=httpx.Timeout(12.0),
+            follow_redirects=False,
+            transport=self.transport,
+            headers=headers,
+        ) as client:
+            token_response = client.get(
+                DUCKDUCKGO_SEARCH,
+                params={"q": query, "iax": "images", "ia": "images"},
+            )
+            token_response.raise_for_status()
+            match = re.search(r"vqd=['\"]?([0-9-]+)", token_response.text)
+            if match is None:
+                return []
+            response = client.get(
+                DUCKDUCKGO_IMAGES,
+                params={"q": query, "o": "json", "vqd": match.group(1), "f": ",,,", "p": "1"},
+                headers={**headers, "Referer": str(token_response.request.url)},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        rows = payload.get("results", []) if isinstance(payload, dict) else []
+        if not isinstance(rows, list):
+            return []
+        scored: list[tuple[int, ProductImageSearchItemRead]] = []
+        seen: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            image_url = row.get("image")
+            thumbnail_url = row.get("thumbnail") or image_url
+            source_url = row.get("url") or image_url
+            if not all(isinstance(value, str) for value in (image_url, thumbnail_url, source_url)):
+                continue
+            try:
+                self._validate_remote_url(image_url, allowed_hosts=None, resolve_host=False)
+                self._validate_remote_url(thumbnail_url, allowed_hosts=None, resolve_host=False)
+                self._validate_remote_url(source_url, allowed_hosts=None, resolve_host=False)
+            except ProductImageValidationError:
+                continue
+            canonical = image_url.split("?", 1)[0].casefold()
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            title = self._clean_title(str(row.get("title") or row.get("source") or "Produktbild"))
+            item = ProductImageSearchItemRead(
+                title=title,
+                thumbnail_url=thumbnail_url,
+                source_url=source_url,
+                image_url=image_url,
+                license_name=None,
+                author=str(row.get("source") or "").strip()[:300] or None,
+                provider="DuckDuckGo Images",
+            )
+            score = self._relevance_score(query, title, source_url)
+            scored.append((score, item))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].title.casefold()))
+        return [item for _, item in scored[:limit]]
+
+    def _search_wikimedia(
+        self,
+        query: str,
+        limit: int,
+    ) -> list[ProductImageSearchItemRead]:
         params = {
             "action": "query",
             "generator": "search",
-            "gsrsearch": normalized,
+            "gsrsearch": query,
             "gsrnamespace": "6",
-            "gsrlimit": str(min(max(limit, 1), 24)),
+            "gsrlimit": str(limit),
             "prop": "imageinfo",
             "iiprop": "url|extmetadata",
             "iiurlwidth": "360",
             "format": "json",
             "formatversion": "2",
         }
-        try:
-            with httpx.Client(
-                timeout=httpx.Timeout(12.0),
-                follow_redirects=False,
-                transport=self.transport,
-                headers={"User-Agent": "DocOfHome product image search/1.4.0"},
-            ) as client:
-                response = client.get(WIKIMEDIA_API, params=params)
-                response.raise_for_status()
-                payload = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ProductImageUnavailableError(
-                "Der DocOfHome-Container konnte Wikimedia nicht erreichen. "
-                "Mögliche Ursachen sind DNS, TLS, Proxy, Firewall oder der externe Dienst."
-            ) from exc
-
+        with httpx.Client(
+            timeout=httpx.Timeout(12.0),
+            follow_redirects=False,
+            transport=self.transport,
+            headers={"User-Agent": "DocOfHome product image search/1.6.0"},
+        ) as client:
+            response = client.get(WIKIMEDIA_API, params=params)
+            response.raise_for_status()
+            payload = response.json()
         pages = payload.get("query", {}).get("pages", []) if isinstance(payload, dict) else []
-        items: list[ProductImageSearchItemRead] = []
         if not isinstance(pages, list):
-            pages = []
+            return []
+        items: list[tuple[int, ProductImageSearchItemRead]] = []
         for page in pages:
             if not isinstance(page, dict):
                 continue
@@ -154,49 +243,43 @@ class ProductImageService:
             thumbnail_url = info.get("thumburl") or image_url
             source_url = info.get("descriptionurl") or image_url
             if not all(isinstance(value, str) and value.startswith("https://") for value in (
-                image_url,
-                thumbnail_url,
-                source_url,
+                image_url, thumbnail_url, source_url,
             )):
                 continue
             try:
-                self._validate_remote_url(
-                    image_url, allowed_hosts=ALLOWED_REMOTE_IMAGE_HOSTS
-                )
-                self._validate_remote_url(
-                    thumbnail_url, allowed_hosts=ALLOWED_REMOTE_IMAGE_HOSTS
-                )
-                self._validate_remote_url(
-                    source_url, allowed_hosts=ALLOWED_REMOTE_SOURCE_HOSTS
-                )
+                self._validate_remote_url(image_url, allowed_hosts=ALLOWED_REMOTE_IMAGE_HOSTS)
+                self._validate_remote_url(thumbnail_url, allowed_hosts=ALLOWED_REMOTE_IMAGE_HOSTS)
+                self._validate_remote_url(source_url, allowed_hosts=ALLOWED_REMOTE_SOURCE_HOSTS)
             except ProductImageValidationError:
                 continue
             metadata = info.get("extmetadata") if isinstance(info.get("extmetadata"), dict) else {}
-            items.append(
-                ProductImageSearchItemRead(
-                    title=self._clean_title(str(page.get("title") or "Produktbild")),
-                    thumbnail_url=thumbnail_url,
-                    source_url=source_url,
-                    image_url=image_url,
-                    license_name=self._metadata_value(metadata, "LicenseShortName"),
-                    author=self._metadata_value(metadata, "Artist"),
-                )
+            title = self._clean_title(str(page.get("title") or "Produktbild"))
+            item = ProductImageSearchItemRead(
+                title=title,
+                thumbnail_url=thumbnail_url,
+                source_url=source_url,
+                image_url=image_url,
+                license_name=self._metadata_value(metadata, "LicenseShortName"),
+                author=self._metadata_value(metadata, "Artist"),
+                provider="Wikimedia Commons",
             )
-        return ProductImageSearchRead(items=items, enabled=True)
+            items.append((self._relevance_score(query, title, source_url), item))
+        items.sort(key=lambda pair: (-pair[0], pair[1].title.casefold()))
+        return [item for _, item in items[:limit]]
 
     def import_online(
         self, image_url: str, *, source_url: str | None = None
     ) -> ProductImageUploadRead:
         self._require_online_search()
-        self._validate_remote_url(image_url, allowed_hosts=ALLOWED_REMOTE_IMAGE_HOSTS)
+        self._validate_remote_url(image_url, allowed_hosts=None, resolve_host=True)
         if source_url is not None:
-            self._validate_remote_url(source_url, allowed_hosts=ALLOWED_REMOTE_SOURCE_HOSTS)
+            self._validate_remote_url(source_url, allowed_hosts=None, resolve_host=True)
         try:
             with httpx.Client(
                 timeout=httpx.Timeout(15.0),
                 follow_redirects=False,
                 transport=self.transport,
-                headers={"User-Agent": "DocOfHome product image import/1.4.0"},
+                headers={"User-Agent": "DocOfHome product image import/1.6.0"},
             ) as client:
                 with client.stream("GET", image_url) as response:
                     response.raise_for_status()
@@ -219,8 +302,7 @@ class ProductImageService:
             raise
         except httpx.HTTPError as exc:
             raise ProductImageUnavailableError(
-                "Der DocOfHome-Container konnte das gewählte Wikimedia-Bild nicht "
-                "herunterladen."
+                "Der DocOfHome-Container konnte das gewählte Online-Bild nicht herunterladen."
             ) from exc
         content = b"".join(chunks)
         if not content:
@@ -249,19 +331,85 @@ class ProductImageService:
             )
 
     @staticmethod
-    def _validate_remote_url(value: str, *, allowed_hosts: frozenset[str]) -> None:
+    def _validate_remote_url(
+        value: str,
+        *,
+        allowed_hosts: frozenset[str] | None,
+        resolve_host: bool = False,
+    ) -> None:
         parsed = urlparse(value)
-        host = (parsed.hostname or "").casefold()
+        host = (parsed.hostname or "").casefold().rstrip(".")
         if (
             parsed.scheme != "https"
             or parsed.username is not None
             or parsed.password is not None
             or parsed.port not in (None, 443)
-            or host not in allowed_hosts
+            or not host
+            or host == "localhost"
+            or host.endswith(".local")
+            or (allowed_hosts is not None and host not in allowed_hosts)
         ):
             raise ProductImageValidationError(
-                "Das Online-Bild stammt nicht vom freigegebenen Bildanbieter."
+                "Das Online-Bild stammt nicht von einer zulässigen öffentlichen HTTPS-Adresse."
             )
+        try:
+            literal = ipaddress.ip_address(host)
+        except ValueError:
+            literal = None
+        if literal is not None and not literal.is_global:
+            raise ProductImageValidationError(
+                "Private oder lokale Bildadressen sind nicht zulässig."
+            )
+        if resolve_host and literal is None:
+            try:
+                addresses = {
+                    ipaddress.ip_address(item[4][0])
+                    for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+                }
+            except (OSError, ValueError) as exc:
+                raise ProductImageValidationError(
+                    "Der Bildhost konnte nicht sicher aufgelöst werden."
+                ) from exc
+            if not addresses or any(not address.is_global for address in addresses):
+                raise ProductImageValidationError(
+                    "Private oder lokale Bildziele sind nicht zulässig."
+                )
+
+    @staticmethod
+    def _relevance_score(query: str, title: str, source_url: str) -> int:
+        def normalize(value: str) -> str:
+            decomposed = unicodedata.normalize("NFKD", value.casefold())
+            return " ".join(
+                re.findall(
+                    r"[a-z0-9]+",
+                    "".join(
+                        char
+                        for char in decomposed
+                        if not unicodedata.combining(char)
+                    ),
+                )
+            )
+
+        query_tokens = [token for token in normalize(query).split() if len(token) > 1]
+        haystack = normalize(f"{title} {source_url}")
+        score = sum(12 for token in query_tokens if token in haystack)
+        if query_tokens and all(token in haystack for token in query_tokens):
+            score += 35
+        penalties = {
+            "logo": 24,
+            "icon": 20,
+            "symbol": 16,
+            "manual": 14,
+            "datasheet": 14,
+            "diagram": 12,
+            "schematic": 12,
+            "wiring": 10,
+            "vector": 10,
+        }
+        for token, penalty in penalties.items():
+            if token in haystack:
+                score -= penalty
+        return score
 
     def _require_online_search(self) -> None:
         application = self.settings_repository.get_application()

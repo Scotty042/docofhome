@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTheme } from 'vuetify'
 
@@ -114,6 +114,16 @@ const currentIntegrationMeta = computed(() => {
 const enabledIntegrations = computed(() => (
   configuration.value.integrations.filter((integration) => integration.enabled)
 ))
+
+watch(currentStep, (nextStep, previousStep) => {
+  const nextKind = integrationStepKinds[nextStep]
+  const previousKind = integrationStepKinds[previousStep]
+  if (nextKind !== previousKind) {
+    integrationTestResult.value = null
+    testingIntegration.value = false
+    error.value = null
+  }
+})
 
 const requiredRule = (value: string | null) => Boolean(value?.trim()) || 'Dieses Feld ist erforderlich.'
 const urlRule = (value: string | null) => validateIntegrationUrl(

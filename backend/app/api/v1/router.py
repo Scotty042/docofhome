@@ -21,6 +21,7 @@ from app.api.v1 import (
     release,
     search,
     settings,
+    smart_meter,
     system,
     work,
 )
@@ -47,4 +48,5 @@ api_router.include_router(asset_engine.router)
 api_router.include_router(electrical.router)
 api_router.include_router(electrical_circuits.router)
 api_router.include_router(electrical_topology.router)
+api_router.include_router(smart_meter.router)
 api_router.include_router(energy.router)

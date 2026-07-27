@@ -8,12 +8,17 @@ import { consumptionApi } from '../services/consumptionApi'
 import { electricalApi } from '../services/electricalApi'
 import { useNotificationStore } from '../stores/notifications'
 import {
+  assetCabinetClass,
   busbarPhasePattern,
+  cabinetComponentClass,
   groupProtectiveDevices,
   moduleBoardStyle,
   moduleNumbers,
   modulePlacements,
-  protectiveDeviceLabels
+  protectiveDeviceCabinetClass,
+  protectiveDeviceLabels,
+  isElectricalConsumptionMeterType,
+  isNonElectricalMeterAssetType
 } from '../services/electricalPresentation'
 import type { Asset } from '../types/assets'
 import type { ConsumptionMeter } from '../types/consumption'
@@ -85,7 +90,7 @@ function devicesWithoutModulePlacement(devices: ProtectiveDevice[]): ProtectiveD
   return devices.filter((device) => device.start_position === null || device.module_width === null)
 }
 const sections = ref<DistributionSection[]>([])
-const topology = ref<ElectricalTopology>({ nodes: [], connections: [] })
+const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measurement_points: [] })
 const meterPlacements = ref<ElectricalMeterPlacement[]>([])
 const assetPlacements = ref<ElectricalAssetPlacement[]>([])
 const cabinetComponents = ref<ElectricalCabinetComponent[]>([])
@@ -263,10 +268,18 @@ const deviceAreaOptions = computed(() => sections.value.flatMap((section) => sec
   .map((area) => ({ id: area.id, title: `${section.name} · ${area.name}` }))))
 const placedAssetIds = computed(() => new Set(assetPlacements.value.map((placement) => placement.asset_id)))
 const protectiveAssetIds = computed(() => new Set((distribution.value?.protective_devices ?? []).map((device) => device.asset_id)))
+const nonElectricalMeterAssetIds = computed(() => new Set(
+  consumptionMeters.value
+    .filter((meter) => !isElectricalConsumptionMeterType(meter.meter_type))
+    .map((meter) => meter.asset_id)
+    .filter((id): id is string => Boolean(id))
+))
 const dinAssetOptions = computed(() => assets.value
   .filter((asset) => (
     asset.status === 'active' && Boolean(asset.effective_module_width)
       && !placedAssetIds.value.has(asset.id) && !protectiveAssetIds.value.has(asset.id)
+      && !nonElectricalMeterAssetIds.value.has(asset.id)
+      && !isNonElectricalMeterAssetType(asset.asset_type.name)
   ))
   .map((asset) => ({
     id: asset.id,
@@ -367,7 +380,9 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
       .map((meter) => meter.asset_id)
       .filter((id): id is string => Boolean(id))
   )
-  const meterCandidates = consumptionMeters.value.map((meter) => ({
+  const meterCandidates = consumptionMeters.value
+    .filter((meter) => isElectricalConsumptionMeterType(meter.meter_type))
+    .map((meter) => ({
     value: `meter:${meter.id}`,
     sourceKind: 'consumption_meter' as const,
     sourceId: meter.id,
@@ -379,7 +394,13 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
   const assetCandidates = assets.value
     .filter((asset) => (
       asset.status === 'active'
-      && asset.asset_type.name.trim().toLocaleLowerCase('de') === 'zähler'
+      && (() => {
+        const typeName = asset.asset_type.name.trim().toLocaleLowerCase('de')
+        return typeName.includes('stromzähler')
+          || typeName.includes('stromzaehler')
+          || typeName.includes('smart meter')
+          || typeName.includes('smartmeter')
+      })()
       && !linkedAssetIds.has(asset.id)
     ))
     .map((asset) => ({
@@ -439,7 +460,7 @@ async function load() {
         topologyError.value = reason instanceof Error
           ? reason.message
           : 'Versorgungsinformationen konnten nicht geladen werden.'
-        return { nodes: [], connections: [] } satisfies ElectricalTopology
+        return { nodes: [], connections: [], measurement_points: [] } satisfies ElectricalTopology
       }),
       electricalApi.cabinetComponents(distributionId.value),
       electricalApi.assetPlacements(distributionId.value),
@@ -1309,6 +1330,15 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               <v-btn value="expanded" prepend-icon="mdi-format-list-bulleted">Erweitert</v-btn>
             </v-btn-toggle>
           </div>
+          <div class="cabinet-legend mt-3" aria-label="Farblegende der Gerätetypen">
+            <span class="legend-item cabinet-type-mcb">LS / Sicherung</span>
+            <span class="legend-item cabinet-type-rcd">FI / RCD</span>
+            <span class="legend-item cabinet-type-smart-meter">Smart Meter</span>
+            <span class="legend-item cabinet-type-electric-meter">Stromzähler</span>
+            <span class="legend-item cabinet-type-impulse-switch">Stromstoßschalter</span>
+            <span class="legend-item cabinet-type-busbar">Sammel-/Kammschiene</span>
+            <span class="legend-item cabinet-type-passive">Passive Komponente</span>
+          </div>
           <v-alert
             v-if="layoutWarnings.length"
             type="warning"
@@ -1358,7 +1388,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             >
               <div
                 class="module-board"
-                :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null }"
+                :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': viewMode === 'compact' }"
                 :style="moduleBoardStyle(distribution.modules_per_row)"
               >
                 <div
@@ -1387,7 +1417,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   :class="{
                     'drag-ready': desktopDragEnabled,
                     'drag-source': draggedDeviceId === placement.device.id,
-                    'has-group-warning': placement.device.group_warnings.length > 0
+                    'has-group-warning': placement.device.group_warnings.length > 0,
+                    [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                   }"
                   variant="tonal"
                   @click="openDeviceDetails(placement.device)"
@@ -1396,9 +1427,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   @dragstart="beginDeviceDrag($event, placement.device)"
                   @dragend="finishDeviceDrag"
                 >
-                  <v-card-title class="text-caption font-weight-bold text-wrap">
+                  <v-card-title class="module-device-title text-caption font-weight-bold">
                     {{ placement.device.asset.name }}
                   </v-card-title>
+                  <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
+                    {{ placement.device.asset.technical_short_label }}
+                  </div>
                   <v-card-subtitle>{{ placement.device.asset.jarvis_code }}</v-card-subtitle>
                   <v-card-text class="pa-2 text-caption">
                     <div class="device-meta-row mb-2">
@@ -1432,12 +1466,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   v-for="component in simpleCabinetComponentsForRow(group.row)"
                   :key="component.id"
                   class="module-device cabinet-component-card"
-                  :class="{ 'busbar-card': component.component_type === 'busbar' }"
+                  :class="{ 'busbar-card': component.component_type === 'busbar', [cabinetComponentClass(component.component_type)]: true }"
                   variant="outlined"
                   :style="componentGridStyle(component)"
                   @click="openComponentDetails(component)"
                 >
-                  <v-card-title class="text-caption font-weight-bold text-wrap">
+                  <v-card-title class="module-device-title text-caption font-weight-bold">
                     {{ component.name }}
                   </v-card-title>
                   <v-card-text class="pa-2 text-caption">
@@ -1466,7 +1500,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   class="module-device"
                   :class="{
                     'drag-ready': desktopDragEnabled,
-                    'drag-source': draggedAsset?.assetId === placement.asset_id
+                    'drag-source': draggedAsset?.assetId === placement.asset_id,
+                    [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                   }"
                   variant="outlined"
                   :style="{ gridColumn: `${placement.start_position} / span ${placement.module_width}` }"
@@ -1475,7 +1510,10 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   @dragstart="beginAssetDrag($event, placement)"
                   @dragend="finishDeviceDrag"
                 >
-                  <v-card-title class="text-caption font-weight-bold text-wrap">{{ placement.asset_name }}</v-card-title>
+                  <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.asset_name }}</v-card-title>
+                  <div v-if="placement.primary_live_value || placement.technical_short_label" class="module-compact-value">
+                    {{ placement.primary_live_value ? liveValueText(placement) : placement.technical_short_label }}
+                  </div>
                   <v-card-text class="pa-2 text-caption">
                     <div>{{ placement.product_name || placement.asset_code }} · TE {{ placement.start_position }}–{{ placement.start_position + placement.module_width - 1 }}</div>
                     <div>{{ liveValueText(placement) }}</div>
@@ -1616,7 +1654,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     <div v-if="group.row !== null && area.modules_per_row" class="module-scroll">
                       <div
                         class="module-board"
-                        :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null }"
+                        :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': viewMode === 'compact' }"
                         :style="moduleBoardStyle(area.modules_per_row)"
                       >
                         <div v-for="number in moduleNumbers(area.modules_per_row)" :key="number" class="module-cell" :style="{ gridColumn: number }">{{ number }}</div>
@@ -1638,7 +1676,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           :class="{
                             'drag-ready': desktopDragEnabled,
                             'drag-source': draggedDeviceId === placement.device.id,
-                            'has-group-warning': placement.device.group_warnings.length > 0
+                            'has-group-warning': placement.device.group_warnings.length > 0,
+                            [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                           }"
                           :style="{ gridColumn: placement.gridColumn }"
                           variant="outlined"
@@ -1647,7 +1686,10 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           @dragstart="beginDeviceDrag($event, placement.device)"
                           @dragend="finishDeviceDrag"
                         >
-                          <v-card-title class="text-caption font-weight-bold text-wrap">{{ placement.device.asset.name }}</v-card-title>
+                          <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.device.asset.name }}</v-card-title>
+                          <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
+                            {{ placement.device.asset.technical_short_label }}
+                          </div>
                           <v-card-text class="pa-2 text-caption">
                             <div class="device-meta-row mb-2">
                               <span>{{ protectiveDeviceLabels[placement.device.device_type] }} · TE {{ placement.start }}–{{ placement.end }}</span>
@@ -1677,12 +1719,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           v-for="component in cabinetComponentsForArea(area.id).filter((item) => item.row_number === group.row)"
                           :key="component.id"
                           class="module-device cabinet-component-card"
-                          :class="{ 'busbar-card': component.component_type === 'busbar' }"
+                          :class="{ 'busbar-card': component.component_type === 'busbar', [cabinetComponentClass(component.component_type)]: true }"
                           variant="tonal"
                           :style="componentGridStyle(component)"
                           @click="openComponentDetails(component)"
                         >
-                          <v-card-title class="text-caption font-weight-bold text-wrap">{{ component.name }}</v-card-title>
+                          <v-card-title class="module-device-title text-caption font-weight-bold">{{ component.name }}</v-card-title>
                           <v-card-text class="pa-2 text-caption">
                             <div>{{ cabinetComponentTypeMeta[component.component_type].title }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}</div>
                             <div v-if="component.linked_rcd_name" class="mt-1">FI: {{ component.linked_rcd_name }}</div>
@@ -1709,7 +1751,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           class="module-device"
                           :class="{
                             'drag-ready': desktopDragEnabled,
-                            'drag-source': draggedAsset?.assetId === placement.asset_id
+                            'drag-source': draggedAsset?.assetId === placement.asset_id,
+                            [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                           }"
                           variant="outlined"
                           :style="{ gridColumn: `${placement.start_position} / span ${placement.module_width}` }"
@@ -1718,7 +1761,10 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           @dragstart="beginAssetDrag($event, placement)"
                           @dragend="finishDeviceDrag"
                         >
-                          <v-card-title class="text-caption font-weight-bold text-wrap">{{ placement.asset_name }}</v-card-title>
+                          <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.asset_name }}</v-card-title>
+                          <div v-if="placement.primary_live_value || placement.technical_short_label" class="module-compact-value">
+                            {{ placement.primary_live_value ? liveValueText(placement) : placement.technical_short_label }}
+                          </div>
                           <v-card-text class="pa-2 text-caption">
                             <div>{{ placement.product_name || placement.asset_code }} · TE {{ placement.start_position }}–{{ placement.start_position + placement.module_width - 1 }}</div>
                             <div>{{ liveValueText(placement) }}</div>
@@ -2166,24 +2212,43 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
 </template>
 
 <style scoped>
-.layout-page { max-width: 1600px; }
+.layout-page { max-width: 1920px; }
 h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
-.layout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.layout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; align-items: start; }
 .section-card { min-width: 0; }
 .area-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .area-card { overflow: hidden; grid-column: span 2; }
 .area-card.area-half { grid-column: span 1; }
-@media (max-width: 600px) { .area-card.area-half { grid-column: span 2; } }
+@media (max-width: 900px) { .area-card.area-half { grid-column: span 2; } .layout-grid { grid-template-columns: minmax(0, 1fr); } }
 .area-placeholder { min-height: 72px; display: grid; place-items: center; border: 1px dashed rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 8px; }
 .module-scroll { overflow-x: auto; padding-bottom: 6px; }
 .module-board { display: grid; gap: 4px; width: 100%; align-items: stretch; grid-template-rows: auto minmax(132px, auto) auto; }
-.module-cell { grid-row: 1; min-width: 34px; text-align: center; font-size: 0.7rem; opacity: 0.65; border-bottom: 1px solid currentColor; }
+.module-cell { grid-row: 1; min-width: 48px; text-align: center; font-size: 0.7rem; opacity: 0.65; border-bottom: 1px solid currentColor; }
 .module-drop-cell { grid-row: 2 / span 2; min-height: 150px; border: 2px dashed transparent; border-radius: 6px; transition: background-color 120ms ease, border-color 120ms ease; }
 .module-board.is-dragging .module-drop-cell { border-color: rgba(var(--v-theme-primary), 0.35); background: rgba(var(--v-theme-primary), 0.06); }
 .module-board.is-dragging .module-device { pointer-events: none; opacity: 0.72; }
 .module-board.is-dragging .drop-target-valid { border-color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.2); }
 .module-board.is-dragging .drop-target-invalid { border-color: rgb(var(--v-theme-error)); background: rgba(var(--v-theme-error), 0.2); }
-.module-device { grid-row: 2; min-width: 0; z-index: 2; overflow: hidden; cursor: pointer; }
+.module-device { grid-row: 2; min-width: 0; z-index: 2; overflow: hidden; cursor: pointer; border-width: 2px; }
+.module-device-title { padding: 10px 8px 4px; line-height: 1.2; min-height: 2.8rem; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: normal; overflow-wrap: break-word; hyphens: auto; }
+.module-compact-value { padding: 0 8px 8px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.module-board.compact-view .module-device :deep(.v-card-subtitle),
+.module-board.compact-view .module-device :deep(.v-card-text),
+.module-board.compact-view .module-device-actions { display: none; }
+.module-board.compact-view .module-device { min-height: 92px; }
+.cabinet-legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.legend-item { display: inline-flex; align-items: center; min-height: 30px; padding: 4px 10px; border-radius: 999px; border: 2px solid transparent; font-size: 0.75rem; font-weight: 700; }
+.cabinet-type-fuse, .cabinet-type-mcb { border-color: #607d8b !important; background: rgba(96, 125, 139, 0.16) !important; }
+.cabinet-type-rcd { border-color: #3949ab !important; background: rgba(57, 73, 171, 0.16) !important; }
+.cabinet-type-rcbo { border-color: #7e57c2 !important; background: rgba(126, 87, 194, 0.16) !important; }
+.cabinet-type-spd { border-color: #ef6c00 !important; background: rgba(239, 108, 0, 0.16) !important; }
+.cabinet-type-smart-meter { border-color: #00897b !important; background: rgba(0, 137, 123, 0.16) !important; }
+.cabinet-type-electric-meter { border-color: #00838f !important; background: rgba(0, 131, 143, 0.16) !important; }
+.cabinet-type-impulse-switch { border-color: #039be5 !important; background: rgba(3, 155, 229, 0.16) !important; }
+.cabinet-type-busbar { border-color: #f9a825 !important; background: rgba(249, 168, 37, 0.18) !important; }
+.cabinet-type-neutral { border-color: #1565c0 !important; background: rgba(21, 101, 192, 0.14) !important; }
+.cabinet-type-pe { border-color: #2e7d32 !important; background: rgba(46, 125, 50, 0.14) !important; }
+.cabinet-type-passive, .cabinet-type-asset { border-color: #757575 !important; background: rgba(117, 117, 117, 0.12) !important; }
 .module-device-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(28px, 1fr)); width: 100%; gap: 0; }
 .module-device-actions :deep(.v-btn) { min-width: 28px; width: 100%; }
 .layout-summary { position: sticky; top: 8px; z-index: 5; backdrop-filter: blur(8px); }

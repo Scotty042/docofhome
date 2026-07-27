@@ -19,6 +19,8 @@ from app.schemas.backups import BackupRecord, RemoteBackupRecord
 
 MAX_IMPORT_BYTES = 512 * 1024 * 1024
 DAV_NAMESPACE = "{DAV:}"
+CURRENT_BACKUP_PREFIX = "DocOfHome-backup-"
+LEGACY_BACKUP_PREFIXES = ("tectoryn-backup-",)
 
 
 class BackupError(RuntimeError):
@@ -41,7 +43,12 @@ class BackupService:
 
     def list_backups(self) -> list[BackupRecord]:
         records: list[BackupRecord] = []
-        for path in sorted(self.backup_dir.glob("tectoryn-backup-*.zip"), reverse=True):
+        paths = {
+            path
+            for prefix in (CURRENT_BACKUP_PREFIX, *LEGACY_BACKUP_PREFIXES)
+            for path in self.backup_dir.glob(f"{prefix}*.zip")
+        }
+        for path in sorted(paths, reverse=True):
             try:
                 records.append(self._record_from_archive(path))
             except (BackupError, OSError, zipfile.BadZipFile, json.JSONDecodeError):
@@ -59,7 +66,7 @@ class BackupService:
 
         created_at = datetime.now(UTC)
         stamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
-        filename = f"tectoryn-backup-{stamp}.zip"
+        filename = f"{CURRENT_BACKUP_PREFIX}{stamp}.zip"
         archive_path = self.backup_dir / filename
 
         with tempfile.TemporaryDirectory(dir=self.backup_dir) as temp_dir:
@@ -100,7 +107,7 @@ class BackupService:
             raise BackupError("Backup upload exceeds the 512 MB limit")
 
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-        filename = f"tectoryn-backup-{stamp}.zip"
+        filename = f"{CURRENT_BACKUP_PREFIX}{stamp}.zip"
         target = self.backup_dir / filename
         with tempfile.TemporaryDirectory(dir=self.backup_dir) as temp_dir:
             temporary = Path(temp_dir) / filename
@@ -369,7 +376,7 @@ class BackupService:
     def _is_backup_filename(filename: str) -> bool:
         return (
             Path(filename).name == filename
-            and filename.startswith("tectoryn-backup-")
+            and filename.startswith((CURRENT_BACKUP_PREFIX, *LEGACY_BACKUP_PREFIXES))
             and filename.endswith(".zip")
         )
 

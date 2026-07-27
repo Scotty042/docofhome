@@ -649,6 +649,7 @@ class AssetService(CrudService[Asset, AssetWrite]):
         self._require_unplaced_meter_asset(record_id)
         self._require_unplaced_din_asset(record_id)
         self._require_archived_network_role(record_id)
+        self._require_no_smart_meter_measurement_points(record_id)
         super().delete(record_id)
 
     def replace(
@@ -664,6 +665,7 @@ class AssetService(CrudService[Asset, AssetWrite]):
         self._require_unplaced_meter_asset(record_id)
         self._require_unplaced_din_asset(record_id)
         self._require_archived_network_role(record_id)
+        self._require_no_smart_meter_measurement_points(record_id)
         if payload.status == "retired":
             raise InvalidReferenceError("A replacement asset must not start as retired")
         self._validate_inventory_number(payload.inventory_number)
@@ -688,6 +690,14 @@ class AssetService(CrudService[Asset, AssetWrite]):
             replacement=self._to_read(replacement),
             relationship=RelationshipRead.model_validate(relationship),
         )
+
+    def _require_no_smart_meter_measurement_points(self, asset_id: UUID) -> None:
+        from app.services.smart_meter import SmartMeterMeasurementService
+
+        if SmartMeterMeasurementService(self.session).active_for_asset(asset_id):
+            raise ResourceConflictError(
+                "Das Smart Meter besitzt noch aktive Messpunkte. Entferne diese zuerst."
+            )
 
     def _clone_asset(
         self,
@@ -715,6 +725,12 @@ class AssetService(CrudService[Asset, AssetWrite]):
             serial_number=None,
             inventory_number=None,
             module_width=source.module_width,
+            breaker_characteristic=source.breaker_characteristic,
+            rated_current_a=source.rated_current_a,
+            coil_voltage_v=source.coil_voltage_v,
+            coil_voltage_type=source.coil_voltage_type,
+            contact_count=source.contact_count,
+            contact_type=source.contact_type,
             status="active",
         )
         self.session.add(clone)
@@ -1163,6 +1179,36 @@ class AssetService(CrudService[Asset, AssetWrite]):
                 "asset_type": ReferenceRead(id=asset_type.id, name=asset_type.name),
                 "product": ReferenceRead(id=product.id, name=product.name) if product else None,
                 "product_image_url": product.image_url if product else None,
+                "effective_breaker_characteristic": (
+                    asset.breaker_characteristic
+                    if asset.breaker_characteristic is not None
+                    else asset_type.breaker_characteristic
+                ),
+                "effective_rated_current_a": (
+                    asset.rated_current_a
+                    if asset.rated_current_a is not None
+                    else asset_type.rated_current_a
+                ),
+                "effective_coil_voltage_v": (
+                    asset.coil_voltage_v
+                    if asset.coil_voltage_v is not None
+                    else asset_type.coil_voltage_v
+                ),
+                "effective_coil_voltage_type": (
+                    asset.coil_voltage_type
+                    if asset.coil_voltage_type is not None
+                    else asset_type.coil_voltage_type
+                ),
+                "effective_contact_count": (
+                    asset.contact_count
+                    if asset.contact_count is not None
+                    else asset_type.contact_count
+                ),
+                "effective_contact_type": (
+                    asset.contact_type
+                    if asset.contact_type is not None
+                    else asset_type.contact_type
+                ),
                 "effective_module_width": (
                     asset.module_width
                     if asset.module_width is not None

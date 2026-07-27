@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.smart_meter import SmartMeterMeasurementPointRead
+
 
 class ElectricalEndpointKind(StrEnum):
     GRID_CONNECTION = "grid_connection"
@@ -116,3 +118,4 @@ class ElectricalTopologyNodeRead(BaseModel):
 class ElectricalTopologyRead(BaseModel):
     nodes: list[ElectricalTopologyNodeRead]
     connections: list[ElectricalConnectionRead]
+    measurement_points: list[SmartMeterMeasurementPointRead] = Field(default_factory=list)

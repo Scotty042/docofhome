@@ -56,6 +56,10 @@ from app.models.release import (
     GuidedSetupDraft,
     ServiceWorkload,
 )
+from app.models.smart_meter import (
+    SmartMeterMeasurementEntity,
+    SmartMeterMeasurementPoint,
+)
 from app.models.system_setting import SystemSetting
 from app.models.work import WorkItem, WorkItemEvent
 
@@ -104,6 +108,8 @@ __all__ = [
     "QualityRun",
     "GuidedSetupDraft",
     "ServiceWorkload",
+    "SmartMeterMeasurementEntity",
+    "SmartMeterMeasurementPoint",
     "SystemSetting",
     "WikiPage",
     "WorkItem",

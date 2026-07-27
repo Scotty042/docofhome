@@ -9,6 +9,7 @@ import HomeAssistantAssetCard from '../components/HomeAssistantAssetCard.vue'
 import MaintenanceCard from '../components/MaintenanceCard.vue'
 import NetworkAssetCard from '../components/NetworkAssetCard.vue'
 import NotesCard from '../components/NotesCard.vue'
+import SmartMeterMeasurementPointsCard from '../components/SmartMeterMeasurementPointsCard.vue'
 import ImmichImageLinksCard from '../components/ImmichImageLinksCard.vue'
 import { assetApi } from '../services/assetApi'
 import type { Asset, AssetStatus, Product, Relationship } from '../types/assets'
@@ -24,9 +25,18 @@ const confirmDelete = ref(false)
 const duplicateOpen = ref(false)
 const error = ref<string | null>(null)
 const archivedView = computed(() => route.query.archived === '1')
+const isSmartMeter = computed(() => {
+  const name = asset.value?.asset_type.name.trim().toLocaleLowerCase('de') ?? ''
+  return name.includes('smart meter') || name.includes('smartmeter')
+})
 
 const statusText: Record<AssetStatus, string> = {
   active: 'Aktiv', inactive: 'Inaktiv', maintenance: 'Wartung', retired: 'Ausgemustert'
+}
+const contactTypeText: Record<string, string> = {
+  normally_open: 'Schließer',
+  normally_closed: 'Öffner',
+  changeover: 'Wechsler'
 }
 const statusColor: Record<AssetStatus, string> = {
   active: 'success', inactive: 'secondary', maintenance: 'warning', retired: 'error'
@@ -130,12 +140,22 @@ function endpointName(relationship: Relationship) {
                 <v-col cols="12" sm="6"><div class="field-label">Inventarnummer</div><div>{{ asset.inventory_number || '–' }}</div></v-col>
                 <v-col cols="12" sm="6"><div class="field-label">Seriennummer</div><div>{{ asset.serial_number || '–' }}</div></v-col>
                 <v-col cols="12" sm="6"><div class="field-label">DIN-Breite</div><div>{{ asset.effective_module_width ? `${asset.effective_module_width} TE` : 'Nicht auf Hutschiene platzierbar' }}</div></v-col>
+                <v-col v-if="asset.effective_breaker_characteristic" cols="12" sm="6"><div class="field-label">Auslösecharakteristik</div><div>{{ asset.effective_breaker_characteristic }}</div></v-col>
+                <v-col v-if="asset.effective_rated_current_a" cols="12" sm="6"><div class="field-label">Nennstrom</div><div>{{ asset.effective_rated_current_a }} A<span v-if="asset.effective_breaker_characteristic"> · {{ asset.effective_breaker_characteristic }}{{ asset.effective_rated_current_a }}</span></div></v-col>
+                <v-col v-if="asset.effective_coil_voltage_v" cols="12" sm="6"><div class="field-label">Spulenspannung</div><div>{{ asset.effective_coil_voltage_v }} V {{ asset.effective_coil_voltage_type || '' }}</div></v-col>
+                <v-col v-if="asset.effective_contact_count" cols="12" sm="6"><div class="field-label">Schaltkontakte</div><div>{{ asset.effective_contact_count }} · {{ asset.effective_contact_type ? contactTypeText[asset.effective_contact_type] : 'Kontaktart nicht angegeben' }}</div></v-col>
                 <v-col cols="12"><div class="field-label">Beschreibung</div><div class="description">{{ asset.description || 'Keine Beschreibung hinterlegt.' }}</div></v-col>
               </v-row>
             </v-card-text>
           </v-card>
 
           <HomeAssistantAssetCard
+            :asset-id="asset.id"
+            :read-only="Boolean(asset.deleted_at)"
+          />
+
+          <SmartMeterMeasurementPointsCard
+            v-if="isSmartMeter"
             :asset-id="asset.id"
             :read-only="Boolean(asset.deleted_at)"
           />

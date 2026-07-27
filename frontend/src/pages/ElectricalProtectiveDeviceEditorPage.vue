@@ -27,7 +27,7 @@ const { form, tree, assets, loading, assetsLoading, error, loadEditor, searchAss
   useElectricalProtectiveDeviceEditor()
 )
 const saving = ref(false)
-const topology = ref<ElectricalTopology>({ nodes: [], connections: [] })
+const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measurement_points: [] })
 const topologyLoading = ref(false)
 const topologyError = ref<string | null>(null)
 let assetSearchTimer: ReturnType<typeof setTimeout> | undefined
@@ -83,7 +83,7 @@ watch(
 )
 
 watch(deviceId, async (id) => {
-  topology.value = { nodes: [], connections: [] }
+  topology.value = { nodes: [], connections: [], measurement_points: [] }
   topologyError.value = null
   if (!id) return
   topologyLoading.value = true

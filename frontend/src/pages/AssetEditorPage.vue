@@ -58,6 +58,28 @@ const inheritedModuleWidth = computed(() => (
     ? selectedProduct.value.module_width
     : selectedAssetType.value?.module_width ?? null
 ))
+const selectedAssetTypeName = computed(() => (
+  selectedAssetType.value?.name.trim().toLocaleLowerCase('de') ?? ''
+))
+const isBreakerAsset = computed(() => (
+  selectedAssetTypeName.value.includes('sicherungsautomat')
+  || selectedAssetTypeName.value.includes('leitungsschutz')
+))
+const isImpulseSwitchAsset = computed(() => (
+  selectedAssetTypeName.value.includes('stromstoß')
+  || selectedAssetTypeName.value.includes('stromstoss')
+))
+const inheritedBreakerCharacteristic = computed(() => selectedAssetType.value?.breaker_characteristic ?? null)
+const inheritedRatedCurrent = computed(() => selectedAssetType.value?.rated_current_a ?? null)
+const inheritedCoilVoltage = computed(() => selectedAssetType.value?.coil_voltage_v ?? null)
+const inheritedCoilVoltageType = computed(() => selectedAssetType.value?.coil_voltage_type ?? null)
+const inheritedContactCount = computed(() => selectedAssetType.value?.contact_count ?? null)
+const inheritedContactType = computed(() => selectedAssetType.value?.contact_type ?? null)
+const contactTypeItems = [
+  { title: 'Schließer', value: 'normally_open' },
+  { title: 'Öffner', value: 'normally_closed' },
+  { title: 'Wechsler', value: 'changeover' }
+]
 
 const requiredRule = (value: string | null) => Boolean(value?.trim()) || 'Dieses Feld ist erforderlich.'
 const statusItems = [
@@ -233,6 +255,105 @@ async function save() {
                 persistent-hint
               />
             </v-col>
+            <template v-if="isBreakerAsset">
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="form.breaker_characteristic"
+                  :items="['B', 'C', 'D', 'K', 'Z']"
+                  label="Auslösecharakteristik (optional)"
+                  clearable
+                  :hint="inheritedBreakerCharacteristic
+                    ? `Leer lassen, um ${inheritedBreakerCharacteristic} aus dem Asset-Typ zu übernehmen.`
+                    : 'Zum Beispiel B oder C.'"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-text-field
+                  v-model.number="form.rated_current_a"
+                  label="Nennstrom (optional)"
+                  type="number"
+                  min="0.1"
+                  max="10000"
+                  step="0.1"
+                  suffix="A"
+                  clearable
+                  :hint="inheritedRatedCurrent
+                    ? `Leer lassen, um ${inheritedRatedCurrent} A aus dem Asset-Typ zu übernehmen.`
+                    : 'Zum Beispiel 16 A.'"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="4" class="d-flex align-center">
+                <v-chip v-if="form.breaker_characteristic || inheritedBreakerCharacteristic" color="primary" variant="tonal">
+                  Technische Kurzbezeichnung:
+                  {{ form.breaker_characteristic || inheritedBreakerCharacteristic }}{{ form.rated_current_a || inheritedRatedCurrent || '?' }}
+                </v-chip>
+              </v-col>
+            </template>
+            <template v-if="isImpulseSwitchAsset">
+              <v-col cols="12" md="3">
+                <v-text-field
+                  v-model.number="form.rated_current_a"
+                  label="Kontakt-Nennstrom (optional)"
+                  type="number"
+                  min="0.1"
+                  max="10000"
+                  step="0.1"
+                  suffix="A"
+                  clearable
+                  :hint="inheritedRatedCurrent ? `Standard: ${inheritedRatedCurrent} A` : 'Zum Beispiel 16 A.'"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-text-field
+                  v-model.number="form.coil_voltage_v"
+                  label="Spulenspannung (optional)"
+                  type="number"
+                  min="0.1"
+                  max="10000"
+                  step="0.1"
+                  suffix="V"
+                  clearable
+                  :hint="inheritedCoilVoltage ? `Standard: ${inheritedCoilVoltage} V` : 'Zum Beispiel 230 V.'"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="2">
+                <v-select
+                  v-model="form.coil_voltage_type"
+                  :items="['AC', 'DC']"
+                  label="Spannungsart"
+                  clearable
+                  :hint="inheritedCoilVoltageType ? `Standard: ${inheritedCoilVoltageType}` : undefined"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="2">
+                <v-text-field
+                  v-model.number="form.contact_count"
+                  label="Kontaktanzahl"
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  clearable
+                  :hint="inheritedContactCount ? `Standard: ${inheritedContactCount}` : undefined"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" md="2">
+                <v-select
+                  v-model="form.contact_type"
+                  :items="contactTypeItems"
+                  label="Kontaktart"
+                  clearable
+                  :hint="inheritedContactType ? 'Vom Asset-Typ vorbelegt' : undefined"
+                  persistent-hint
+                />
+              </v-col>
+            </template>
             <v-col v-if="selectedProduct" cols="12">
               <v-card variant="tonal" class="d-flex flex-column flex-sm-row align-center pa-3 ga-4">
                 <v-avatar rounded="lg" size="120" color="surface-variant">

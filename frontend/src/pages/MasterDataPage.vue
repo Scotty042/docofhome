@@ -42,7 +42,7 @@ const editorOpen = ref(false)
 const editorKind = ref<MasterDataTab>('asset-types')
 const editingId = ref<string | null>(null)
 const archiveTarget = ref<ArchiveTarget | null>(null)
-const assetTypeForm = ref<AssetTypeWrite>({ name: '', description: null, icon: null, module_width: null })
+const assetTypeForm = ref<AssetTypeWrite>({ name: '', description: null, icon: null, module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null })
 const productForm = ref<ProductWrite>({
   name: '',
   manufacturer: null,
@@ -66,9 +66,22 @@ const recommendedAssetTypes: AssetTypeWrite[] = [
   },
   {
     name: 'Sicherungsautomat',
-    description: 'Leitungsschutzschalter',
+    description: 'Leitungsschutzschalter, standardmäßig B16',
     icon: 'mdi-toggle-switch',
-    module_width: 1
+    module_width: 1,
+    breaker_characteristic: 'B',
+    rated_current_a: 16
+  },
+  {
+    name: 'Stromstoßschalter',
+    description: 'Impulsschalter für Lichtkreise mit mehreren Tastern, z. B. im Treppenhaus',
+    icon: 'mdi-electric-switch-closed',
+    module_width: 1,
+    rated_current_a: 16,
+    coil_voltage_v: 230,
+    coil_voltage_type: 'AC',
+    contact_count: 1,
+    contact_type: 'normally_open'
   },
   {
     name: 'FI-Schutzschalter',
@@ -126,6 +139,15 @@ const editorTitle = computed(() => {
   return `Label ${action}`
 })
 const activeAssetTypes = computed(() => assetTypes.value.filter((item) => !item.deleted_at))
+const isImpulseAssetTypeForm = computed(() => {
+  const name = assetTypeForm.value.name.trim().toLocaleLowerCase('de')
+  return name.includes('stromstoß') || name.includes('stromstoss')
+})
+const contactTypeItems = [
+  { title: 'Schließer', value: 'normally_open' },
+  { title: 'Öffner', value: 'normally_closed' },
+  { title: 'Wechsler', value: 'changeover' }
+]
 const requiredRule = (value: string | null) => Boolean(value?.trim()) || 'Dieses Feld ist erforderlich.'
 const colorRule = (value: string) => /^#[0-9a-fA-F]{6}$/.test(value) || 'Farbe als #RRGGBB angeben.'
 
@@ -162,7 +184,7 @@ function optionalText(value: string | null | undefined): string | null {
 function openCreate(kind: MasterDataTab) {
   editorKind.value = kind
   editingId.value = null
-  assetTypeForm.value = { name: '', description: null, icon: null, module_width: null }
+  assetTypeForm.value = { name: '', description: null, icon: null, module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null }
   productForm.value = {
     name: '',
     manufacturer: null,
@@ -182,7 +204,7 @@ function openCreate(kind: MasterDataTab) {
 function editAssetType(item: AssetType) {
   editorKind.value = 'asset-types'
   editingId.value = item.id
-  assetTypeForm.value = { name: item.name, description: item.description, icon: item.icon, module_width: item.module_width }
+  assetTypeForm.value = { name: item.name, description: item.description, icon: item.icon, module_width: item.module_width, breaker_characteristic: item.breaker_characteristic, rated_current_a: item.rated_current_a, coil_voltage_v: item.coil_voltage_v, coil_voltage_type: item.coil_voltage_type, contact_count: item.contact_count, contact_type: item.contact_type }
   editorOpen.value = true
 }
 
@@ -223,7 +245,13 @@ async function saveEditor() {
         name: assetTypeForm.value.name.trim(),
         description: optionalText(assetTypeForm.value.description),
         icon: optionalText(assetTypeForm.value.icon),
-        module_width: assetTypeForm.value.module_width
+        module_width: assetTypeForm.value.module_width,
+        breaker_characteristic: assetTypeForm.value.breaker_characteristic ?? null,
+        rated_current_a: assetTypeForm.value.rated_current_a ?? null,
+        coil_voltage_v: assetTypeForm.value.coil_voltage_v ?? null,
+        coil_voltage_type: assetTypeForm.value.coil_voltage_type ?? null,
+        contact_count: assetTypeForm.value.contact_count ?? null,
+        contact_type: assetTypeForm.value.contact_type ?? null
       }
       if (editingId.value) await assetApi.updateAssetType(editingId.value, payload)
       else await assetApi.createAssetType(payload)
@@ -314,6 +342,27 @@ async function addRecommendedAssetTypes() {
   }
 }
 
+function assetTypeStandardText(item: AssetType): string {
+  const values: string[] = []
+  if (item.breaker_characteristic && item.rated_current_a) {
+    values.push(`${item.breaker_characteristic}${item.rated_current_a}`)
+  } else if (item.rated_current_a) {
+    values.push(`${item.rated_current_a} A`)
+  }
+  if (item.coil_voltage_v) {
+    values.push(`${item.coil_voltage_v} V${item.coil_voltage_type ? ` ${item.coil_voltage_type}` : ''}`)
+  }
+  if (item.contact_count) {
+    const labels: Record<string, string> = {
+      normally_open: 'Schließer',
+      normally_closed: 'Öffner',
+      changeover: 'Wechsler'
+    }
+    values.push(`${item.contact_count} ${item.contact_type ? labels[item.contact_type] : 'Kontakt(e)'}`)
+  }
+  return values.join(' · ') || '—'
+}
+
 function assetTypeName(id: string | null): string {
   if (!id) return 'Alle Typen'
   return assetTypes.value.find((item) => item.id === id)?.name ?? 'Unbekannter Typ'
@@ -390,7 +439,7 @@ function assetTypeName(id: string | null): string {
           </v-alert>
           <div v-else class="table-scroll">
             <v-table hover>
-              <thead><tr><th>Name</th><th>Code-Präfix</th><th>DIN</th><th>Beschreibung</th><th>Status</th><th class="text-right">Aktionen</th></tr></thead>
+              <thead><tr><th>Name</th><th>Code-Präfix</th><th>DIN</th><th>Standard</th><th>Beschreibung</th><th>Status</th><th class="text-right">Aktionen</th></tr></thead>
               <tbody>
                 <tr v-for="item in assetTypes" :key="item.id">
                   <td>
@@ -400,6 +449,7 @@ function assetTypeName(id: string | null): string {
                   </td>
                   <td><v-chip size="small" variant="tonal">{{ item.code_prefix }}</v-chip></td>
                   <td>{{ item.module_width ? `${item.module_width} TE` : '—' }}</td>
+                  <td>{{ assetTypeStandardText(item) }}</td>
                   <td>{{ item.description || '—' }}</td>
                   <td><v-chip size="small" :color="item.deleted_at ? 'default' : 'success'" variant="tonal">{{ item.deleted_at ? 'Archiviert' : 'Aktiv' }}</v-chip></td>
                   <td class="text-right text-no-wrap">
@@ -493,6 +543,53 @@ function assetTypeName(id: string | null): string {
                 persistent-hint
                 class="mt-3"
               />
+              <v-row class="mt-1">
+                <v-col cols="12" sm="6">
+                  <v-select
+                    v-model="assetTypeForm.breaker_characteristic"
+                    :items="['B', 'C', 'D', 'K', 'Z']"
+                    label="Auslösecharakteristik (optional)"
+                    clearable
+                    hint="Standard für Sicherungsautomaten; am einzelnen Asset überschreibbar."
+                    persistent-hint
+                  />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field
+                    v-model.number="assetTypeForm.rated_current_a"
+                    label="Nennstrom (optional)"
+                    type="number"
+                    min="0.1"
+                    max="10000"
+                    step="0.1"
+                    suffix="A"
+                    clearable
+                    hint="Zum Beispiel 16 A."
+                    persistent-hint
+                  />
+                </v-col>
+              </v-row>
+              <v-expand-transition>
+                <v-card v-if="isImpulseAssetTypeForm" variant="tonal" class="mt-3 mb-3">
+                  <v-card-title class="text-subtitle-1">Stromstoßschalter</v-card-title>
+                  <v-card-text>
+                    <v-row>
+                      <v-col cols="12" sm="3">
+                        <v-text-field v-model.number="assetTypeForm.coil_voltage_v" label="Spulenspannung" type="number" min="0.1" max="10000" step="0.1" suffix="V" clearable />
+                      </v-col>
+                      <v-col cols="12" sm="3">
+                        <v-select v-model="assetTypeForm.coil_voltage_type" :items="['AC', 'DC']" label="Spannungsart" clearable />
+                      </v-col>
+                      <v-col cols="12" sm="3">
+                        <v-text-field v-model.number="assetTypeForm.contact_count" label="Kontaktanzahl" type="number" min="1" max="100" step="1" clearable />
+                      </v-col>
+                      <v-col cols="12" sm="3">
+                        <v-select v-model="assetTypeForm.contact_type" :items="contactTypeItems" label="Kontaktart" clearable />
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-expand-transition>
               <v-textarea
                 v-model="assetTypeForm.description"
                 label="Beschreibung (optional)"

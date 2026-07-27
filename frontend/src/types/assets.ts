@@ -5,6 +5,9 @@ export type { Location } from './locations'
 export type AssetStatus = 'active' | 'inactive' | 'maintenance' | 'retired'
 export type SortOrder = 'asc' | 'desc'
 export type ProductImageSource = 'url' | 'upload' | 'immich' | 'online'
+export type BreakerCharacteristic = 'B' | 'C' | 'D' | 'K' | 'Z'
+export type CoilVoltageType = 'AC' | 'DC'
+export type ContactType = 'normally_open' | 'normally_closed' | 'changeover'
 
 export interface Page<T> {
   items: T[]
@@ -32,6 +35,12 @@ export interface AssetType extends AssetRecord {
   description: string | null
   icon: string | null
   module_width: number | null
+  breaker_characteristic: BreakerCharacteristic | null
+  rated_current_a: number | null
+  coil_voltage_v: number | null
+  coil_voltage_type: CoilVoltageType | null
+  contact_count: number | null
+  contact_type: ContactType | null
 }
 
 export interface AssetTypeWrite {
@@ -39,6 +48,12 @@ export interface AssetTypeWrite {
   description: string | null
   icon: string | null
   module_width: number | null
+  breaker_characteristic?: BreakerCharacteristic | null
+  rated_current_a?: number | null
+  coil_voltage_v?: number | null
+  coil_voltage_type?: CoilVoltageType | null
+  contact_count?: number | null
+  contact_type?: ContactType | null
 }
 
 export interface Product extends AssetRecord {
@@ -88,6 +103,18 @@ export interface Asset extends AssetRecord {
   inventory_number: string | null
   module_width: number | null
   effective_module_width: number | null
+  breaker_characteristic: BreakerCharacteristic | null
+  effective_breaker_characteristic: BreakerCharacteristic | null
+  rated_current_a: number | null
+  effective_rated_current_a: number | null
+  coil_voltage_v: number | null
+  effective_coil_voltage_v: number | null
+  coil_voltage_type: CoilVoltageType | null
+  effective_coil_voltage_type: CoilVoltageType | null
+  contact_count: number | null
+  effective_contact_count: number | null
+  contact_type: ContactType | null
+  effective_contact_type: ContactType | null
   status: AssetStatus
   asset_type: Reference
   product: Reference | null
@@ -105,6 +132,12 @@ export interface AssetWrite {
   serial_number: string | null
   inventory_number: string | null
   module_width: number | null
+  breaker_characteristic?: BreakerCharacteristic | null
+  rated_current_a?: number | null
+  coil_voltage_v?: number | null
+  coil_voltage_type?: CoilVoltageType | null
+  contact_count?: number | null
+  contact_type?: ContactType | null
   status: AssetStatus
   label_ids: string[]
 }
@@ -149,6 +182,7 @@ export interface ProductImageSearchItem {
   image_url: string
   license_name: string | null
   author: string | null
+  provider?: string | null
 }
 
 export interface ProductImageSearch {
@@ -192,6 +226,12 @@ export function createEmptyAsset(): AssetWrite {
     serial_number: null,
     inventory_number: null,
     module_width: null,
+    breaker_characteristic: null,
+    rated_current_a: null,
+    coil_voltage_v: null,
+    coil_voltage_type: null,
+    contact_count: null,
+    contact_type: null,
     status: 'active',
     label_ids: []
   }
@@ -207,6 +247,12 @@ export function editableAsset(asset: Asset): AssetWrite {
     serial_number: asset.serial_number,
     inventory_number: asset.inventory_number,
     module_width: asset.module_width,
+    breaker_characteristic: asset.breaker_characteristic,
+    rated_current_a: asset.rated_current_a,
+    coil_voltage_v: asset.coil_voltage_v,
+    coil_voltage_type: asset.coil_voltage_type,
+    contact_count: asset.contact_count,
+    contact_type: asset.contact_type,
     status: asset.status,
     label_ids: asset.labels.map((label) => label.id)
   }

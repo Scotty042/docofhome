@@ -97,3 +97,55 @@ def test_online_product_search_ignores_unapproved_result_hosts(session: Session)
     )
 
     assert service.search_online("ABB S201").items == []
+
+
+def test_duckduckgo_image_search_scores_specific_product_results_first(
+    session: Session,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "duckduckgo.com" and request.url.path == "/":
+            return httpx.Response(200, request=request, text="vqd='123-456'")
+        if request.url.host == "duckduckgo.com" and request.url.path == "/i.js":
+            return httpx.Response(
+                200,
+                request=request,
+                json={
+                    "results": [
+                        {
+                            "title": "Generic electrical company logo",
+                            "image": "https://images.example.org/logo.png",
+                            "thumbnail": "https://images.example.org/logo-thumb.png",
+                            "url": "https://example.org/logo",
+                            "source": "Example",
+                        },
+                        {
+                            "title": "ABB S201 B16 Sicherungsautomat Produktfoto",
+                            "image": "https://cdn.example.org/abb-s201-b16.jpg",
+                            "thumbnail": "https://cdn.example.org/abb-s201-b16-thumb.jpg",
+                            "url": "https://example.org/abb-s201-b16",
+                            "source": "Example Shop",
+                        },
+                    ]
+                },
+            )
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    result = _online_service(session, handler).search_online("ABB S201 B16")
+
+    assert result.items[0].title == "ABB S201 B16 Sicherungsautomat Produktfoto"
+    assert result.items[0].provider == "DuckDuckGo Images"
+
+
+def test_remote_image_validation_blocks_private_hosts_for_generic_search_results() -> None:
+    with pytest.raises(ProductImageValidationError):
+        ProductImageService._validate_remote_url(
+            "https://192.168.1.10/product.jpg",
+            allowed_hosts=None,
+            resolve_host=False,
+        )
+    with pytest.raises(ProductImageValidationError):
+        ProductImageService._validate_remote_url(
+            "https://localhost/product.jpg",
+            allowed_hosts=None,
+            resolve_host=False,
+        )

@@ -21,6 +21,32 @@ class AssetType(AssetEngineRecord, table=True):
             "module_width IS NULL OR (module_width >= 1 AND module_width <= 100)",
             name="ck_asset_types_module_width",
         ),
+        CheckConstraint(
+            "breaker_characteristic IS NULL OR "
+            "breaker_characteristic IN ('B', 'C', 'D', 'K', 'Z')",
+            name="ck_asset_types_breaker_characteristic",
+        ),
+        CheckConstraint(
+            "rated_current_a IS NULL OR (rated_current_a > 0 AND rated_current_a <= 10000)",
+            name="ck_asset_types_rated_current",
+        ),
+        CheckConstraint(
+            "coil_voltage_v IS NULL OR (coil_voltage_v > 0 AND coil_voltage_v <= 10000)",
+            name="ck_asset_types_coil_voltage",
+        ),
+        CheckConstraint(
+            "coil_voltage_type IS NULL OR coil_voltage_type IN ('AC', 'DC')",
+            name="ck_asset_types_coil_voltage_type",
+        ),
+        CheckConstraint(
+            "contact_count IS NULL OR (contact_count >= 1 AND contact_count <= 100)",
+            name="ck_asset_types_contact_count",
+        ),
+        CheckConstraint(
+            "contact_type IS NULL OR "
+            "contact_type IN ('normally_open', 'normally_closed', 'changeover')",
+            name="ck_asset_types_contact_type",
+        ),
     )
 
     name: str = Field(index=True, max_length=100)
@@ -28,6 +54,12 @@ class AssetType(AssetEngineRecord, table=True):
     description: str | None = None
     icon: str | None = Field(default=None, max_length=100)
     module_width: int | None = Field(default=None, ge=1, le=100)
+    breaker_characteristic: str | None = Field(default=None, max_length=2)
+    rated_current_a: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_v: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_type: str | None = Field(default=None, max_length=2)
+    contact_count: int | None = Field(default=None, ge=1, le=100)
+    contact_type: str | None = Field(default=None, max_length=30)
 
 
 class Product(AssetEngineRecord, table=True):
@@ -97,6 +129,32 @@ class Asset(AssetEngineRecord, table=True):
             "module_width IS NULL OR (module_width >= 1 AND module_width <= 100)",
             name="ck_assets_module_width",
         ),
+        CheckConstraint(
+            "breaker_characteristic IS NULL OR "
+            "breaker_characteristic IN ('B', 'C', 'D', 'K', 'Z')",
+            name="ck_assets_breaker_characteristic",
+        ),
+        CheckConstraint(
+            "rated_current_a IS NULL OR (rated_current_a > 0 AND rated_current_a <= 10000)",
+            name="ck_assets_rated_current",
+        ),
+        CheckConstraint(
+            "coil_voltage_v IS NULL OR (coil_voltage_v > 0 AND coil_voltage_v <= 10000)",
+            name="ck_assets_coil_voltage",
+        ),
+        CheckConstraint(
+            "coil_voltage_type IS NULL OR coil_voltage_type IN ('AC', 'DC')",
+            name="ck_assets_coil_voltage_type",
+        ),
+        CheckConstraint(
+            "contact_count IS NULL OR (contact_count >= 1 AND contact_count <= 100)",
+            name="ck_assets_contact_count",
+        ),
+        CheckConstraint(
+            "contact_type IS NULL OR "
+            "contact_type IN ('normally_open', 'normally_closed', 'changeover')",
+            name="ck_assets_contact_type",
+        ),
         Index(
             "uq_assets_inventory_number_global",
             "inventory_number",
@@ -114,6 +172,12 @@ class Asset(AssetEngineRecord, table=True):
     serial_number: str | None = Field(default=None, index=True, max_length=200)
     inventory_number: str | None = Field(default=None, index=True, max_length=200)
     module_width: int | None = Field(default=None, ge=1, le=100)
+    breaker_characteristic: str | None = Field(default=None, max_length=2)
+    rated_current_a: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_v: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_type: str | None = Field(default=None, max_length=2)
+    contact_count: int | None = Field(default=None, ge=1, le=100)
+    contact_type: str | None = Field(default=None, max_length=30)
     status: str = Field(default="active", index=True, max_length=30)
 
 

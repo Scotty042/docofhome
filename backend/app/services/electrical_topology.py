@@ -95,6 +95,12 @@ class ElectricalTopologyService:
         record = self.connections.get(connection_id)
         if record is None:
             raise ElectricalNotFoundError
+        from app.services.smart_meter import SmartMeterMeasurementService
+
+        if SmartMeterMeasurementService(self.session).active_for_connection(connection_id):
+            raise ElectricalConflictError(
+                "Die Verkabelung wird von mindestens einem Smart-Meter-Messpunkt verwendet"
+            )
         self._validate_cabinet_phase_flow(None, exclude_id=connection_id)
         now = datetime.now(UTC)
         record.deleted_at = now
@@ -176,7 +182,13 @@ class ElectricalTopologyService:
                 item.endpoint.key,
             )
         )
-        return ElectricalTopologyRead(nodes=nodes, connections=connection_reads)
+        from app.services.smart_meter import SmartMeterMeasurementService
+
+        return ElectricalTopologyRead(
+            nodes=nodes,
+            connections=connection_reads,
+            measurement_points=SmartMeterMeasurementService(self.session).list_all_active(),
+        )
 
     def _validate(
         self,

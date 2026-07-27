@@ -28,6 +28,25 @@ class ProductImageSource(StrEnum):
     ONLINE = "online"
 
 
+class BreakerCharacteristic(StrEnum):
+    B = "B"
+    C = "C"
+    D = "D"
+    K = "K"
+    Z = "Z"
+
+
+class CoilVoltageType(StrEnum):
+    AC = "AC"
+    DC = "DC"
+
+
+class ContactType(StrEnum):
+    NORMALLY_OPEN = "normally_open"
+    NORMALLY_CLOSED = "normally_closed"
+    CHANGEOVER = "changeover"
+
+
 class SortOrder(StrEnum):
     ASC = "asc"
     DESC = "desc"
@@ -62,6 +81,12 @@ class AssetTypeWrite(BaseModel):
     description: str | None = None
     icon: str | None = Field(default=None, max_length=100)
     module_width: int | None = Field(default=None, ge=1, le=100)
+    breaker_characteristic: BreakerCharacteristic | None = None
+    rated_current_a: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_v: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_type: CoilVoltageType | None = None
+    contact_count: int | None = Field(default=None, ge=1, le=100)
+    contact_type: ContactType | None = None
 
     @field_validator("name")
     @classmethod
@@ -75,6 +100,12 @@ class AssetTypeRead(RecordRead):
     description: str | None
     icon: str | None
     module_width: int | None
+    breaker_characteristic: BreakerCharacteristic | None
+    rated_current_a: float | None
+    coil_voltage_v: float | None
+    coil_voltage_type: CoilVoltageType | None
+    contact_count: int | None
+    contact_type: ContactType | None
 
 
 class ProductWrite(BaseModel):
@@ -213,6 +244,12 @@ class AssetWrite(BaseModel):
     serial_number: str | None = Field(default=None, max_length=200)
     inventory_number: str | None = Field(default=None, max_length=200)
     module_width: int | None = Field(default=None, ge=1, le=100)
+    breaker_characteristic: BreakerCharacteristic | None = None
+    rated_current_a: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_v: float | None = Field(default=None, gt=0, le=10000)
+    coil_voltage_type: CoilVoltageType | None = None
+    contact_count: int | None = Field(default=None, ge=1, le=100)
+    contact_type: ContactType | None = None
     status: AssetStatus = AssetStatus.ACTIVE
     label_ids: list[UUID] = Field(default_factory=list, max_length=100)
 
@@ -247,6 +284,18 @@ class AssetRead(RecordRead):
     inventory_number: str | None
     module_width: int | None
     effective_module_width: int | None
+    breaker_characteristic: BreakerCharacteristic | None
+    effective_breaker_characteristic: BreakerCharacteristic | None
+    rated_current_a: float | None
+    effective_rated_current_a: float | None
+    coil_voltage_v: float | None
+    effective_coil_voltage_v: float | None
+    coil_voltage_type: CoilVoltageType | None
+    effective_coil_voltage_type: CoilVoltageType | None
+    contact_count: int | None
+    effective_contact_count: int | None
+    contact_type: ContactType | None
+    effective_contact_type: ContactType | None
     status: AssetStatus
     asset_type: ReferenceRead
     product: ReferenceRead | None
@@ -333,6 +382,7 @@ class ProductImageSearchItemRead(BaseModel):
     image_url: str
     license_name: str | None = None
     author: str | None = None
+    provider: str | None = None
 
 
 class ProductImageSearchRead(BaseModel):

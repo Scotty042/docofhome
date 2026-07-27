@@ -25,7 +25,7 @@ const { distribution, loading, error, errorStatus, loadDistribution } = (
   useElectricalDistributionDetail()
 )
 const deleting = ref(false)
-const topology = ref<ElectricalTopology>({ nodes: [], connections: [] })
+const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measurement_points: [] })
 const topologyLoading = ref(false)
 const topologyError = ref<string | null>(null)
 const confirmArchive = ref(false)
@@ -97,7 +97,7 @@ async function loadTopology() {
   try {
     topology.value = await electricalApi.topology()
   } catch (reason) {
-    topology.value = { nodes: [], connections: [] }
+    topology.value = { nodes: [], connections: [], measurement_points: [] }
     topologyError.value = reason instanceof Error
       ? reason.message
       : 'Versorgungsinformationen konnten nicht geladen werden.'

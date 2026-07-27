@@ -185,3 +185,16 @@ Kurzschluss-/Selektivitätsberechnungen und eine normgerechte Elektro-CAD-Ausgab
 
 Bewusst offen bleiben kontextsensitive Hilfe-Icons in weiteren Dialogen sowie
 eine spätere redaktionelle Erweiterung der statischen Inhalte.
+
+
+## Umgesetzt mit 1.6.0 – Elektroansicht, Stammdaten und Messpunkte
+
+- Assistentenstatus und Abschlussnavigation korrigiert;
+- DocOfHome-Backupnamen mit Legacy-Kompatibilität;
+- verbesserte Online-Bildsuche;
+- Desktop-/Tablet-orientierte, farbcodierte DIN-Schrankansicht;
+- elektrische Zählerfilterung;
+- Sicherungsautomat-Stammdaten und Stromstoßschalter;
+- CT-/Stromwandler-Messpunkte an bestehenden Verkabelungen;
+- Home-Assistant-Zuordnung je Smart-Meter-Messkanal;
+- erweiterte Elektrobegriffe im Handbuch.

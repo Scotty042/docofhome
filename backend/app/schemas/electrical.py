@@ -41,6 +41,10 @@ class ElectricalAssetRead(BaseModel):
     location_path: str
     status: str
     effective_module_width: int | None
+    asset_type_name: str = "Unbekannter Asset-Typ"
+    effective_breaker_characteristic: str | None = None
+    effective_rated_current_a: float | None = None
+    technical_short_label: str | None = None
 
 
 class DistributionWrite(BaseModel):

@@ -7,12 +7,6 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY = re.compile(r"\bTectoryn\b|(?<![A-Za-z0-9_])JARVIS(?![A-Za-z0-9_])")
 LOWERCASE_BRAND = re.compile(r"\bdocofhome\b")
-TECHNICAL_LOWERCASE_IDENTIFIERS = re.compile(
-    r"https://github\.com/Scotty042/docofhome(?:\.git)?"
-    r"|scotty042/docofhome(?::[A-Za-z0-9_.-]+)?"
-    r"|^\s*cd docofhome\s*$",
-    re.MULTILINE,
-)
 CENTRAL_DOCS = [
     ROOT / "README.md",
     ROOT / "PROJECT_STATUS.md",
@@ -42,8 +36,7 @@ def main() -> int:
     for path in CENTRAL_DOCS:
         content = path.read_text(encoding="utf-8")
         failures.extend(line_hits(path, content, LEGACY))
-        visible_content = TECHNICAL_LOWERCASE_IDENTIFIERS.sub("", content)
-        failures.extend(line_hits(path, visible_content, LOWERCASE_BRAND))
+        failures.extend(line_hits(path, content, LOWERCASE_BRAND))
     branding = (ROOT / "frontend" / "src" / "config" / "branding.ts").read_text(
         encoding="utf-8"
     )

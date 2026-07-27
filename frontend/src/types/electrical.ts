@@ -19,6 +19,10 @@ export interface ElectricalAsset {
   location_path: string
   status: string
   effective_module_width: number | null
+  asset_type_name?: string
+  effective_breaker_characteristic?: string | null
+  effective_rated_current_a?: number | null
+  technical_short_label?: string | null
 }
 
 export interface DistributionBreadcrumb {
@@ -158,11 +162,15 @@ export interface ElectricalAssetPlacement {
   asset_id: string
   asset_name: string
   asset_code: string
+  asset_type_name?: string
   product_name: string | null
   location_path: string | null
   row_number: number
   start_position: number
   module_width: number
+  effective_breaker_characteristic?: string | null
+  effective_rated_current_a?: number | null
+  technical_short_label?: string | null
   primary_live_value: ElectricalLiveValue | null
   live_values: ElectricalLiveValue[]
   live_warning: string | null
@@ -379,9 +387,63 @@ export interface ElectricalTopologyNode {
   downstream_asset_count: number
 }
 
+export type SmartMeterMeasurementPhase = 'L1' | 'L2' | 'L3' | 'N'
+export type SmartMeterMeasurementDirection = 'unspecified' | 'source_to_target' | 'target_to_source'
+export type SmartMeterMeasurementEntityRole = 'power' | 'current' | 'voltage' | 'energy' | 'energy_import' | 'energy_export' | 'frequency' | 'power_factor' | 'additional'
+
+export interface SmartMeterMeasurementEntity {
+  id: string
+  entity_id: string
+  role: SmartMeterMeasurementEntityRole
+  created_at: string
+  updated_at: string
+}
+
+export interface SmartMeterMeasurementEntityWrite {
+  entity_id: string
+  role: SmartMeterMeasurementEntityRole
+}
+
+export interface SmartMeterMeasurementPoint {
+  id: string
+  smart_meter_asset_id: string
+  smart_meter_asset_name: string
+  smart_meter_asset_code: string
+  connection_id: string
+  connection_source_name: string
+  connection_target_name: string
+  connection_label: string | null
+  channel_name: string
+  name: string
+  phase: SmartMeterMeasurementPhase | null
+  direction: SmartMeterMeasurementDirection
+  inverted: boolean
+  transformer_nominal_current_a: number | null
+  transformer_ratio: string | null
+  notes: string | null
+  entities: SmartMeterMeasurementEntity[]
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export interface SmartMeterMeasurementPointWrite {
+  connection_id: string
+  channel_name: string
+  name: string
+  phase: SmartMeterMeasurementPhase | null
+  direction: SmartMeterMeasurementDirection
+  inverted: boolean
+  transformer_nominal_current_a: number | null
+  transformer_ratio: string | null
+  notes: string | null
+  entities: SmartMeterMeasurementEntityWrite[]
+}
+
 export interface ElectricalTopology {
   nodes: ElectricalTopologyNode[]
   connections: ElectricalConnection[]
+  measurement_points?: SmartMeterMeasurementPoint[]
 }
 
 export interface ProtectiveDevicePlacementWrite {

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.6.0 – 2026-07-27
+
+### Geändert
+
+- Einrichtungsassistent setzt Integrationsmeldungen beim Schrittwechsel zurück
+  und bietet nach dem Speichern eine zuverlässige Weiterleitung samt Fallback.
+- Backup-Dateien verwenden den Namen DocOfHome; alte `tectoryn`-Dateinamen bleiben
+  für Wiederherstellungen kompatibel.
+- Online-Produktbildsuche verwendet DuckDuckGo Images mit Relevanzsortierung und
+  Wikimedia Commons als Fallback.
+- Sicherungs-/Zählerschrank ist für PC und Tablet kompakter, farbcodiert und
+  zeigt primär Namen sowie optionale Live- oder B16-Kurzwerte.
+- Wasser- und Gaszähler werden aus der elektrischen Platzierung herausgefiltert.
+
+### Hinzugefügt
+
+- Auslösecharakteristik und Nennstrom als Asset-Typ-Standard und Asset-Override.
+- empfohlener Asset-Typ Stromstoßschalter mit Spulenspannung, Spannungsart,
+  Kontaktanzahl und Kontaktart.
+- Smart-Meter-Messpunkte für CT-Klemmen an vorhandenen Verkabelungen mit eigener
+  Home-Assistant-Entitätszuordnung.
+- Migration `0037_release_1_6_electrical_measurements`.
+- ausführlichere Handbuchtexte zu Sammel-/Kammschiene und Stromwandlerklemmen.
+
 ## 1.5.0 – 2026-07-26
 
 ### Hinzugefügt

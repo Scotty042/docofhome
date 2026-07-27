@@ -20,7 +20,10 @@ def require(relative: str, fragments: tuple[str, ...]) -> None:
 
 
 def main() -> int:
-    require("VERSION", ("1.5.0",))
+    version = read("VERSION").strip()
+    version_parts = tuple(int(part) for part in version.split(".")[:3])
+    if version_parts < (1, 5, 0):
+        raise AssertionError("Handbuch-Vertrag benötigt mindestens Version 1.5.0")
     require(
         "frontend/src/router/handbookRoutes.ts",
         ("/wiki/handbuch", "wiki-handbook", "HandbookGlossaryPage"),
@@ -64,12 +67,12 @@ def main() -> int:
     )[0]
     if "Asset bearbeiten" in passive:
         raise AssertionError("Passive Schrankkomponente zeigt einen Asset-Button")
-    migrations = sorted((ROOT / "backend/migrations/versions").glob("*.py"))
-    if not migrations[-1].name.startswith("0036_"):
-        raise AssertionError("1.5.0 darf keine neue Migration enthalten")
+    migrations = {item.name for item in (ROOT / "backend/migrations/versions").glob("*.py")}
+    if not any(name.startswith("0036_") for name in migrations):
+        raise AssertionError("Migration 0036 fehlt")
     lock = json.loads(read("frontend/package-lock.json"))
-    if lock["version"] != "1.5.0" or lock["packages"][""]["version"] != "1.5.0":
-        raise AssertionError("Eigene package-lock-Metadaten sind nicht 1.5.0")
+    if lock["version"] != version or lock["packages"][""]["version"] != version:
+        raise AssertionError("Eigene package-lock-Metadaten stimmen nicht mit VERSION überein")
     rfdc = lock["packages"]["node_modules/rfdc"]
     if rfdc["version"] != "1.4.1":
         raise AssertionError("Transitive rfdc-Abhängigkeit wurde verändert")

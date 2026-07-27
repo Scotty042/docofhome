@@ -346,7 +346,7 @@ async function importOnline(item: ProductImageSearchItem) {
           <v-btn color="primary" :loading="busy" class="mt-1" @click="searchOnline">Suchen</v-btn>
         </div>
         <v-alert type="info" variant="tonal" density="compact" class="mt-3">
-          Die optionale Suche nutzt Wikimedia Commons. Erst der ausdrücklich gewählte Treffer wird lokal gespeichert.
+          Die Suche verwendet primär DuckDuckGo Images und bei Bedarf Wikimedia Commons. Hersteller, Modell und Produktname liefern die besten Treffer. Erst der ausdrücklich gewählte Treffer wird lokal gespeichert.
         </v-alert>
         <v-alert v-if="onlineStatus" :type="onlineStatusType" variant="tonal" density="compact" class="mt-3">
           {{ onlineStatus }}
@@ -357,7 +357,7 @@ async function importOnline(item: ProductImageSearchItem) {
               <v-img :src="item.thumbnail_url" height="130" cover />
               <v-card-text class="pa-2">
                 <div class="text-caption font-weight-medium text-truncate">{{ item.title }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ item.license_name || 'Lizenz siehe Quelle' }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ item.provider || 'Online-Suche' }} · {{ item.license_name || 'Rechte siehe Quelle' }}</div>
               </v-card-text>
             </v-card>
           </v-col>

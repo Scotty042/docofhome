@@ -154,7 +154,7 @@ export function moduleBoardStyle(modulesPerRow: number): {
   minWidth: string
 } {
   const modules = Math.max(1, Math.trunc(modulesPerRow))
-  const moduleWidth = 34
+  const moduleWidth = 48
   const gap = 4
   return {
     gridTemplateColumns: `repeat(${modules}, minmax(${moduleWidth}px, 1fr))`,
@@ -193,4 +193,51 @@ export function distributionCapacity(distribution: Distribution): string {
     ? '? Module je Reihe'
     : `${distribution.modules_per_row} Module je Reihe`
   return `${rows} · ${modules}`
+}
+
+
+const electricalMeterTypes = new Set([
+  'electricity_grid',
+  'electricity_pv',
+  'electricity_feed_in'
+])
+
+export function isElectricalConsumptionMeterType(meterType: string): boolean {
+  return electricalMeterTypes.has(meterType.trim().toLocaleLowerCase('de'))
+}
+
+export function isNonElectricalMeterAssetType(assetTypeName: string): boolean {
+  const normalized = assetTypeName.trim().toLocaleLowerCase('de')
+  return [
+    'wasserzähler',
+    'wasserzaehler',
+    'gaszähler',
+    'gaszaehler',
+    'wärmemengenzähler',
+    'waermemengenzaehler',
+    'wärmezähler',
+    'waermezaehler'
+  ].some((token) => normalized.includes(token))
+}
+
+export function protectiveDeviceCabinetClass(type: ProtectiveDeviceType): string {
+  return `cabinet-type-${type}`
+}
+
+export function assetCabinetClass(assetTypeName: string): string {
+  const normalized = assetTypeName.trim().toLocaleLowerCase('de')
+  if (normalized.includes('smart meter') || normalized.includes('smartmeter')) return 'cabinet-type-smart-meter'
+  if (normalized.includes('stromzähler') || normalized.includes('stromzaehler') || normalized === 'zähler') return 'cabinet-type-electric-meter'
+  if (normalized.includes('stromstoß') || normalized.includes('stromstoss')) return 'cabinet-type-impulse-switch'
+  if (normalized.includes('fi/ls') || normalized.includes('rcbo')) return 'cabinet-type-rcbo'
+  if (normalized.includes('fi-') || normalized.includes('fi ') || normalized.includes('rcd')) return 'cabinet-type-rcd'
+  if (normalized.includes('sicherung') || normalized.includes('leitungsschutz')) return 'cabinet-type-mcb'
+  return 'cabinet-type-asset'
+}
+
+export function cabinetComponentClass(componentType: ElectricalCabinetComponent['component_type']): string {
+  if (componentType === 'busbar' || componentType === 'phase_rail') return 'cabinet-type-busbar'
+  if (componentType === 'neutral_rail') return 'cabinet-type-neutral'
+  if (componentType === 'protective_earth_rail') return 'cabinet-type-pe'
+  return 'cabinet-type-passive'
 }

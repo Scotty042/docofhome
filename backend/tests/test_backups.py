@@ -62,7 +62,7 @@ def test_create_validate_schedule_and_apply_restore(tmp_path: Path, monkeypatch)
 
     record = service.create_backup()
 
-    assert record.filename.startswith("tectoryn-backup-")
+    assert record.filename.startswith("DocOfHome-backup-")
     assert service.validate_backup(record.filename).sha256 == record.sha256
     connection = sqlite3.connect(settings.database_path)
     try:
@@ -224,3 +224,21 @@ def test_schedule_due_calculation() -> None:
 
     assert BackupScheduler._is_due(due) is True
     assert BackupScheduler._is_due(not_due) is False
+
+
+def test_legacy_tectoryn_backup_name_remains_compatible(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    create_database(settings.database_path, "legacy")
+    service = BackupService(empty_session())
+    current = service.create_backup()
+    current_path = service.archive_path(current.filename)
+    legacy_name = current.filename.replace("DocOfHome-backup-", "tectoryn-backup-", 1)
+    legacy_path = current_path.with_name(legacy_name)
+    current_path.rename(legacy_path)
+
+    listed = {item.filename for item in service.list_backups()}
+    assert legacy_name in listed
+    assert service.validate_backup(legacy_name).valid is True

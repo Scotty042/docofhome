@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { assetApi } from '../services/assetApi'
@@ -69,6 +69,8 @@ const preview = ref<GuidedSetupPreview | null>(null)
 const applied = ref<GuidedSetupApply | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
+const redirectFailed = ref(false)
+let redirectTimer: number | null = null
 
 const stepItems = [
   'Umfang',
@@ -170,12 +172,27 @@ async function createPreview() {
 }
 
 async function applyDraft() {
-  if (!draftId.value || !preview.value?.can_apply) return
+  if (!draftId.value || !preview.value?.can_apply || saving.value || applied.value) return
   saving.value = true
   try {
     applied.value = await releaseApi.applyDraft(draftId.value)
+    const savedAssetId = applied.value.asset_id
     step.value = 11
-    window.setTimeout(() => void router.replace({ name: 'guided-setup' }), 1400)
+    redirectFailed.value = false
+    redirectTimer = window.setTimeout(async () => {
+      redirectTimer = null
+      try {
+        await router.replace({ name: 'asset-detail', params: { id: savedAssetId } })
+        if (
+          router.currentRoute.value.name !== 'asset-detail'
+          || String(router.currentRoute.value.params.id) !== savedAssetId
+        ) {
+          redirectFailed.value = true
+        }
+      } catch {
+        redirectFailed.value = true
+      }
+    }, 1400)
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Assistent konnte nicht speichern.'
   } finally {
@@ -192,6 +209,23 @@ async function next() {
   if (step.value < 9) step.value += 1
   else await createPreview()
 }
+
+async function openOverview() {
+  await router.push({ name: 'assets' })
+}
+
+async function openSavedAsset() {
+  if (!applied.value) return
+  try {
+    await router.push({ name: 'asset-detail', params: { id: applied.value.asset_id } })
+  } catch {
+    redirectFailed.value = true
+  }
+}
+
+onBeforeUnmount(() => {
+  if (redirectTimer !== null) window.clearTimeout(redirectTimer)
+})
 
 onMounted(async () => {
   const [typePage, assetRows] = await Promise.all([assetApi.assetTypes(), assetApi.allAssets()])
@@ -375,9 +409,29 @@ onMounted(async () => {
             </v-alert>
           </v-window-item>
           <v-window-item :value="11">
-            <v-alert v-if="applied" type="success">
-              Einrichtung vollständig gespeichert. Asset-ID: {{ applied.asset_id }}. Du wirst zum Anfang zurückgeführt.
+            <v-alert v-if="applied" type="success" class="mb-4">
+              Einrichtung vollständig gespeichert. Asset-ID: {{ applied.asset_id }}.
+              Du wirst zur Asset-Detailansicht weitergeleitet.
             </v-alert>
+            <v-alert v-if="redirectFailed" type="warning" class="mb-4">
+              Die automatische Weiterleitung war nicht möglich. Das Asset wurde dennoch gespeichert.
+            </v-alert>
+            <div v-if="applied" class="d-flex flex-wrap ga-2">
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-open-in-new"
+                @click="openSavedAsset"
+              >
+                Asset öffnen
+              </v-btn>
+              <v-btn
+                variant="tonal"
+                prepend-icon="mdi-format-list-bulleted"
+                @click="openOverview"
+              >
+                Zur Übersicht
+              </v-btn>
+            </div>
           </v-window-item>
         </v-window>
       </v-card-text>

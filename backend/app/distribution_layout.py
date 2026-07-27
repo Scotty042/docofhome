@@ -1375,6 +1375,16 @@ class ElectricalLayoutService:
             )
         if product is None and asset.product_id is not None:
             product = self.session.get(Product, asset.product_id)
+        asset_type = self.session.get(AssetType, asset.asset_type_id)
+        characteristic = asset.breaker_characteristic or (
+            asset_type.breaker_characteristic if asset_type else None
+        )
+        rated_current = asset.rated_current_a if asset.rated_current_a is not None else (
+            asset_type.rated_current_a if asset_type else None
+        )
+        technical_short_label = None
+        if characteristic and rated_current is not None:
+            technical_short_label = f"{characteristic}{rated_current:g}"
         if location_path is None and asset.location_id is not None:
             projection = LocationRepository(self.session).get_projection(
                 asset.location_id, include_deleted=True
@@ -1422,11 +1432,15 @@ class ElectricalLayoutService:
             asset_id=asset.id,
             asset_name=asset.name,
             asset_code=asset.jarvis_code,
+            asset_type_name=asset_type.name if asset_type else "Unbekannter Asset-Typ",
             product_name=product.name if product else None,
             location_path=location_path,
             row_number=placement.row_number,
             start_position=placement.start_position,
             module_width=placement.module_width,
+            effective_breaker_characteristic=characteristic,
+            effective_rated_current_a=rated_current,
+            technical_short_label=technical_short_label,
             primary_live_value=primary,
             live_values=live_values,
             live_warning=live_warning,

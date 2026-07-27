@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: "${DOCOFHOME_IMAGE:-scotty042/docofhome:1.5.0}"
+    image: jarvis:local
     container_name: jarvis
     restart: unless-stopped
     ports:

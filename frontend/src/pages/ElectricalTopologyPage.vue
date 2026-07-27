@@ -21,7 +21,7 @@ import type {
   ElectricalTopology
 } from '../types/electrical'
 
-const topology = ref<ElectricalTopology>({ nodes: [], connections: [] })
+const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measurement_points: [] })
 const route = useRoute()
 const endpoints = ref<ElectricalEndpoint[]>([])
 const loading = ref(true)
@@ -108,6 +108,12 @@ function connectionDetails(connection: ElectricalConnection): string {
     connection.cross_section_mm2 ? `${connection.cross_section_mm2} mm²` : null,
     connection.length_m ? `${connection.length_m} m` : null
   ].filter(Boolean).join(' · ')
+}
+
+function measurementPointsForConnection(connectionId: string) {
+  return (topology.value.measurement_points ?? []).filter(
+    (point) => point.connection_id === connectionId
+  )
 }
 
 async function load() {
@@ -279,8 +285,11 @@ onMounted(() => void initialize())
         <v-col cols="6" sm="3">
           <v-card variant="tonal"><v-card-text><div class="text-h5">{{ rootCount }}</div><div class="text-medium-emphasis">Einspeisungen</div></v-card-text></v-card>
         </v-col>
-        <v-col cols="6" sm="3">
+        <v-col cols="6" sm="2">
           <v-card variant="tonal"><v-card-text><div class="text-h5">{{ topology.connections.length }}</div><div class="text-medium-emphasis">Verbindungen</div></v-card-text></v-card>
+        </v-col>
+        <v-col cols="6" sm="2">
+          <v-card variant="tonal"><v-card-text><div class="text-h5">{{ topology.measurement_points?.length ?? 0 }}</div><div class="text-medium-emphasis">CT-Messpunkte</div></v-card-text></v-card>
         </v-col>
         <v-col v-for="phase in (['L1', 'L2', 'L3'] as const)" :key="phase" cols="4" sm="2">
           <v-card variant="tonal"><v-card-text><div class="text-h5">{{ phaseCounts[phase] }}</div><div class="text-medium-emphasis">mit {{ phase }}</div></v-card-text></v-card>
@@ -347,6 +356,19 @@ onMounted(() => void initialize())
                         <v-chip v-if="!connection.phases.length" size="x-small" variant="tonal">Phase unbekannt</v-chip>
                       </div>
                       <div class="text-caption text-medium-emphasis">{{ connectionDetails(connection) }}</div>
+                      <div v-if="measurementPointsForConnection(connection.id).length" class="d-flex flex-wrap ga-1 mt-1">
+                        <v-chip
+                          v-for="point in measurementPointsForConnection(connection.id)"
+                          :key="point.id"
+                          size="x-small"
+                          color="teal"
+                          variant="tonal"
+                          prepend-icon="mdi-current-ac"
+                          :to="`/assets/${point.smart_meter_asset_id}`"
+                        >
+                          {{ point.channel_name }} · {{ point.smart_meter_asset_name }}<span v-if="point.phase"> · {{ point.phase }}</span>
+                        </v-chip>
+                      </div>
                     </div>
                   </template>
                   <v-chip v-else color="primary" size="small" variant="tonal">Einspeisepunkt</v-chip>
@@ -391,6 +413,19 @@ onMounted(() => void initialize())
                 <div class="d-flex flex-wrap ga-1">
                   <v-chip v-for="phase in connection.phases" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
                   <span class="text-caption">{{ connectionDetails(connection) }}</span>
+                </div>
+                <div v-if="measurementPointsForConnection(connection.id).length" class="d-flex flex-wrap ga-1 mt-1">
+                  <v-chip
+                    v-for="point in measurementPointsForConnection(connection.id)"
+                    :key="point.id"
+                    size="x-small"
+                    color="teal"
+                    variant="tonal"
+                    prepend-icon="mdi-current-ac"
+                    :to="`/assets/${point.smart_meter_asset_id}`"
+                  >
+                    {{ point.channel_name }} · {{ point.smart_meter_asset_name }}
+                  </v-chip>
                 </div>
               </div>
               <div class="text-caption">Einspeisung: {{ row.node.source_names.join(', ') }}</div>

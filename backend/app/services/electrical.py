@@ -529,6 +529,17 @@ class ElectricalDistributionService(ElectricalServiceBase):
         asset = projection.record
         if asset.location_id is None:
             raise ElectricalValidationError("Stored electrical asset has no location")
+        asset_type = self.session.get(AssetType, asset.asset_type_id)
+        characteristic = asset.breaker_characteristic or (
+            asset_type.breaker_characteristic if asset_type else None
+        )
+        rated_current = asset.rated_current_a if asset.rated_current_a is not None else (
+            asset_type.rated_current_a if asset_type else None
+        )
+        short_label = None
+        if characteristic and rated_current is not None:
+            rendered_current = f"{rated_current:g}"
+            short_label = f"{characteristic}{rendered_current}"
         return ElectricalAssetRead(
             id=asset.id,
             name=asset.name,
@@ -537,6 +548,10 @@ class ElectricalDistributionService(ElectricalServiceBase):
             location_path=projection.location_path,
             status=asset.status,
             effective_module_width=effective_asset_module_width(self.session, asset),
+            asset_type_name=asset_type.name if asset_type else "Unbekannter Asset-Typ",
+            effective_breaker_characteristic=characteristic,
+            effective_rated_current_a=rated_current,
+            technical_short_label=short_label,
         )
 
     def _device_read(self, projection: ProtectiveDeviceProjection) -> ProtectiveDeviceRead:
@@ -962,6 +977,24 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         asset = projection.asset.record
         if asset.location_id is None:
             raise ElectricalValidationError("Stored electrical asset has no location")
+        asset_type = self.session.get(AssetType, asset.asset_type_id)
+        characteristic = projection.record.characteristic or asset.breaker_characteristic or (
+            asset_type.breaker_characteristic if asset_type else None
+        )
+        rated_current = (
+            projection.record.rated_current_a
+            if projection.record.rated_current_a is not None
+            else asset.rated_current_a
+            if asset.rated_current_a is not None
+            else asset_type.rated_current_a
+            if asset_type is not None
+            else None
+        )
+        technical_short_label = (
+            f"{characteristic}{rated_current:g}"
+            if characteristic and rated_current is not None
+            else None
+        )
         return ProtectiveDeviceRead.model_validate(
             {
                 **projection.component.model_dump(),
@@ -976,6 +1009,12 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                     effective_module_width=effective_asset_module_width(
                         self.session, asset
                     ),
+                    asset_type_name=(
+                        asset_type.name if asset_type else "Unbekannter Asset-Typ"
+                    ),
+                    effective_breaker_characteristic=characteristic,
+                    effective_rated_current_a=rated_current,
+                    technical_short_label=technical_short_label,
                 ),
                 "distribution_name": projection.distribution_name,
                 **self._group_read_data(projection),

@@ -290,11 +290,15 @@ class ElectricalAssetPlacementRead(BaseModel):
     asset_id: UUID
     asset_name: str
     asset_code: str
+    asset_type_name: str = "Unbekannter Asset-Typ"
     product_name: str | None
     location_path: str | None
     row_number: int
     start_position: int
     module_width: int
+    effective_breaker_characteristic: str | None = None
+    effective_rated_current_a: float | None = None
+    technical_short_label: str | None = None
     primary_live_value: ElectricalLiveValueRead | None = None
     live_values: list[ElectricalLiveValueRead] = Field(default_factory=list)
     live_warning: str | None = None
