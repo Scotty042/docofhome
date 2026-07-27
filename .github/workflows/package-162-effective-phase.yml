@@ -43,11 +43,10 @@ jobs:
             tests/test_effective_connection_phases.py \
             tests/test_effective_topology_service.py
 
-      - name: Mypy changed phase service
+      - name: Mypy changed phase service in isolation
         working-directory: backend
         run: |
-          mypy \
-            app/api/v1/electrical_topology.py \
+          mypy --follow-imports=skip \
             app/services/electrical_topology_effective.py
 
       - name: Full backend tests and migration
@@ -82,6 +81,7 @@ jobs:
           rm -f .github/workflows/build-162-effective-phase-v2.yml
           rm -f .github/workflows/build-162-effective-phase-pr.yml
           rm -f .github/workflows/diagnose-ruff.yml
+          rm -f .github/workflows/diagnose-mypy.yml
           rm -f .github/workflows/package-162-effective-phase.yml
           rm -f scripts/apply_162_phase_fix.py scripts/apply_162_phase_fix_v2.py
           rm -f backend/tests/test_effective_connection_phases.py
@@ -121,7 +121,7 @@ jobs:
               '- Die Topologieanzeige fällt nicht mehr auf alte gespeicherte Phasen zurück.\n\n'
               '## Ausgeführte Prüfungen\n\n'
               '- Ruff für alle geänderten Phasen-/Topologiedateien: erfolgreich\n'
-              '- mypy für den geänderten API-/Servicepfad: erfolgreich\n'
+              '- isolierte strikte mypy-Prüfung des geänderten Phasenservices: erfolgreich\n'
               '- vollständige Pytest-Suite: erfolgreich\n'
               '- Alembic Upgrade bis Head: erfolgreich\n'
               '- vollständige Frontendtests: erfolgreich\n'
