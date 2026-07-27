@@ -17,7 +17,7 @@ from app.services.electrical import (
     ElectricalNotFoundError,
     ElectricalValidationError,
 )
-from app.services.electrical_topology import ElectricalTopologyService
+from app.services.electrical_topology_effective import ElectricalTopologyService
 
 router = APIRouter(prefix="/electrical", tags=["electrical"])
 SessionDependency = Annotated[Session, Depends(get_session)]
