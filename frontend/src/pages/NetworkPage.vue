@@ -383,6 +383,7 @@ async function assignFritzDevice() {
         speed_mbps: null,
         poe_mode: 'none',
         enabled: true,
+        is_primary: false,
         logical_interface_id: null,
         description: 'Logische Geräteschnittstelle für die gemeinsame Management-IP.'
       })
@@ -398,6 +399,7 @@ async function assignFritzDevice() {
       speed_mbps: discovered.connection_rate_mbps,
       poe_mode: 'unknown',
       enabled: true,
+      is_primary: false,
       logical_interface_id: logicalInterfaceId,
       description: 'Physische bzw. drahtlose Schnittstelle aus der FRITZ!Box-Geräteliste. Manuelle Daten werden nicht überschrieben.'
     })

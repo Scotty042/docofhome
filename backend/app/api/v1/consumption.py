@@ -13,6 +13,7 @@ from app.schemas.consumption import (
     ConsumptionImportResultRead,
     ConsumptionMeterLiveRead,
     ConsumptionMeterRead,
+    ConsumptionMeterReplacementWrite,
     ConsumptionMeterType,
     ConsumptionMeterWrite,
     ConsumptionNoteRead,
@@ -147,6 +148,15 @@ def update_meter(
     session: SessionDependency,
 ) -> ConsumptionMeterRead:
     return _call(lambda: ConsumptionService(session).update_meter(meter_id, payload))
+
+
+@router.post("/meters/{meter_id}/replace", response_model=ConsumptionMeterRead)
+def replace_meter(
+    meter_id: UUID,
+    payload: ConsumptionMeterReplacementWrite,
+    session: SessionDependency,
+) -> ConsumptionMeterRead:
+    return _call(lambda: ConsumptionService(session).replace_meter(meter_id, payload))
 
 
 @router.get("/meters/{meter_id}/live", response_model=ConsumptionMeterLiveRead)

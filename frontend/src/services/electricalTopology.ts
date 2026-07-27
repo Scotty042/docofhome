@@ -14,6 +14,15 @@ export interface ElectricalTopologyRow {
   incomingConnections: ElectricalConnection[]
 }
 
+export interface PhaseDistributionGroup {
+  block: ElectricalTopologyNode
+  groups: Array<{
+    key: 'L1' | 'L2' | 'L3' | 'multi' | 'unassigned'
+    label: string
+    connections: ElectricalConnection[]
+  }>
+}
+
 export const endpointKindLabels: Record<ElectricalEndpointKind, string> = {
   grid_connection: 'Netzanschluss',
   asset: 'Asset',
@@ -91,6 +100,41 @@ export function phaseConnectionCounts(
       topology.connections.filter((connection) => connection.phases.includes(phase)).length
     ])
   ) as Record<'L1' | 'L2' | 'L3', number>
+}
+
+export function phaseDistributionGroups(
+  topology: ElectricalTopology
+): PhaseDistributionGroup[] {
+  return topology.nodes
+    .filter((node) => node.endpoint.device_type === 'phase_distribution_block')
+    .map((block) => {
+      const outgoing = topology.connections.filter(
+        (connection) => connection.source.key === block.endpoint.key
+      )
+      const phaseGroup = (connection: ElectricalConnection) => {
+        const phases = connection.phases.filter(
+          (phase): phase is 'L1' | 'L2' | 'L3' => phase === 'L1' || phase === 'L2' || phase === 'L3'
+        )
+        if (phases.length === 1) return phases[0]
+        if (phases.length > 1) return 'multi'
+        return 'unassigned'
+      }
+      const definitions = [
+        { key: 'L1' as const, label: 'L1' },
+        { key: 'L2' as const, label: 'L2' },
+        { key: 'L3' as const, label: 'L3' },
+        { key: 'multi' as const, label: 'Mehrphasig' },
+        { key: 'unassigned' as const, label: 'Nicht zugeordnet' }
+      ]
+      return {
+        block,
+        groups: definitions.map((definition) => ({
+          ...definition,
+          connections: outgoing.filter((connection) => phaseGroup(connection) === definition.key)
+        })).filter((group) => group.connections.length)
+      }
+    })
+    .filter((item) => item.groups.length)
 }
 
 export function endpointTitle(endpoint: ElectricalEndpoint): string {

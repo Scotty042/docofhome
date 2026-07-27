@@ -1262,7 +1262,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         </div>
         <div class="d-flex flex-wrap ga-2">
           <v-btn v-if="structuredLayout" prepend-icon="mdi-view-column-outline" color="primary" @click="openSection()">Feld anlegen</v-btn>
-          <v-btn prepend-icon="mdi-shield-plus-outline" variant="tonal" @click="openPlacement()">Schutzgerät platzieren</v-btn>
+          <v-btn prepend-icon="mdi-shield-plus-outline" variant="tonal" title="Sicherung, LS, FI/RCD, FI/LS oder Überspannungsschutz platzieren" @click="openPlacement()">Sicherungs-/Schutzgerät platzieren</v-btn>
           <v-btn
             prepend-icon="mdi-call-split"
             variant="tonal"
@@ -1421,13 +1421,18 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                   }"
                   variant="tonal"
+                  :aria-label="`${placement.device.asset.name}, ${protectiveDeviceLabels[placement.device.device_type]}, TE ${placement.start} bis ${placement.end}`"
                   @click="openDeviceDetails(placement.device)"
                   :style="{ gridColumn: placement.gridColumn }"
                   :draggable="desktopDragEnabled"
                   @dragstart="beginDeviceDrag($event, placement.device)"
                   @dragend="finishDeviceDrag"
                 >
-                  <v-card-title class="module-device-title text-caption font-weight-bold">
+                  <v-card-title
+                    class="module-device-title text-caption font-weight-bold"
+                    :class="{ 'vertical-device-title': placement.start === placement.end }"
+                    :title="placement.device.asset.name"
+                  >
                     {{ placement.device.asset.name }}
                   </v-card-title>
                   <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
@@ -1681,12 +1686,17 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           }"
                           :style="{ gridColumn: placement.gridColumn }"
                           variant="outlined"
+                          :aria-label="`${placement.device.asset.name}, ${protectiveDeviceLabels[placement.device.device_type]}, TE ${placement.start} bis ${placement.end}`"
                           @click="openDeviceDetails(placement.device)"
                           :draggable="desktopDragEnabled"
                           @dragstart="beginDeviceDrag($event, placement.device)"
                           @dragend="finishDeviceDrag"
                         >
-                          <v-card-title class="module-device-title text-caption font-weight-bold">{{ placement.device.asset.name }}</v-card-title>
+                          <v-card-title
+                            class="module-device-title text-caption font-weight-bold"
+                            :class="{ 'vertical-device-title': placement.start === placement.end }"
+                            :title="placement.device.asset.name"
+                          >{{ placement.device.asset.name }}</v-card-title>
                           <div v-if="placement.device.asset.technical_short_label" class="module-compact-value">
                             {{ placement.device.asset.technical_short_label }}
                           </div>
@@ -2231,6 +2241,18 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
 .module-board.is-dragging .drop-target-invalid { border-color: rgb(var(--v-theme-error)); background: rgba(var(--v-theme-error), 0.2); }
 .module-device { grid-row: 2; min-width: 0; z-index: 2; overflow: hidden; cursor: pointer; border-width: 2px; }
 .module-device-title { padding: 10px 8px 4px; line-height: 1.2; min-height: 2.8rem; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: normal; overflow-wrap: break-word; hyphens: auto; }
+.vertical-device-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 118px;
+  max-height: none;
+  padding: 8px 4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
 .module-compact-value { padding: 0 8px 8px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .module-board.compact-view .module-device :deep(.v-card-subtitle),
 .module-board.compact-view .module-device :deep(.v-card-text),

@@ -127,11 +127,23 @@ class ConfigurationWrite(BaseModel):
     timezone: str = Field(min_length=1, max_length=100)
     theme: ThemePreference = ThemePreference.DARK
     online_product_image_search_enabled: bool = False
+    product_image_source_wikimedia_enabled: bool = True
+    product_image_source_duckduckgo_enabled: bool = True
     enabled_modules: list[ModuleKey] = Field(
         default_factory=default_enabled_modules,
         max_length=len(ModuleKey),
     )
     integrations: list[IntegrationWrite] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def image_search_has_a_provider(self) -> "ConfigurationWrite":
+        if (
+            self.online_product_image_search_enabled
+            and not self.product_image_source_wikimedia_enabled
+            and not self.product_image_source_duckduckgo_enabled
+        ):
+            raise ValueError("Für die Online-Bildsuche muss mindestens eine Quelle aktiv sein")
+        return self
 
     @field_validator("installation_name")
     @classmethod
@@ -190,6 +202,8 @@ class ConfigurationRead(BaseModel):
     timezone: str
     theme: ThemePreference
     online_product_image_search_enabled: bool
+    product_image_source_wikimedia_enabled: bool
+    product_image_source_duckduckgo_enabled: bool
     enabled_modules: list[ModuleKey]
     setup_completed_at: datetime
     integrations: list[IntegrationRead]

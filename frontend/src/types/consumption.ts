@@ -103,6 +103,14 @@ export interface ConsumptionReadingWrite {
   immich_original_file_name: string | null
 }
 
+export interface ConsumptionMeterReplacementWrite {
+  replaced_at: string
+  old_final_value: number
+  new_serial_number: string
+  new_start_value: number
+  note: string | null
+}
+
 export interface ConsumptionNote {
   id: string
   note_date: string
@@ -212,7 +220,7 @@ export interface ConsumptionDefaultSeed {
 }
 
 export interface ConsumptionComparison {
-  medium: 'water' | 'electricity' | 'gas'
+  medium: 'water' | 'electricity' | 'pv_generation' | 'gas'
   name: string
   meter_id: string | null
   unit: string | null

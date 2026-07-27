@@ -49,6 +49,8 @@ export interface ConfigurationRead {
   timezone: string
   theme: ThemePreference
   online_product_image_search_enabled: boolean
+  product_image_source_wikimedia_enabled: boolean
+  product_image_source_duckduckgo_enabled: boolean
   enabled_modules?: ModuleKey[]
   setup_completed_at: string
   integrations: IntegrationRead[]
@@ -60,6 +62,8 @@ export interface ConfigurationWrite {
   timezone: string
   theme: ThemePreference
   online_product_image_search_enabled: boolean
+  product_image_source_wikimedia_enabled: boolean
+  product_image_source_duckduckgo_enabled: boolean
   enabled_modules?: ModuleKey[]
   integrations: IntegrationWrite[]
 }
@@ -92,6 +96,8 @@ export function createDefaultConfiguration(): ConfigurationWrite {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     theme: 'dark',
     online_product_image_search_enabled: false,
+    product_image_source_wikimedia_enabled: true,
+    product_image_source_duckduckgo_enabled: true,
     enabled_modules: [...moduleKeys],
     integrations: integrationKinds.map((kind) => ({
       kind,
@@ -112,6 +118,8 @@ export function editableConfiguration(configuration: ConfigurationRead): Configu
     timezone: configuration.timezone,
     theme: configuration.theme,
     online_product_image_search_enabled: configuration.online_product_image_search_enabled,
+    product_image_source_wikimedia_enabled: configuration.product_image_source_wikimedia_enabled,
+    product_image_source_duckduckgo_enabled: configuration.product_image_source_duckduckgo_enabled,
     enabled_modules: [...(configuration.enabled_modules ?? moduleKeys)],
     integrations: integrationKinds.map((kind) => {
       const stored = configuration.integrations.find((integration) => integration.kind === kind)

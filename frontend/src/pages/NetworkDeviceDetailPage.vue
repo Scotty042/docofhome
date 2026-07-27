@@ -48,7 +48,7 @@ const interfaceDialog = ref(false)
 const editingInterface = ref<NetworkInterface | null>(null)
 const interfaceForm = ref<NetworkInterfaceWrite>({
   network_device_id: '', name: '', interface_type: 'ethernet', mac_address: null,
-  speed_mbps: null, poe_mode: 'none', enabled: true, logical_interface_id: null, description: null
+  speed_mbps: null, poe_mode: 'none', enabled: true, is_primary: false, logical_interface_id: null, description: null
 })
 const addressDialog = ref(false)
 const editingAddress = ref<NetworkAddress | null>(null)
@@ -164,11 +164,12 @@ function openInterface(item?: NetworkInterface) {
     speed_mbps: item.speed_mbps,
     poe_mode: item.poe_mode,
     enabled: item.enabled,
+    is_primary: item.is_primary,
     logical_interface_id: item.logical_interface_id,
     description: item.description
   } : {
     network_device_id: deviceId.value, name: '', interface_type: 'ethernet', mac_address: null,
-    speed_mbps: null, poe_mode: 'none', enabled: true, logical_interface_id: null, description: null
+    speed_mbps: null, poe_mode: 'none', enabled: true, is_primary: false, logical_interface_id: null, description: null
   }
   interfaceDialog.value = true
 }
@@ -343,6 +344,7 @@ watch(deviceId, () => void load())
                   <v-icon :icon="item.interface_type === 'wifi' ? 'mdi-wifi' : item.interface_type === 'fiber' ? 'mdi-lan-connect' : 'mdi-ethernet'" />
                   <strong>{{ item.name }}</strong>
                   <v-chip size="x-small" variant="tonal">{{ item.interface_type }}</v-chip>
+                  <v-chip v-if="item.is_primary" size="x-small" color="primary" variant="tonal">Primär</v-chip>
                   <v-chip v-if="item.mac_address" size="x-small" variant="outlined">{{ item.mac_address }}</v-chip>
                   <v-chip v-if="item.logical_interface_name" size="x-small" color="info" prepend-icon="mdi-bridge">Mitglied von {{ item.logical_interface_name }}</v-chip>
                   <v-chip v-if="item.interface_type === 'virtual' && item.member_count" size="x-small" color="primary" prepend-icon="mdi-ethernet">{{ item.member_count }} Mitgliedsports</v-chip>
@@ -430,6 +432,7 @@ watch(deviceId, () => void load())
           <v-row><v-col cols="12" sm="7"><v-text-field v-model="interfaceForm.mac_address" label="MAC-Adresse" placeholder="AA:BB:CC:DD:EE:FF" /></v-col><v-col cols="12" sm="5"><v-text-field v-model.number="interfaceForm.speed_mbps" type="number" min="1" label="Geschwindigkeit (Mbit/s)" /></v-col></v-row>
           <v-select v-model="interfaceForm.poe_mode" :items="poeItems" label="PoE" class="mb-3" />
           <v-switch v-model="interfaceForm.enabled" color="primary" label="Schnittstelle aktiv" />
+          <v-switch v-model="interfaceForm.is_primary" color="primary" label="Primäre Schnittstelle dieses Geräts" hint="Nur eine Schnittstelle je Gerät kann primär sein." persistent-hint />
           <v-textarea v-model="interfaceForm.description" label="Beschreibung" rows="3" />
         </v-card-text>
         <v-card-actions><v-spacer /><v-btn @click="interfaceDialog = false">Abbrechen</v-btn><v-btn color="primary" :loading="saving" :disabled="!interfaceForm.name" @click="saveInterface">Speichern</v-btn></v-card-actions>

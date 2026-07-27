@@ -7,6 +7,7 @@ from sqlmodel import Session, col, select
 
 from app.models.asset_engine import Asset, AssetType, Relationship
 from app.models.electrical import (
+    ElectricalAssetPlacement,
     ElectricalComponent,
     ElectricalDistribution,
     ElectricalProtectiveDevice,
@@ -18,6 +19,7 @@ from app.schemas.electrical import (
     ElectricalRole,
     ProtectiveDeviceType,
 )
+from app.services.protective_devices import is_protective_asset_type
 
 
 @dataclass(frozen=True)
@@ -276,6 +278,29 @@ class ElectricalDistributionRepository:
             self.session,
             assets,
         )
+        asset_types = {item.id: item for item in self.session.exec(select(AssetType)).all()}
+        structured_asset_ids = {
+            component.asset_id
+            for component in components.values()
+            if component.role == ElectricalRole.PROTECTIVE_DEVICE.value
+            and component.deleted_at is None
+        }
+        for placement in self.session.exec(select(ElectricalAssetPlacement)).all():
+            if placement.deleted_at is not None or placement.asset_id in structured_asset_ids:
+                continue
+            asset = assets.get(placement.asset_id)
+            asset_type = asset_types.get(asset.asset_type_id) if asset else None
+            if (
+                asset is None
+                or asset.deleted_at is not None
+                or asset.status != "active"
+                or asset_type is None
+                or not is_protective_asset_type(asset_type.name)
+            ):
+                continue
+            device_counts[placement.distribution_id] = (
+                device_counts.get(placement.distribution_id, 0) + 1
+            )
 
         return {
             distribution_id: DistributionProjection(

@@ -5,6 +5,7 @@ import type {
   ConsumptionImportResult,
   ConsumptionMeter,
   ConsumptionMeterLive,
+  ConsumptionMeterReplacementWrite,
   ConsumptionMeterType,
   ConsumptionMeterWrite,
   ConsumptionNote,
@@ -93,6 +94,10 @@ export const consumptionApi = {
   updateMeter: (id: string, payload: ConsumptionMeterWrite) => request<ConsumptionMeter>(`/meters/${id}`, {
     method: 'PUT', body: JSON.stringify(payload)
   }),
+  replaceMeter: (id: string, payload: ConsumptionMeterReplacementWrite) => request<ConsumptionMeter>(
+    `/meters/${id}/replace`,
+    { method: 'POST', body: JSON.stringify(payload) }
+  ),
   removeMeter: (id: string) => request<void>(`/meters/${id}`, { method: 'DELETE' }),
   captureHomeAssistant: (id: string) => request<ConsumptionReading>(
     `/meters/${id}/capture-home-assistant`, { method: 'POST' }

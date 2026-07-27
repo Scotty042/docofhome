@@ -15,7 +15,8 @@ class HomeAssistantAssetLink(SQLModel, table=True):
         CheckConstraint(
             "role IN ('primary_live', 'total_power', 'voltage', 'current', 'energy', "
             "'power_l1', 'power_l2', 'power_l3', 'voltage_l1', 'voltage_l2', "
-            "'voltage_l3', 'additional')",
+            "'voltage_l3', 'switch_output', 'input', 'availability', 'diagnostic', "
+            "'additional')",
             name="ck_home_assistant_asset_links_role",
         ),
         UniqueConstraint(

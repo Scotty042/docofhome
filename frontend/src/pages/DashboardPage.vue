@@ -362,7 +362,7 @@ onMounted(async () => {
         >
           <v-card-text>
             <v-row dense>
-              <v-col v-for="item in comparisons" :key="item.medium" cols="12" sm="4">
+              <v-col v-for="item in comparisons" :key="item.medium" cols="12" sm="6" lg="3">
                 <div class="comparison">
                   <div class="font-weight-bold">{{ item.name }}</div>
                   <div class="text-h6">{{ formatValue(item.current_value, item.decimals, item.unit) }}</div>

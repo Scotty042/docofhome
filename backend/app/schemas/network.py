@@ -227,6 +227,7 @@ class NetworkInterfaceWrite(BaseModel):
     speed_mbps: int | None = Field(default=None, ge=1, le=1_000_000)
     poe_mode: NetworkPoeMode = NetworkPoeMode.NONE
     enabled: bool = True
+    is_primary: bool = False
     logical_interface_id: UUID | None = None
     description: str | None = None
 
@@ -254,6 +255,7 @@ class NetworkInterfaceRead(BaseModel):
     speed_mbps: int | None
     poe_mode: NetworkPoeMode
     enabled: bool
+    is_primary: bool
     logical_interface_id: UUID | None
     logical_interface_name: str | None
     member_count: int = Field(ge=0)

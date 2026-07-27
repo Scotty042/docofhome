@@ -13,6 +13,7 @@ python scripts/check-release-1.4.1.py
 python scripts/check-release-1.4.2.py
 python scripts/check-release-1.5.0.py
 python scripts/check-release-1.6.0.py
+python scripts/check-release-1.6.1.py
 python scripts/check-migration-0030.py
 python scripts/check-migration-0031.py
 python scripts/check-migration-0032.py

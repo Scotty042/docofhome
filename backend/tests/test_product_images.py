@@ -103,6 +103,8 @@ def test_duckduckgo_image_search_scores_specific_product_results_first(
     session: Session,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "commons.wikimedia.org":
+            return httpx.Response(200, request=request, json={"query": {"pages": []}})
         if request.url.host == "duckduckgo.com" and request.url.path == "/":
             return httpx.Response(200, request=request, text="vqd='123-456'")
         if request.url.host == "duckduckgo.com" and request.url.path == "/i.js":

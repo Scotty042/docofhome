@@ -95,6 +95,18 @@ class ConsumptionRepository:
             statement = statement.where(ConsumptionMeter.id != exclude_id)
         return self.session.exec(statement).first()
 
+    def active_dashboard_meters(self, meter_type: str) -> list[ConsumptionMeter]:
+        statement = (
+            select(ConsumptionMeter)
+            .where(
+                ConsumptionMeter.meter_type == meter_type,
+                ConsumptionMeter.primary_for_dashboard.is_(True),
+                col(ConsumptionMeter.deleted_at).is_(None),
+            )
+            .order_by(ConsumptionMeter.sort_order, ConsumptionMeter.name)
+        )
+        return list(self.session.exec(statement).all())
+
     def first_active_meter_by_type(self, meter_type: str) -> ConsumptionMeter | None:
         statement = (
             select(ConsumptionMeter)

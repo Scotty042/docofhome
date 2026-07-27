@@ -524,7 +524,7 @@ for trigger in (
     ),
 ):
     event.listen(
-        ElectricalProtectiveDevice.__table__,  # type: ignore[attr-defined]
+        SQLModel.metadata,
         "after_create",
         trigger.execute_if(dialect="sqlite"),
     )

@@ -195,14 +195,14 @@ onMounted(() => void load())
     <v-card class="mb-4" title="Netzanschluss und Bilanzzähler" prepend-icon="mdi-transmission-tower">
       <v-card-text>
         <v-row>
-          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.grid_connection_name" label="Netzanschluss" clearable /></v-col>
-          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.metering_point_id" label="Zählpunkt / Marktlokation" clearable /></v-col>
-          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.grid_operator" label="Netzbetreiber" clearable /></v-col>
-          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.energy_supplier" label="Energieversorger" clearable /></v-col>
-          <v-col cols="12" md="4"><v-text-field v-model.number="configurationForm.connection_capacity_kw" type="number" min="0" suffix="kW" label="Anschlussleistung" clearable /></v-col>
-          <v-col cols="12" md="4"><v-select v-model="configurationForm.grid_import_meter_id" :items="importMeters" item-title="name" item-value="id" label="Netzbezug" clearable /></v-col>
-          <v-col cols="12" md="4"><v-select v-model="configurationForm.pv_generation_meter_id" :items="pvMeters" item-title="name" item-value="id" label="PV-Erzeugung" clearable /></v-col>
-          <v-col cols="12" md="4"><v-select v-model="configurationForm.grid_export_meter_id" :items="exportMeters" item-title="name" item-value="id" label="Netzeinspeisung" clearable /></v-col>
+          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.grid_connection_name" label="Netzanschluss (optional)" hint="Bezeichnung des dokumentierten Hausanschlusses, z. B. Hausanschluss Hauptgebäude." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.metering_point_id" label="Zählpunkt / Marktlokation (optional)" hint="Kennung aus Vertrag, Rechnung oder Unterlagen des Netzbetreibers." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.grid_operator" label="Netzbetreiber (optional)" hint="Betreiber des örtlichen Stromnetzes, nicht der Stromlieferant." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="6"><v-text-field v-model="configurationForm.energy_supplier" label="Energieversorger (optional)" hint="Vertragspartner für den Strombezug, nicht der Netzbetreiber." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="4"><v-text-field v-model.number="configurationForm.connection_capacity_kw" type="number" min="0" suffix="kW" label="Anschlussleistung (optional)" hint="Maximale Anschlussleistung in kW, z. B. 30 kW." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="4"><v-select v-model="configurationForm.grid_import_meter_id" :items="importMeters" item-title="name" item-value="id" label="Netzbezug (optional)" hint="Zähler für die aus dem öffentlichen Netz bezogene Energie (typisch OBIS 1.8.0)." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="4"><v-select v-model="configurationForm.pv_generation_meter_id" :items="pvMeters" item-title="name" item-value="id" label="PV-Erzeugung (optional)" hint="Zähler für die gesamte von der PV-Anlage erzeugte Energie." persistent-hint clearable /></v-col>
+          <v-col cols="12" md="4"><v-select v-model="configurationForm.grid_export_meter_id" :items="exportMeters" item-title="name" item-value="id" label="Netzeinspeisung (optional)" hint="Zähler für die ins öffentliche Netz eingespeiste Energie (typisch OBIS 2.8.0)." persistent-hint clearable /></v-col>
           <v-col cols="12"><v-textarea v-model="configurationForm.notes" label="Notizen" rows="2" clearable /></v-col>
         </v-row>
         <v-alert v-if="!configuration?.complete_for_balance" type="warning" variant="tonal" density="compact" class="mb-3">

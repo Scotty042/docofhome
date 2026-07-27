@@ -2,14 +2,13 @@
 
 Stand: 27. Juli 2026
 
-Release: 1.6.0
+Release: 1.6.1
 
-Alembic-Head: `0037`
+Alembic-Head: `0038`
 
-DocOfHome 1.6.0 verbessert den Einrichtungsassistenten, die Backup-Benennung,
-die Online-Bildsuche sowie die Sicherungs- und Zählerschrankansicht. Zusätzlich
-können Sicherungsautomaten fachlich genauer und CT-/Stromwandlerklemmen eines
-Smart Meters als Messpunkte an bestehenden Verkabelungen dokumentiert werden.
+DocOfHome 1.6.1 bündelt Korrekturen für Zählerwechsel, PV-Dashboard,
+Produktbildquellen, elektrische Topologie, Schutzgeräte, Netzwerkschnittstellen
+und smarte DIN-Schaltaktoren.
 
 ## Umgesetzter Funktionsstand
 
@@ -30,10 +29,11 @@ Smart Meters als Messpunkte an bestehenden Verkabelungen dokumentiert werden.
 
 ## Daten- und Updatezustand
 
-Migration `0037` ergänzt optionale Spalten und neue Messpunkt-Tabellen. Die
+Migration `0038` ergänzt optionale Einstellungen, Rollen, Indizes und
+Standard-Stammdaten. Die
 bestehenden Assets, Produkte, Verteilungen, Verkabelungen, Zählerstände,
 Home-Assistant-Zuordnungen, Bilder und Dokumente werden nicht ersetzt.
 
 Vor jedem Update ist ein vollständiges Backup des persistenten `data`-Ordners
-erforderlich. Details stehen in `RELEASE_NOTES_1.6.0.md` und den Dokumenten unter
+erforderlich. Details stehen in `RELEASE_NOTES_1.6.1.md` und den Dokumenten unter
 `docs/`.

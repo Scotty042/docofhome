@@ -87,6 +87,7 @@ export interface NetworkInterface {
   speed_mbps: number | null
   poe_mode: NetworkPoeMode
   enabled: boolean
+  is_primary: boolean
   logical_interface_id: string | null
   logical_interface_name: string | null
   member_count: number
@@ -105,6 +106,7 @@ export interface NetworkInterfaceWrite {
   speed_mbps: number | null
   poe_mode: NetworkPoeMode
   enabled: boolean
+  is_primary: boolean
   logical_interface_id: string | null
   description: string | null
 }

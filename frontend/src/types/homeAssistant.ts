@@ -4,7 +4,8 @@ export type HomeAssistantSelectionScope = 'visible' | 'all'
 export type HomeAssistantEntityRole =
   | 'primary_live' | 'total_power' | 'voltage' | 'current' | 'energy'
   | 'power_l1' | 'power_l2' | 'power_l3'
-  | 'voltage_l1' | 'voltage_l2' | 'voltage_l3' | 'additional'
+  | 'voltage_l1' | 'voltage_l2' | 'voltage_l3'
+  | 'switch_output' | 'input' | 'availability' | 'diagnostic' | 'additional'
 
 export type HomeAssistantArea = {
   area_id: string

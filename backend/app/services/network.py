@@ -253,6 +253,10 @@ class NetworkService:
         self._require_device(payload.network_device_id)
         self._validate_interface_unique(payload)
         self._validate_logical_interface(payload)
+        if payload.is_primary:
+            for item in self.repository.list_interfaces(device_id=payload.network_device_id):
+                item.is_primary = False
+                self.session.add(item)
         record = NetworkInterface(
             network_device_id=payload.network_device_id,
             name=payload.name,
@@ -261,6 +265,7 @@ class NetworkService:
             speed_mbps=payload.speed_mbps,
             poe_mode=payload.poe_mode.value,
             enabled=payload.enabled,
+            is_primary=payload.is_primary,
             logical_interface_id=payload.logical_interface_id,
             description=payload.description,
         )
@@ -278,6 +283,11 @@ class NetworkService:
             )
         self._validate_interface_unique(payload, exclude_id=record.id)
         self._validate_logical_interface(payload, record_id=record.id)
+        if payload.is_primary:
+            for item in self.repository.list_interfaces(device_id=record.network_device_id):
+                if item.id != record.id:
+                    item.is_primary = False
+                    self.session.add(item)
         if (
             record.interface_type == NetworkInterfaceType.VIRTUAL.value
             and payload.interface_type != NetworkInterfaceType.VIRTUAL
@@ -297,6 +307,7 @@ class NetworkService:
         record.speed_mbps = payload.speed_mbps
         record.poe_mode = payload.poe_mode.value
         record.enabled = payload.enabled
+        record.is_primary = payload.is_primary
         record.logical_interface_id = payload.logical_interface_id
         record.description = payload.description
         record.updated_at = datetime.now(UTC)
@@ -789,6 +800,7 @@ class NetworkService:
             speed_mbps=record.speed_mbps,
             poe_mode=self._poe_mode(record.poe_mode),
             enabled=record.enabled,
+            is_primary=record.is_primary,
             logical_interface_id=record.logical_interface_id,
             logical_interface_name=logical.name if logical else None,
             member_count=len(members),

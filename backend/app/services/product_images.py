@@ -6,6 +6,7 @@ import ipaddress
 import re
 import socket
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from fastapi import UploadFile
 from sqlmodel import Session
 
 from app.core.settings import settings
+from app.models.application_setting import ApplicationSetting
 from app.repositories.settings import SettingsRepository
 from app.schemas.asset_engine import (
     ProductImageSearchItemRead,
@@ -108,27 +110,48 @@ class ProductImageService:
         return candidate
 
     def search_online(self, query: str, *, limit: int = 12) -> ProductImageSearchRead:
-        self._require_online_search()
+        application = self._require_online_search()
         normalized = query.strip()
         if len(normalized) < 2:
             raise ProductImageValidationError("Bitte mindestens zwei Suchzeichen eingeben.")
         bounded_limit = min(max(limit, 1), 24)
-        try:
-            items = self._search_duckduckgo(normalized, bounded_limit)
-            if items:
-                return ProductImageSearchRead(items=items, enabled=True)
-        except (httpx.HTTPError, ValueError, ProductImageUnavailableError):
-            pass
-        try:
-            return ProductImageSearchRead(
-                items=self._search_wikimedia(normalized, bounded_limit),
-                enabled=True,
-            )
-        except (httpx.HTTPError, ValueError, ProductImageUnavailableError) as exc:
+        providers: list[
+            Callable[[str, int], list[ProductImageSearchItemRead]]
+        ] = []
+        if application.product_image_source_duckduckgo_enabled:
+            providers.append(self._search_duckduckgo)
+        if application.product_image_source_wikimedia_enabled:
+            providers.append(self._search_wikimedia)
+        items: list[ProductImageSearchItemRead] = []
+        errors: list[Exception] = []
+        for provider in providers:
+            try:
+                items.extend(provider(normalized, bounded_limit))
+            except (httpx.HTTPError, ValueError, ProductImageUnavailableError) as exc:
+                errors.append(exc)
+        relevant = [
+            item
+            for item in items
+            if self._relevance_score(normalized, item.title, item.source_url) >= 12
+        ]
+        unique: dict[str, ProductImageSearchItemRead] = {}
+        for item in relevant:
+            unique.setdefault(item.image_url.split("?", 1)[0].casefold(), item)
+        ranked = sorted(
+            unique.values(),
+            key=lambda item: (
+                -self._relevance_score(normalized, item.title, item.source_url),
+                item.title.casefold(),
+            ),
+        )
+        if ranked or not errors:
+            return ProductImageSearchRead(items=ranked[:bounded_limit], enabled=True)
+        if errors:
             raise ProductImageUnavailableError(
-                "Die Online-Bildsuche konnte weder DuckDuckGo Images noch Wikimedia erreichen. "
+                "Keine der aktivierten Online-Bildquellen ist erreichbar. "
                 "Mögliche Ursachen sind DNS, TLS, Proxy, Firewall oder der externe Dienst."
-            ) from exc
+            ) from errors[-1]
+        return ProductImageSearchRead(items=[], enabled=True)
 
     def _search_duckduckgo(
         self,
@@ -136,7 +159,7 @@ class ProductImageService:
         limit: int,
     ) -> list[ProductImageSearchItemRead]:
         headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; DocOfHome/1.6.0; product image search)",
+            "User-Agent": "Mozilla/5.0 (compatible; DocOfHome/1.6.1; product image search)",
             "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
         }
         with httpx.Client(
@@ -219,7 +242,7 @@ class ProductImageService:
             timeout=httpx.Timeout(12.0),
             follow_redirects=False,
             transport=self.transport,
-            headers={"User-Agent": "DocOfHome product image search/1.6.0"},
+            headers={"User-Agent": "DocOfHome product image search/1.6.1"},
         ) as client:
             response = client.get(WIKIMEDIA_API, params=params)
             response.raise_for_status()
@@ -279,7 +302,7 @@ class ProductImageService:
                 timeout=httpx.Timeout(15.0),
                 follow_redirects=False,
                 transport=self.transport,
-                headers={"User-Agent": "DocOfHome product image import/1.6.0"},
+                headers={"User-Agent": "DocOfHome product image import/1.6.1"},
             ) as client:
                 with client.stream("GET", image_url) as response:
                     response.raise_for_status()
@@ -411,12 +434,20 @@ class ProductImageService:
                 score -= penalty
         return score
 
-    def _require_online_search(self) -> None:
+    def _require_online_search(self) -> ApplicationSetting:
         application = self.settings_repository.get_application()
         if application is None or not application.online_product_image_search_enabled:
             raise ProductImageSearchDisabledError(
                 "Die Online-Produktbildsuche ist in den Einstellungen deaktiviert."
             )
+        if not (
+            application.product_image_source_duckduckgo_enabled
+            or application.product_image_source_wikimedia_enabled
+        ):
+            raise ProductImageSearchDisabledError(
+                "Für die Online-Produktbildsuche ist keine Quelle aktiviert."
+            )
+        return application
 
     def _store(self, content: bytes, extension: str) -> StoredProductImage:
         self.upload_dir.mkdir(parents=True, exist_ok=True)

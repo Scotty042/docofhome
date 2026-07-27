@@ -122,7 +122,7 @@ onMounted(load)
         <v-card variant="tonal">
           <v-card-text>
             <div class="text-h5">{{ deviceCount }}</div>
-            <div class="text-medium-emphasis">aktive Schutzgeräte</div>
+            <div class="text-medium-emphasis">aktive Sicherungs-/Schutzgeräte</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -202,7 +202,7 @@ onMounted(load)
                     </div>
                     <div class="text-caption text-medium-emphasis">
                       {{ row.distribution.distribution_type === 'main' ? 'Hauptverteilung' : 'Unterverteilung' }}
-                      · {{ row.distribution.direct_protective_device_count }} aktive Schutzgeräte
+                      · {{ row.distribution.direct_protective_device_count }} aktive Sicherungs-/Schutzgeräte
                     </div>
                   </div>
                 </div>
@@ -249,7 +249,7 @@ onMounted(load)
             <div>{{ row.distribution.asset.location_path }}</div>
             <div class="text-medium-emphasis mt-1">
               {{ row.distribution.direct_subdistribution_count }} Unterverteilungen ·
-              {{ row.distribution.direct_protective_device_count }} aktive Schutzgeräte
+              {{ row.distribution.direct_protective_device_count }} aktive Sicherungs-/Schutzgeräte
             </div>
           </v-card-text>
         </v-card>

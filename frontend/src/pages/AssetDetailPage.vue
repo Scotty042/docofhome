@@ -12,13 +12,16 @@ import NotesCard from '../components/NotesCard.vue'
 import SmartMeterMeasurementPointsCard from '../components/SmartMeterMeasurementPointsCard.vue'
 import ImmichImageLinksCard from '../components/ImmichImageLinksCard.vue'
 import { assetApi } from '../services/assetApi'
+import { electricalApi } from '../services/electricalApi'
 import type { Asset, AssetStatus, Product, Relationship } from '../types/assets'
+import type { ElectricalConnection, ElectricalEndpoint, ElectricalTopology } from '../types/electrical'
 
 const route = useRoute()
 const router = useRouter()
 const asset = ref<Asset | null>(null)
 const product = ref<Product | null>(null)
 const relationships = ref<Relationship[]>([])
+const electricalTopology = ref<ElectricalTopology | null>(null)
 const loading = ref(true)
 const deleting = ref(false)
 const confirmDelete = ref(false)
@@ -29,6 +32,12 @@ const isSmartMeter = computed(() => {
   const name = asset.value?.asset_type.name.trim().toLocaleLowerCase('de') ?? ''
   return name.includes('smart meter') || name.includes('smartmeter')
 })
+const incomingConnections = computed(() => electricalTopology.value?.connections.filter(
+  (connection) => connection.target.kind === 'asset' && connection.target.id === asset.value?.id
+) ?? [])
+const outgoingConnections = computed(() => electricalTopology.value?.connections.filter(
+  (connection) => connection.source.kind === 'asset' && connection.source.id === asset.value?.id
+) ?? [])
 
 const statusText: Record<AssetStatus, string> = {
   active: 'Aktiv', inactive: 'Inaktiv', maintenance: 'Wartung', retired: 'Ausgemustert'
@@ -48,6 +57,7 @@ onMounted(async () => {
     const record = archivedView.value ? await assetApi.getArchived(id) : await assetApi.get(id)
     asset.value = record
     relationships.value = await assetApi.relationships(id)
+    electricalTopology.value = await electricalApi.topology().catch(() => null)
     if (record.product_id) {
       try {
         product.value = await assetApi.getProduct(record.product_id)
@@ -82,6 +92,19 @@ function endpointName(relationship: Relationship) {
   return relationship.source_asset_id === asset.value.id
     ? `Ziel: ${relationship.target_asset_id}`
     : `Quelle: ${relationship.source_asset_id}`
+}
+
+function endpointRoute(endpoint: ElectricalEndpoint): string | null {
+  if (endpoint.kind === 'asset') return `/assets/${endpoint.id}${endpoint.deleted_at ? '?archived=1' : ''}`
+  if (endpoint.kind === 'distribution') return `/electrical/distributions/${endpoint.id}`
+  if (endpoint.kind === 'protective_device') return `/electrical/protective-devices/${endpoint.id}/edit`
+  if (endpoint.kind === 'circuit') return `/electrical/circuits/${endpoint.id}`
+  return null
+}
+
+function connectionSubtitle(connection: ElectricalConnection): string {
+  const phases = connection.phases.length ? connection.phases.join(', ') : 'Phase nicht zugeordnet'
+  return [phases, connection.label, connection.cable_type].filter(Boolean).join(' · ')
 }
 </script>
 
@@ -182,6 +205,36 @@ function endpointName(relationship: Relationship) {
 
           <NotesCard target-type="asset" :target-id="asset.id" :read-only="Boolean(asset.deleted_at)" />
           <MaintenanceCard target-type="asset" :target-id="asset.id" :read-only="Boolean(asset.deleted_at)" />
+
+          <v-card title="Verbindungen" prepend-icon="mdi-source-branch" class="mb-5">
+            <v-card-text v-if="!incomingConnections.length && !outgoingConnections.length" class="text-medium-emphasis">
+              Keine direkten Versorgungsverbindungen dokumentiert.
+            </v-card-text>
+            <template v-else>
+              <v-list v-if="incomingConnections.length" lines="two">
+                <v-list-subheader>Einspeisung von</v-list-subheader>
+                <v-list-item
+                  v-for="connection in incomingConnections"
+                  :key="connection.id"
+                  :title="connection.source.name"
+                  :subtitle="connectionSubtitle(connection)"
+                  prepend-icon="mdi-arrow-right-bold-circle-outline"
+                  :to="endpointRoute(connection.source) ?? undefined"
+                />
+              </v-list>
+              <v-list v-if="outgoingConnections.length" lines="two">
+                <v-list-subheader>Weiterführung zu</v-list-subheader>
+                <v-list-item
+                  v-for="connection in outgoingConnections"
+                  :key="connection.id"
+                  :title="connection.target.name"
+                  :subtitle="connectionSubtitle(connection)"
+                  prepend-icon="mdi-arrow-right-circle-outline"
+                  :to="endpointRoute(connection.target) ?? undefined"
+                />
+              </v-list>
+            </template>
+          </v-card>
 
           <v-card title="Beziehungen" prepend-icon="mdi-vector-link">
             <v-list v-if="relationships.length">

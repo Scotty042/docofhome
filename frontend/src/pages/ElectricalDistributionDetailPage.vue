@@ -215,7 +215,7 @@ watch(distributionId, (id) => {
               </div>
               <div class="metric">
                 <span class="text-h4">{{ distribution.direct_protective_device_count }}</span>
-                <span class="text-medium-emphasis">aktive Schutzgeräte</span>
+                <span class="text-medium-emphasis">aktive Sicherungs-/Schutzgeräte</span>
               </div>
             </v-card-text>
           </v-card>

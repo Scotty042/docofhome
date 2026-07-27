@@ -131,6 +131,31 @@ class ConsumptionMeterRead(BaseModel):
     updated_at: datetime
 
 
+class ConsumptionMeterReplacementWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    replaced_at: datetime
+    old_final_value: float = Field(ge=0)
+    new_serial_number: str = Field(min_length=1, max_length=200)
+    new_start_value: float = Field(ge=0)
+    note: str | None = Field(default=None, max_length=5000)
+
+    @field_validator("new_serial_number")
+    @classmethod
+    def normalize_new_serial_number(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Die neue Zählernummer darf nicht leer sein")
+        return normalized
+
+    @field_validator("note")
+    @classmethod
+    def normalize_replacement_note(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value.strip()
+
+
 class ConsumptionMeterLiveRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

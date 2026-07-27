@@ -20,6 +20,8 @@ class ApplicationSetting(SQLModel, table=True):
     theme: str = Field(default="dark", max_length=20)
     enabled_modules_json: str = Field(default=DEFAULT_ENABLED_MODULES_JSON)
     online_product_image_search_enabled: bool = False
+    product_image_source_wikimedia_enabled: bool = True
+    product_image_source_duckduckgo_enabled: bool = True
     setup_completed_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -205,9 +205,33 @@ async function testIntegration(kind: IntegrationKind) {
                 color="primary"
                 inset
                 label="Online-Suche für Produktbilder erlauben"
-                hint="Erlaubt eine kontrollierte Suche bei Wikimedia Commons. Ein Treffer wird erst nach Auswahl lokal gespeichert."
+                hint="Erlaubt die Suche ausschließlich über die unten aktivierten Quellen. Ein Treffer wird erst nach Auswahl lokal gespeichert."
                 persistent-hint
               />
+            </v-col>
+            <v-col v-if="form.online_product_image_search_enabled" cols="12">
+              <div class="text-subtitle-2 mb-1">Suchquellen</div>
+              <div class="d-flex flex-wrap ga-4">
+                <v-checkbox
+                  v-model="form.product_image_source_duckduckgo_enabled"
+                  label="DuckDuckGo Images"
+                  hide-details
+                />
+                <v-checkbox
+                  v-model="form.product_image_source_wikimedia_enabled"
+                  label="Wikimedia Commons"
+                  hide-details
+                />
+              </div>
+              <v-alert
+                v-if="!form.product_image_source_duckduckgo_enabled && !form.product_image_source_wikimedia_enabled"
+                type="warning"
+                density="compact"
+                variant="tonal"
+                class="mt-2"
+              >
+                Aktiviere mindestens eine Quelle, bevor du die Einstellungen speicherst.
+              </v-alert>
             </v-col>
           </v-row>
         </v-card-text>

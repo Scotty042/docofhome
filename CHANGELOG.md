@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.1 – 2026-07-27
+
+### Geändert
+
+- Zählerwechsel ist ein eigener atomarer Vorgang; normale Ablesungen enthalten
+  keine Reset-Option mehr und zeigen den letzten Stand sowie passende
+  OBIS-Hinweise.
+- Mehrere ausgewählte PV-Zähler werden im Dashboard gemeinsam ausgewertet.
+- Online-Produktbildquellen sind einzeln konfigurierbar; Ergebnisse aktivierter
+  Quellen werden kombiniert, dedupliziert und nach Relevanz sortiert.
+- Asset-Details zeigen direkte elektrische Einspeisungen und Weiterführungen;
+  Phasenabgänge werden nach L1, L2, L3, mehrphasig und nicht zugeordnet gruppiert.
+- Sicherungs-/Schutzgeräte werden zentral klassifiziert und einheitlich gezählt.
+- Netzwerkschnittstellen können als primär markiert werden.
+
+### Hinzugefügt
+
+- ausführliche Hilfetexte zur Energiebilanz;
+- Home-Assistant-Rollen für Schaltausgang, Eingang, Verfügbarkeit und Diagnose;
+- Standard-Asset-Typ **Smartes Relais / DIN-Schaltaktor** und Produkt
+  **Shelly Pro 1**;
+- Migration `0038_release_1_6_1_corrections`.
+
 ## 1.6.0 – 2026-07-27
 
 ### Geändert

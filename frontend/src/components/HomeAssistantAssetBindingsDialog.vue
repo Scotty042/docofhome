@@ -56,6 +56,10 @@ const roleOptions: Array<{ title: string; value: HomeAssistantEntityRole }> = [
   { title: 'Spannung L1', value: 'voltage_l1' },
   { title: 'Spannung L2', value: 'voltage_l2' },
   { title: 'Spannung L3', value: 'voltage_l3' },
+  { title: 'Schaltausgang', value: 'switch_output' },
+  { title: 'Eingang', value: 'input' },
+  { title: 'Verfügbarkeit', value: 'availability' },
+  { title: 'Diagnose', value: 'diagnostic' },
   { title: 'Weitere Information', value: 'additional' }
 ]
 

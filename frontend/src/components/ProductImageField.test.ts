@@ -1,15 +1,12 @@
 import source from './ProductImageField.vue?raw'
 import { describe, expect, it } from 'vitest'
 
-describe('product image browser fallback workflow', () => {
-  it('prefers the backend and locally uploads a browser-downloaded fallback image', () => {
-    const backendSearch = source.indexOf('assetApi.searchProductImages')
-    const browserSearch = source.indexOf('searchWikimediaInBrowser(query')
-
-    expect(backendSearch).toBeGreaterThan(-1)
-    expect(browserSearch).toBeGreaterThan(backendSearch)
-    expect(source).toContain('downloadWikimediaImageInBrowser')
-    expect(source).toContain('assetApi.uploadProductImage(file, signal)')
-    expect(source).toContain('Browser-Suche nicht erreichbar')
+describe('product image provider workflow', () => {
+  it('enforces provider selection through the backend', () => {
+    expect(source).toContain('assetApi.searchProductImages')
+    expect(source).toContain('assetApi.importProductImage')
+    expect(source).toContain('in den Einstellungen aktivierten Quellen')
+    expect(source).not.toContain('searchWikimediaInBrowser')
+    expect(source).not.toContain('downloadWikimediaImageInBrowser')
   })
 })

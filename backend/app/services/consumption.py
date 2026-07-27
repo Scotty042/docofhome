@@ -19,13 +19,13 @@ from sqlmodel import Session, col, select
 
 from app.models.application_setting import ApplicationSetting
 from app.models.asset_engine import Asset, Location
-from app.models.electrical import ElectricalMeterPlacement
 from app.models.consumption import (
     ConsumptionMeter,
     ConsumptionNote,
     ConsumptionReading,
     ConsumptionSetting,
 )
+from app.models.electrical import ElectricalMeterPlacement
 from app.repositories.asset_engine import LocationRepository
 from app.repositories.consumption import ConsumptionRepository
 from app.schemas.consumption import (
@@ -35,6 +35,7 @@ from app.schemas.consumption import (
     ConsumptionImportResultRead,
     ConsumptionMeterLiveRead,
     ConsumptionMeterRead,
+    ConsumptionMeterReplacementWrite,
     ConsumptionMeterType,
     ConsumptionMeterWrite,
     ConsumptionNoteRead,
@@ -231,7 +232,10 @@ class ConsumptionService:
         self._validate_meter(payload)
         if self.repository.find_meter_by_name(payload.name, include_archived=True):
             raise ConsumptionConflictError("Ein Zähler mit diesem Namen ist bereits vorhanden")
-        if payload.primary_for_dashboard:
+        if (
+            payload.primary_for_dashboard
+            and payload.meter_type != ConsumptionMeterType.ELECTRICITY_PV
+        ):
             self.repository.clear_primary_for_type(payload.meter_type.value)
             self.session.flush()
         record = ConsumptionMeter(
@@ -264,7 +268,10 @@ class ConsumptionService:
         named = self.repository.find_meter_by_name(payload.name, include_archived=True)
         if named is not None and named.id != meter_id:
             raise ConsumptionConflictError("Ein Zähler mit diesem Namen ist bereits vorhanden")
-        if payload.primary_for_dashboard:
+        if (
+            payload.primary_for_dashboard
+            and payload.meter_type != ConsumptionMeterType.ELECTRICITY_PV
+        ):
             self.repository.clear_primary_for_type(
                 payload.meter_type.value, exclude_id=meter_id
             )
@@ -289,6 +296,62 @@ class ConsumptionService:
         record.notes = payload.notes
         record.updated_at = datetime.now(UTC)
         return self._save_meter(record)
+
+    def replace_meter(
+        self,
+        meter_id: UUID,
+        payload: ConsumptionMeterReplacementWrite,
+    ) -> ConsumptionMeterRead:
+        meter = self.repository.get_meter(meter_id)
+        if meter is None:
+            raise ConsumptionNotFoundError("Der aktive Zähler wurde nicht gefunden")
+        replaced_at = self._as_utc(payload.replaced_at)
+        old_measured_at = replaced_at - timedelta(microseconds=1)
+        if (
+            self.repository.duplicate_reading(meter.id, old_measured_at)
+            or self.repository.duplicate_reading(meter.id, replaced_at)
+        ):
+            raise ConsumptionConflictError(
+                "Zum Austauschzeitpunkt existiert bereits eine Ablesung"
+            )
+        self._validate_reading_value(
+            meter,
+            old_measured_at,
+            payload.old_final_value,
+            False,
+        )
+        old_serial = meter.serial_number or "nicht dokumentiert"
+        note_suffix = f" · {payload.note}" if payload.note else ""
+        old_reading = ConsumptionReading(
+            meter_id=meter.id,
+            measured_at=old_measured_at,
+            value=payload.old_final_value,
+            note=f"Letzter Stand vor Zählerwechsel ({old_serial}){note_suffix}",
+            source=ConsumptionReadingSource.MANUAL.value,
+            is_reset=False,
+        )
+        new_reading = ConsumptionReading(
+            meter_id=meter.id,
+            measured_at=replaced_at,
+            value=payload.new_start_value,
+            note=f"Startstand nach Zählerwechsel ({payload.new_serial_number}){note_suffix}",
+            source=ConsumptionReadingSource.MANUAL.value,
+            is_reset=True,
+        )
+        meter.serial_number = payload.new_serial_number
+        meter.updated_at = datetime.now(UTC)
+        try:
+            self.session.add(old_reading)
+            self.session.add(new_reading)
+            self.session.add(meter)
+            self.session.commit()
+            self.session.refresh(meter)
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ConsumptionConflictError(
+                "Der Zählerwechsel konnte nicht widerspruchsfrei gespeichert werden"
+            ) from exc
+        return self._meter_read(meter)
 
     def meter_live_values(
         self, meter_id: UUID, *, refresh: bool = False
@@ -721,12 +784,14 @@ class ConsumptionService:
         for meter_type, medium, label in (
             (ConsumptionMeterType.WATER, "water", "Hauptwasser"),
             (ConsumptionMeterType.ELECTRICITY_GRID, "electricity", "Strom"),
+            (ConsumptionMeterType.ELECTRICITY_PV, "pv_generation", "PV-Erzeugung"),
             (ConsumptionMeterType.GAS, "gas", "Gas"),
         ):
-            meter = self.repository.active_primary_meter(meter_type.value)
+            dashboard_meters = self.repository.active_dashboard_meters(meter_type.value)
+            meter = dashboard_meters[0] if dashboard_meters else None
             if meter is None and meter_type == ConsumptionMeterType.WATER:
                 meter = self.repository.active_main_water_meter()
-            if meter is None:
+            if meter is None and meter_type != ConsumptionMeterType.ELECTRICITY_PV:
                 meter = self.repository.first_active_meter_by_type(meter_type.value)
             if meter is None:
                 rows.append(
@@ -746,8 +811,21 @@ class ConsumptionService:
                     )
                 )
                 continue
-            current = self._consumption_for_meter(meter.id, current_start, current_end)
-            previous = self._consumption_for_meter(meter.id, previous_start, previous_end)
+            selected_meters = (
+                dashboard_meters
+                if meter_type == ConsumptionMeterType.ELECTRICITY_PV and dashboard_meters
+                else [meter]
+            )
+            current_results = [
+                self._consumption_for_meter(item.id, current_start, current_end)
+                for item in selected_meters
+            ]
+            previous_results = [
+                self._consumption_for_meter(item.id, previous_start, previous_end)
+                for item in selected_meters
+            ]
+            current = self._combine(current_results, require_all=True)
+            previous = self._combine(previous_results, require_all=True)
             difference = (
                 current.value - previous.value
                 if current.value is not None and previous.value is not None
@@ -767,7 +845,7 @@ class ConsumptionService:
                 ConsumptionComparisonRead(
                     medium=medium,
                     name=label,
-                    meter_id=meter.id,
+                    meter_id=meter.id if len(selected_meters) == 1 else None,
                     unit=meter.unit,
                     decimals=meter.decimals,
                     current_value=current.value,

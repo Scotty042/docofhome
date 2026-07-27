@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { AssetApiError, assetApi } from '../services/assetApi'
+import { assetApi } from '../services/assetApi'
 import { immichApi } from '../services/immichApi'
-import { downloadWikimediaImageInBrowser, searchWikimediaInBrowser } from '../services/productImageSearch'
 import { useNotificationStore } from '../stores/notifications'
 import type { ProductImageSearchItem, ProductImageSource } from '../types/assets'
 import type { ImmichAlbum, ImmichImage } from '../types/immich'
@@ -42,7 +41,6 @@ const onlineQuery = ref('')
 const onlineItems = ref<ProductImageSearchItem[]>([])
 const onlineStatus = ref<string | null>(null)
 const onlineStatusType = ref<'info' | 'warning'>('info')
-const browserFallbackActive = ref(false)
 let onlineSearchController: AbortController | null = null
 let onlineImportController: AbortController | null = null
 let immichTimer: ReturnType<typeof setTimeout> | undefined
@@ -189,7 +187,6 @@ async function searchOnline() {
   busy.value = true
   error.value = null
   onlineStatus.value = null
-  browserFallbackActive.value = false
   onlineItems.value = []
   try {
     const result = await withRequestTimeout(
@@ -205,37 +202,9 @@ async function searchOnline() {
     onlineStatusType.value = 'info'
   } catch (backendReason) {
     if (controller.signal.aborted) return
-    const backendUnavailable = !(backendReason instanceof AssetApiError)
-      || backendReason.status === 502
-      || backendReason.status >= 500
-    if (!backendUnavailable) {
-      error.value = backendReason instanceof Error
-        ? backendReason.message
-        : 'Backend-Suche konnte nicht ausgeführt werden.'
-      return
-    }
-    onlineStatus.value = 'Die Backend-Suche ist nicht erreichbar. DocOfHome verwendet die direkte Browser-Suche bei Wikimedia.'
-    onlineStatusType.value = 'warning'
-    try {
-      const items = await withRequestTimeout(
-        controller.signal,
-        14_000,
-        (signal) => searchWikimediaInBrowser(query, { signal })
-      )
-      if (controller.signal.aborted) return
-      onlineItems.value = items
-      browserFallbackActive.value = true
-      if (!items.length) {
-        onlineStatus.value = 'Die Browser-Suche war erreichbar, hat aber keine Treffer geliefert.'
-        onlineStatusType.value = 'info'
-      }
-    } catch (browserReason) {
-      if (controller.signal.aborted) return
-      const backendMessage = requestErrorMessage(backendReason, 'Backend nicht erreichbar')
-      const browserMessage = requestErrorMessage(browserReason, 'Externe Suche nicht erreichbar')
-      error.value = `Backend-Suche nicht erreichbar: ${backendMessage} Browser-Suche nicht erreichbar: ${browserMessage}`
-      onlineStatus.value = null
-    }
+    error.value = backendReason instanceof Error
+      ? backendReason.message
+      : 'Die aktivierten Online-Bildquellen sind nicht erreichbar.'
   } finally {
     if (onlineSearchController === controller) {
       onlineSearchController = null
@@ -252,35 +221,10 @@ async function importOnline(item: ProductImageSearchItem) {
   error.value = null
   onlineStatus.value = null
   try {
-    if (!browserFallbackActive.value) {
-      try {
-        const result = await withRequestTimeout(
-          controller.signal,
-          16_000,
-          (signal) => assetApi.importProductImage(item.image_url, item.source_url, signal)
-        )
-        applyImage(result.image_url, 'online', item.source_url)
-        tab.value = 'online'
-        notifications.success('Das gewählte Produktbild wurde lokal gespeichert.')
-        return
-      } catch (reason) {
-        const backendUnavailable = !(reason instanceof AssetApiError)
-          || reason.status === 502
-          || reason.status >= 500
-        if (!backendUnavailable) throw reason
-        onlineStatus.value = 'Der Container konnte das Bild nicht herunterladen. Der Browser übernimmt den Download und lädt es lokal zu DocOfHome hoch.'
-        onlineStatusType.value = 'warning'
-      }
-    }
-    const file = await withRequestTimeout(
-      controller.signal,
-      16_000,
-      (signal) => downloadWikimediaImageInBrowser(item, { signal })
-    )
     const result = await withRequestTimeout(
       controller.signal,
       16_000,
-      (signal) => assetApi.uploadProductImage(file, signal)
+      (signal) => assetApi.importProductImage(item.image_url, item.source_url, signal)
     )
     if (controller.signal.aborted) return
     applyImage(result.image_url, 'online', item.source_url)
@@ -346,7 +290,9 @@ async function importOnline(item: ProductImageSearchItem) {
           <v-btn color="primary" :loading="busy" class="mt-1" @click="searchOnline">Suchen</v-btn>
         </div>
         <v-alert type="info" variant="tonal" density="compact" class="mt-3">
-          Die Suche verwendet primär DuckDuckGo Images und bei Bedarf Wikimedia Commons. Hersteller, Modell und Produktname liefern die besten Treffer. Erst der ausdrücklich gewählte Treffer wird lokal gespeichert.
+          Die Suche verwendet ausschließlich die in den Einstellungen aktivierten Quellen.
+          Hersteller, Modell und Produktname liefern die besten Treffer. Erst der ausdrücklich
+          gewählte Treffer wird lokal gespeichert.
         </v-alert>
         <v-alert v-if="onlineStatus" :type="onlineStatusType" variant="tonal" density="compact" class="mt-3">
           {{ onlineStatus }}

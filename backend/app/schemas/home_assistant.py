@@ -22,6 +22,10 @@ class HomeAssistantEntityRole(StrEnum):
     VOLTAGE_L1 = "voltage_l1"
     VOLTAGE_L2 = "voltage_l2"
     VOLTAGE_L3 = "voltage_l3"
+    SWITCH_OUTPUT = "switch_output"
+    INPUT = "input"
+    AVAILABILITY = "availability"
+    DIAGNOSTIC = "diagnostic"
     ADDITIONAL = "additional"
 
 

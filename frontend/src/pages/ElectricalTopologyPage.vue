@@ -8,6 +8,7 @@ import {
   endpointKindLabels,
   endpointTitle,
   electricalPhaseColors,
+  phaseDistributionGroups,
   phaseConnectionCounts,
   topologyRows
 } from '../services/electricalTopology'
@@ -51,6 +52,7 @@ const phaseItems: Array<{ title: string; value: ElectricalPhase }> = [
 ]
 const rows = computed(() => topologyRows(topology.value))
 const phaseCounts = computed(() => phaseConnectionCounts(topology.value))
+const phaseBlocks = computed(() => phaseDistributionGroups(topology.value))
 const endpointItems = computed(() => endpoints.value.map((endpoint) => ({
   title: endpointTitle(endpoint),
   value: endpoint.key,
@@ -311,6 +313,34 @@ onMounted(() => void initialize())
               </v-card>
             </v-col>
           </v-row>
+        </v-card-text>
+      </v-card>
+
+      <v-card v-if="phaseBlocks.length" class="mb-5" title="Phasenabgänge" prepend-icon="mdi-call-split">
+        <v-card-text>
+          <v-expansion-panels multiple>
+            <v-expansion-panel v-for="item in phaseBlocks" :key="item.block.endpoint.key">
+              <v-expansion-panel-title>{{ item.block.endpoint.name }}</v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <v-row dense>
+                  <v-col v-for="group in item.groups" :key="group.key" cols="12" md="4">
+                    <v-card variant="outlined" height="100%">
+                      <v-card-title class="text-body-1">{{ group.label }}</v-card-title>
+                      <v-list density="compact">
+                        <v-list-item
+                          v-for="connection in group.connections"
+                          :key="connection.id"
+                          :title="connection.target.name"
+                          :subtitle="connection.phases.length ? connection.phases.join(', ') : 'Phase fehlt'"
+                          :to="endpointRoute(connection.target) ?? undefined"
+                        />
+                      </v-list>
+                    </v-card>
+                  </v-col>
+                </v-row>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </v-card-text>
       </v-card>
 

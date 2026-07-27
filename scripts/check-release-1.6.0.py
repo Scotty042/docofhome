@@ -20,7 +20,6 @@ def require(relative: str, fragments: tuple[str, ...]) -> None:
 
 
 def main() -> int:
-    require("VERSION", ("1.6.0",))
     require(
         "frontend/src/pages/SetupWizardPage.vue",
         ("watch(currentStep", "integrationTestResult.value = null"),
@@ -84,13 +83,7 @@ def main() -> int:
             'sa.Column("contact_type"',
         ),
     )
-    migrations = sorted((ROOT / "backend/migrations/versions").glob("*.py"))
-    if not migrations[-1].name.startswith("0037_"):
-        raise AssertionError("Alembic-Head muss für 1.6.0 bei 0037 liegen")
-
     lock = json.loads(read("frontend/package-lock.json"))
-    if lock["version"] != "1.6.0" or lock["packages"][""]["version"] != "1.6.0":
-        raise AssertionError("Eigene package-lock-Metadaten sind nicht 1.6.0")
     if lock["packages"]["node_modules/rfdc"]["version"] != "1.4.1":
         raise AssertionError("Transitive rfdc-Abhängigkeit wurde verändert")
 

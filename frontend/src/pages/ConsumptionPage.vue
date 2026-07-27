@@ -19,6 +19,7 @@ import type {
   ConsumptionImportPreview,
   ConsumptionImportResult,
   ConsumptionMeter,
+  ConsumptionMeterReplacementWrite,
   ConsumptionMeterLive,
   ConsumptionMeterType,
   ConsumptionMeterWrite,
@@ -69,6 +70,15 @@ const meterForm = ref<ConsumptionMeterWrite>(emptyMeter())
 const readingDialog = ref(false)
 const editingReading = ref<ConsumptionReading | null>(null)
 const readingForm = ref<ConsumptionReadingWrite>(emptyReading())
+const replacementDialog = ref(false)
+const replacementMeter = ref<ConsumptionMeter | null>(null)
+const replacementForm = ref<ConsumptionMeterReplacementWrite>({
+  replaced_at: new Date().toISOString().slice(0, 16),
+  old_final_value: 0,
+  new_serial_number: '',
+  new_start_value: 0,
+  note: null
+})
 const importDialog = ref(false)
 const importFile = ref<File | null>(null)
 const importPreview = ref<ConsumptionImportPreview | null>(null)
@@ -100,6 +110,11 @@ const filteredMeters = computed(() => meters.value.filter((meter) => {
 }))
 const selectedReadings = computed(() => readings.value.filter((reading) => !selectedMeterId.value || reading.meter_id === selectedMeterId.value))
 const selectedReadingMeter = computed(() => meters.value.find((meter) => meter.id === readingForm.value.meter_id) ?? null)
+const selectedReadingObis = computed(() => {
+  if (selectedReadingMeter.value?.meter_type === 'electricity_grid') return 'OBIS 1.8.0 · bezogene Energie'
+  if (selectedReadingMeter.value?.meter_type === 'electricity_feed_in') return 'OBIS 2.8.0 · eingespeiste Energie'
+  return null
+})
 const displayedSeries = computed(() => {
   if (chartMode.value === 'month') return statistics.value?.series ?? []
   return (statistics.value?.series ?? []).map((series) => {
@@ -293,6 +308,35 @@ function openReading(reading?: ConsumptionReading, meterId?: string) {
   } : { ...emptyReading(), meter_id: meterId ?? selectedMeterId.value ?? meters.value[0]?.id ?? '' }
   readingDialog.value = true
 }
+function openReplacement(meter: ConsumptionMeter) {
+  replacementMeter.value = meter
+  replacementForm.value = {
+    replaced_at: new Date().toISOString().slice(0, 16),
+    old_final_value: meter.latest_value ?? 0,
+    new_serial_number: '',
+    new_start_value: 0,
+    note: null
+  }
+  replacementDialog.value = true
+}
+async function saveReplacement() {
+  if (!replacementMeter.value) return
+  saving.value = true
+  error.value = null
+  try {
+    await consumptionApi.replaceMeter(replacementMeter.value.id, {
+      ...replacementForm.value,
+      replaced_at: new Date(replacementForm.value.replaced_at).toISOString()
+    })
+    replacementDialog.value = false
+    setNotice('Zählerwechsel wurde mit Alt- und Startstand gespeichert.')
+    await loadAll()
+  } catch (reason) {
+    setError(reason, 'Zählerwechsel konnte nicht gespeichert werden.')
+  } finally {
+    saving.value = false
+  }
+}
 async function saveReading() {
   saving.value = true; error.value = null
   try {
@@ -448,6 +492,7 @@ onMounted(async () => {
                     <v-btn v-if="meter.home_assistant_power_entity_id || meter.home_assistant_voltage_entity_id" icon="mdi-refresh" size="small" variant="text" title="Livewerte aktualisieren" :loading="liveLoading.has(meter.id)" @click="loadLiveValue(meter, true)" />
                     <v-btn v-if="meter.home_assistant_entity_id" icon="mdi-download" size="small" variant="text" title="Aktuellen HA-Wert übernehmen" @click="captureHomeAssistant(meter)" />
                     <v-btn icon="mdi-plus" size="small" variant="text" title="Ablesung" @click="openReading(undefined, meter.id)" />
+                    <v-btn icon="mdi-swap-horizontal" size="small" variant="text" title="Zähler austauschen" @click="openReplacement(meter)" />
                     <v-btn icon="mdi-pencil" size="small" variant="text" @click="openMeter(meter)" />
                     <v-btn icon="mdi-archive-outline" size="small" variant="text" color="error" @click="archiveMeter(meter)" />
                   </td>
@@ -540,7 +585,7 @@ onMounted(async () => {
                 <template #item="{ props, item }"><v-list-item v-bind="props" :style="{ paddingInlineStart: `${16 + item.raw.depth * 18}px` }" /></template>
               </v-autocomplete>
             </v-col>
-            <v-col cols="12"><v-checkbox v-model="meterForm.primary_for_dashboard" label="Primärzähler für den Dashboard-Vergleich" /></v-col>
+            <v-col cols="12"><v-checkbox v-model="meterForm.primary_for_dashboard" :label="meterForm.meter_type === 'electricity_pv' ? 'PV-Zähler auf dem Dashboard berücksichtigen' : 'Primärzähler für den Dashboard-Vergleich'" /></v-col>
             <v-col v-if="meterForm.meter_type === 'water'" cols="12"><v-select v-model="meterForm.water_role" :items="waterRoleItems" label="Wasser-Auswertung" /></v-col>
             <v-col cols="12" sm="6">
               <v-text-field
@@ -600,8 +645,15 @@ onMounted(async () => {
             class="reading-value"
             autofocus
           />
+          <v-alert v-if="selectedReadingMeter" type="info" variant="tonal" density="compact" class="mb-3">
+            <div v-if="selectedReadingMeter.latest_value !== null">
+              Letzter Wert: <strong>{{ formatValue(selectedReadingMeter.latest_value, selectedReadingMeter.decimals, selectedReadingMeter.unit) }}</strong>
+              · {{ formatDate(selectedReadingMeter.latest_measured_at) }}
+            </div>
+            <div v-else>Noch keine vorherige Ablesung vorhanden.</div>
+            <div v-if="selectedReadingObis" class="mt-1">{{ selectedReadingObis }}</div>
+          </v-alert>
           <v-text-field v-model="readingForm.measured_at" type="datetime-local" label="Zeitpunkt" />
-          <v-checkbox v-model="readingForm.is_reset" label="Zähler wurde zurückgesetzt oder ausgetauscht" />
           <v-textarea v-model="readingForm.note" label="Notiz" rows="3" clearable />
           <ImmichReadingPicker
             v-model:asset-id="readingForm.immich_asset_id"
@@ -612,6 +664,27 @@ onMounted(async () => {
           <v-spacer />
           <v-btn @click="readingDialog = false">Abbrechen</v-btn>
           <v-btn color="primary" size="large" :loading="saving" :disabled="saving || !readingForm.meter_id" @click="saveReading">Speichern</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="replacementDialog" :fullscreen="smAndDown" max-width="680">
+      <v-card title="Zähler austauschen" prepend-icon="mdi-swap-horizontal">
+        <v-card-text v-if="replacementMeter">
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+            {{ replacementMeter.name }} · bisherige Zählernummer:
+            {{ replacementMeter.serial_number || 'nicht dokumentiert' }}
+          </v-alert>
+          <v-text-field v-model="replacementForm.replaced_at" type="datetime-local" label="Datum und Zeitpunkt des Austauschs" />
+          <v-text-field v-model.number="replacementForm.old_final_value" type="number" inputmode="decimal" :suffix="replacementMeter.unit" label="Letzter Stand des alten Zählers" />
+          <v-text-field v-model="replacementForm.new_serial_number" label="Neue Zählernummer" />
+          <v-text-field v-model.number="replacementForm.new_start_value" type="number" inputmode="decimal" :suffix="replacementMeter.unit" label="Startstand des neuen Zählers" />
+          <v-textarea v-model="replacementForm.note" label="Notiz / Dokumentation (optional)" rows="3" clearable />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="replacementDialog = false">Abbrechen</v-btn>
+          <v-btn color="primary" :loading="saving" :disabled="!replacementForm.new_serial_number.trim()" @click="saveReplacement">Austausch speichern</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

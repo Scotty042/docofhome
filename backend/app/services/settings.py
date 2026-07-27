@@ -105,6 +105,12 @@ class SettingsService:
         setting.online_product_image_search_enabled = (
             payload.online_product_image_search_enabled
         )
+        setting.product_image_source_wikimedia_enabled = (
+            payload.product_image_source_wikimedia_enabled
+        )
+        setting.product_image_source_duckduckgo_enabled = (
+            payload.product_image_source_duckduckgo_enabled
+        )
         setting.enabled_modules_json = self._serialize_modules(payload.enabled_modules)
         setting.updated_at = now
 
@@ -188,6 +194,12 @@ class SettingsService:
             theme=ThemePreference(setting.theme),
             online_product_image_search_enabled=(
                 setting.online_product_image_search_enabled
+            ),
+            product_image_source_wikimedia_enabled=(
+                setting.product_image_source_wikimedia_enabled
+            ),
+            product_image_source_duckduckgo_enabled=(
+                setting.product_image_source_duckduckgo_enabled
             ),
             enabled_modules=self._deserialize_modules(setting.enabled_modules_json),
             setup_completed_at=setting.setup_completed_at,

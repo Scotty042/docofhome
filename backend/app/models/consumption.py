@@ -47,10 +47,13 @@ class ConsumptionMeter(ConsumptionRecord, table=True):
             sqlite_where=text("deleted_at IS NULL AND water_role = 'main'"),
         ),
         Index(
-            "uq_consumption_meters_active_primary_type",
+            "uq_consumption_meters_active_primary_non_pv",
             "meter_type",
             unique=True,
-            sqlite_where=text("deleted_at IS NULL AND primary_for_dashboard = 1"),
+            sqlite_where=text(
+                "deleted_at IS NULL AND primary_for_dashboard = 1 "
+                "AND meter_type <> 'electricity_pv'"
+            ),
         ),
         CheckConstraint(
             "reading_schedule_day IS NULL OR "
