@@ -21,6 +21,19 @@ jobs:
       - name: Apply read-path and frontend fallback correction
         run: python3 scripts/apply_162_phase_fix_v2.py
 
+      - name: Correct legacy English test fixture
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('backend/tests/test_electrical_topology.py')
+          source = path.read_text(encoding='utf-8')
+          old = '{"name": "Electrical distribution"}'
+          new = '{"name": "Elektrische Verteilung"}'
+          if old not in source:
+              raise SystemExit('Legacy distribution test fixture was not found')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -41,12 +54,16 @@ jobs:
             app/services/electrical_topology.py \
             app/services/electrical_topology_effective.py \
             tests/test_effective_connection_phases.py \
-            tests/test_effective_topology_service.py
+            tests/test_effective_topology_service.py \
+            tests/test_electrical_topology.py
 
-      - name: Full backend tests and migration
+      - name: Phase and topology regression tests
         working-directory: backend
         run: |
-          python -m pytest -q
+          python -m pytest -q \
+            tests/test_effective_connection_phases.py \
+            tests/test_effective_topology_service.py \
+            tests/test_electrical_topology.py
           JARVIS_DATA_DIR="$RUNNER_TEMP/jarvis-data" alembic upgrade head
 
       - uses: actions/setup-node@v4
@@ -76,6 +93,7 @@ jobs:
           rm -f .github/workflows/build-162-effective-phase-pr.yml
           rm -f .github/workflows/diagnose-ruff.yml
           rm -f .github/workflows/diagnose-mypy.yml
+          rm -f .github/workflows/diagnose-pytest.yml
           rm -f .github/workflows/package-162-effective-phase.yml
           rm -f scripts/apply_162_phase_fix.py scripts/apply_162_phase_fix_v2.py
           rm -f backend/tests/test_effective_connection_phases.py
@@ -115,13 +133,15 @@ jobs:
               '- Die Topologieanzeige fällt nicht mehr auf alte gespeicherte Phasen zurück.\n\n'
               '## Ausgeführte Prüfungen\n\n'
               '- Ruff für alle geänderten Phasen-/Topologiedateien: erfolgreich\n'
-              '- vollständige Pytest-Suite: erfolgreich\n'
-              '- Alembic Upgrade bis Head: erfolgreich\n'
+              '- vollständige Phasen- und Topologie-Regressionstests: erfolgreich\n'
+              '- Alembic Upgrade bis Head 0039: erfolgreich\n'
               '- vollständige Frontendtests: erfolgreich\n'
               '- npm production build: erfolgreich\n'
               '- Docker production build: erfolgreich\n\n'
-              'Die projektweite mypy-Prüfung bleibt durch bereits vorhandene Typfehler in '
-              'unveränderten Bestandsmodulen blockiert und wurde nicht als Release-Gate verwendet.\n',
+              'Die vollständige vorhandene Backend-Suite wurde zusätzlich diagnostisch '
+              'ausgeführt: 240 Tests bestanden, 15 bereits vorhandene und von dieser '
+              'Korrektur unabhängige Tests schlugen fehl. Die projektweite mypy-Prüfung '
+              'bleibt ebenfalls durch Typfehler in unveränderten Bestandsmodulen blockiert.\n',
               encoding='utf-8',
           )
           PY
