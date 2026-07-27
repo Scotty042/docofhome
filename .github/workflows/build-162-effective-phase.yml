@@ -1,0 +1,318 @@
+name: Build corrected DocOfHome 1.6.2
+
+on:
+  push:
+    branches:
+      - fix/1.6.2-effective-phases
+    paths-ignore:
+      - artifacts/**
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply effective phase correction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          backend = Path('backend/app/services/electrical_topology.py')
+          text = backend.read_text(encoding='utf-8')
+          old = '''    @staticmethod
+              def _effective_connection_phases(
+                  source: ElectricalEndpointProjection,
+                  target: ElectricalEndpointProjection,
+                  stored: list[ElectricalPhase],
+              ) -> tuple[list[ElectricalPhase], list[str]]:
+                  allowed = set(stored)
+                  for endpoint in (source, target):
+                      if endpoint.effective_phases is None:
+                          continue
+                      line_allowed = set(endpoint.effective_phases) & {
+                          ElectricalPhase.L1,
+                          ElectricalPhase.L2,
+                          ElectricalPhase.L3,
+                      }
+                      if line_allowed:
+                          allowed -= {
+                              ElectricalPhase.L1,
+                              ElectricalPhase.L2,
+                              ElectricalPhase.L3,
+                          } - line_allowed
+                  order = {phase: index for index, phase in enumerate(ElectricalPhase)}
+                  effective = sorted(allowed, key=order.__getitem__)
+                  warnings: list[str] = []
+                  if effective != stored:
+                      stored_names = ", ".join(item.value for item in stored) or "keine"
+                      effective_names = ", ".join(item.value for item in effective) or "keine"
+                      warnings.append(
+                          "Gespeicherte Verbindung enthält abweichende Phasen: "
+                          f"{stored_names}. Wirksam: {effective_names}."
+                      )
+                  return effective, warnings
+          '''
+          old = old.replace('              ', '        ')
+          new = '''    @staticmethod
+              def _effective_connection_phases(
+                  source: ElectricalEndpointProjection,
+                  target: ElectricalEndpointProjection,
+                  stored: list[ElectricalPhase],
+              ) -> tuple[list[ElectricalPhase], list[str]]:
+                  line_phases = {
+                      ElectricalPhase.L1,
+                      ElectricalPhase.L2,
+                      ElectricalPhase.L3,
+                  }
+                  order = {phase: index for index, phase in enumerate(ElectricalPhase)}
+                  warnings: list[str] = []
+
+                  requirements: list[tuple[ElectricalPhase, ...]] = []
+                  for endpoint in (source, target):
+                      if (
+                          endpoint.kind != ElectricalEndpointKind.PROTECTIVE_DEVICE
+                          or endpoint.effective_phases is None
+                      ):
+                          continue
+                      required = tuple(
+                          phase for phase in endpoint.effective_phases if phase in line_phases
+                      )
+                      if required:
+                          requirements.append(required)
+
+                  if requirements:
+                      required = requirements[0]
+                      if any(candidate != required for candidate in requirements[1:]):
+                          details = " / ".join(
+                              ", ".join(phase.value for phase in candidate)
+                              for candidate in requirements
+                          )
+                          warnings.append(
+                              "Beteiligte Schutzgeräte haben widersprüchliche wirksame Phasen: "
+                              f"{details}."
+                          )
+                          required_lines = set.intersection(
+                              *(set(candidate) for candidate in requirements)
+                          )
+                      else:
+                          required_lines = set(required)
+
+                      preserved = set(stored) - line_phases
+                      effective_set = preserved | required_lines
+                      for endpoint in (source, target):
+                          if (
+                              endpoint.kind == ElectricalEndpointKind.PROTECTIVE_DEVICE
+                              or endpoint.effective_phases is None
+                          ):
+                              continue
+                          endpoint_lines = set(endpoint.effective_phases) & line_phases
+                          if endpoint_lines:
+                              effective_set -= line_phases - endpoint_lines
+                      effective = sorted(effective_set, key=order.__getitem__)
+                  else:
+                      allowed = set(stored)
+                      for endpoint in (source, target):
+                          if endpoint.effective_phases is None:
+                              continue
+                          line_allowed = set(endpoint.effective_phases) & line_phases
+                          if line_allowed:
+                              allowed -= line_phases - line_allowed
+                      effective = sorted(allowed, key=order.__getitem__)
+
+                  if effective != stored:
+                      stored_names = ", ".join(item.value for item in stored) or "keine"
+                      effective_names = ", ".join(item.value for item in effective) or "keine"
+                      warnings.append(
+                          "Gespeicherte Verbindung enthält abweichende Phasen: "
+                          f"{stored_names}. Wirksam: {effective_names}."
+                      )
+                  return effective, warnings
+          '''
+          new = new.replace('              ', '        ')
+          if old not in text:
+              raise SystemExit('Expected backend function was not found')
+          backend.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          frontend = Path('frontend/src/pages/ElectricalTopologyPage.vue')
+          text = frontend.read_text(encoding='utf-8')
+          old_frontend = '''function displayPhases(connection: ElectricalConnection): ElectricalPhase[] {
+            return connection.effective_phases.length ? connection.effective_phases : connection.phases
+          }'''.replace('          ', '')
+          new_frontend = '''function displayPhases(connection: ElectricalConnection): ElectricalPhase[] {
+            return connection.effective_phases
+          }'''.replace('          ', '')
+          if old_frontend not in text:
+              raise SystemExit('Expected frontend phase fallback was not found')
+          frontend.write_text(text.replace(old_frontend, new_frontend, 1), encoding='utf-8')
+          PY
+
+      - name: Add regression test
+        shell: bash
+        run: |
+          cat > backend/tests/test_effective_connection_phases.py <<'PY'
+          from uuid import uuid4
+
+          from app.repositories.electrical_topology import ElectricalEndpointProjection
+          from app.schemas.electrical_topology import ElectricalEndpointKind, ElectricalPhase
+          from app.services.electrical_topology import ElectricalTopologyService
+
+
+          def endpoint(
+              kind: ElectricalEndpointKind,
+              phases: tuple[ElectricalPhase, ...] | None,
+          ) -> ElectricalEndpointProjection:
+              return ElectricalEndpointProjection(
+                  kind=kind,
+                  id=uuid4(),
+                  name='Test',
+                  code=None,
+                  type_name='Test',
+                  location_name=None,
+                  device_type=None,
+                  deleted_at=None,
+                  effective_phases=phases,
+              )
+
+
+          def test_stored_line_phase_is_replaced_by_busbar_calculated_phase() -> None:
+              source = endpoint(
+                  ElectricalEndpointKind.CABINET_COMPONENT,
+                  (ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3),
+              )
+              target = endpoint(
+                  ElectricalEndpointKind.PROTECTIVE_DEVICE,
+                  (ElectricalPhase.L3,),
+              )
+
+              effective, warnings = ElectricalTopologyService._effective_connection_phases(
+                  source,
+                  target,
+                  [ElectricalPhase.L1, ElectricalPhase.N, ElectricalPhase.PE],
+              )
+
+              assert effective == [ElectricalPhase.L3, ElectricalPhase.N, ElectricalPhase.PE]
+              assert warnings == [
+                  'Gespeicherte Verbindung enthält abweichende Phasen: '
+                  'L1, N, PE. Wirksam: L3, N, PE.'
+              ]
+
+
+          def test_busbar_position_two_replaces_stored_l3_with_l2() -> None:
+              source = endpoint(
+                  ElectricalEndpointKind.CABINET_COMPONENT,
+                  (ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3),
+              )
+              target = endpoint(
+                  ElectricalEndpointKind.PROTECTIVE_DEVICE,
+                  (ElectricalPhase.L2,),
+              )
+
+              effective, warnings = ElectricalTopologyService._effective_connection_phases(
+                  source,
+                  target,
+                  [ElectricalPhase.L3],
+              )
+
+              assert effective == [ElectricalPhase.L2]
+              assert warnings
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Backend quality and tests
+        working-directory: backend
+        run: |
+          ruff check app tests
+          mypy app
+          python -m pytest -q
+          JARVIS_DATA_DIR="$RUNNER_TEMP/jarvis-data" alembic upgrade head
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend tests and build
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run build
+
+      - name: Docker build
+        run: docker build -t docofhome:1.6.2 .
+
+      - name: Create release package
+        shell: bash
+        run: |
+          rm -rf frontend/node_modules frontend/dist
+          find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
+          rm -f .github/workflows/build-162-effective-phase.yml
+          rm -f backend/tests/test_effective_connection_phases.py
+          mkdir -p artifacts
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          root = Path('.')
+          excluded = {'.git', 'artifacts', 'node_modules', 'dist', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
+          files = []
+          for path in root.rglob('*'):
+              if not path.is_file() or any(part in excluded for part in path.parts):
+                  continue
+              files.append(path)
+          files.sort(key=lambda item: item.as_posix())
+          lines = [
+              '# DocOfHome 1.6.2 – Release-Manifest',
+              '# Format: SHA256  SIZE_BYTES  PATH',
+              f'# Dateien: {len(files)}',
+          ]
+          for path in files:
+              data = path.read_bytes()
+              lines.append(f'{hashlib.sha256(data).hexdigest()}  {len(data)}  {path.as_posix()}')
+          Path('artifacts/DocOfHome-1.6.2-MANIFEST.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          Path('artifacts/DocOfHome-1.6.2-VALIDATION.md').write_text(
+              '# DocOfHome 1.6.2 – Validierungsbericht\n\n'
+              '- Wirksame Schienenphase ersetzt alte gespeicherte Außenleiterphasen.\n'
+              '- N und PE bleiben erhalten.\n'
+              '- Frontend fällt bei Phasenwidersprüchen nicht mehr auf gespeicherte Altwerte zurück.\n'
+              '- Backend: Ruff, mypy, vollständige Pytest-Suite und Alembic bis Head erfolgreich.\n'
+              '- Frontend: npm test und npm run build erfolgreich.\n'
+              '- Docker-Build erfolgreich.\n',
+              encoding='utf-8',
+          )
+          PY
+          zip -q -r "$RUNNER_TEMP/DocOfHome-1.6.2.zip" . \
+            -x '.git/*' 'artifacts/*' 'frontend/node_modules/*' 'frontend/dist/*' \
+               '*/__pycache__/*' '*/.pytest_cache/*' '*/.mypy_cache/*' '*/.ruff_cache/*'
+          cp "$RUNNER_TEMP/DocOfHome-1.6.2.zip" artifacts/DocOfHome-1.6.2.zip
+          sha256sum artifacts/DocOfHome-1.6.2.zip > artifacts/DocOfHome-1.6.2.zip.sha256
+          unzip -tq artifacts/DocOfHome-1.6.2.zip
+
+      - name: Commit release artifacts
+        shell: bash
+        run: |
+          git config user.name 'DocOfHome Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -f artifacts/DocOfHome-1.6.2.zip \
+            artifacts/DocOfHome-1.6.2.zip.sha256 \
+            artifacts/DocOfHome-1.6.2-MANIFEST.txt \
+            artifacts/DocOfHome-1.6.2-VALIDATION.md
+          git commit -m 'Add corrected DocOfHome 1.6.2 package [skip ci]'
+          git push
