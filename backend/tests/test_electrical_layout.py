@@ -1,14 +1,18 @@
 from collections.abc import Generator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.db.session import get_session
 from app.main import app
+from app.models.electrical import ElectricalProtectiveDevice
+from app.models.electrical_topology import ElectricalConnection
 
 
 @pytest.fixture
@@ -330,6 +334,29 @@ def test_half_width_neutral_and_pe_rails_and_meter_placement(
     assert protective_earth["width"] == "half"
     assert protective_earth["side"] == "right"
     assert protective_earth["position"] == neutral["position"]
+
+    cabinet_components = client.get(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components"
+    )
+    assert cabinet_components.status_code == 200, cabinet_components.text
+    rail_components = {
+        item["component_type"]: item for item in cabinet_components.json()
+    }
+    assert rail_components["neutral_rail"]["area_id"] == neutral["id"]
+    assert rail_components["neutral_rail"]["phases"] == ["N"]
+    assert rail_components["protective_earth_rail"]["area_id"] == protective_earth["id"]
+    assert rail_components["protective_earth_rail"]["phases"] == ["PE"]
+
+    endpoints = client.get(
+        "/api/v1/electrical/connection-endpoints?page=1&page_size=100"
+    )
+    assert endpoints.status_code == 200, endpoints.text
+    endpoint_keys = {item["key"] for item in endpoints.json()["items"]}
+    assert f"cabinet_component:{rail_components['neutral_rail']['id']}" in endpoint_keys
+    assert (
+        f"cabinet_component:{rail_components['protective_earth_rail']['id']}"
+        in endpoint_keys
+    )
 
     meter = create(
         client,
@@ -773,7 +800,196 @@ def test_din_asset_can_use_width_from_asset_or_asset_type_without_product(
     assert "DIN-Breite" in rejected.text
 
 
-def test_busbar_overlays_din_assets_and_only_conflicts_on_same_mounting_side(
+def test_phase_rail_contacts_every_fully_covered_din_device(
+    layout_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = layout_client
+    room, distribution_assets = setup_assets(client, count=3)
+    distribution = create(
+        client,
+        "electrical/distributions",
+        {
+            "asset_id": distribution_assets[0]["id"],
+            "parent_distribution_id": None,
+            "distribution_type": "main",
+            "layout_mode": "rows",
+            "designation": "HV mit Schienen",
+            "rows": 2,
+            "modules_per_row": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+    din_type = create(
+        client,
+        "asset-types",
+        {"name": "DIN-Hutschienengerät", "module_width": 4},
+    )
+    din_asset = create(
+        client,
+        "assets",
+        {
+            "name": "Allgemeines DIN-Gerät",
+            "asset_type_id": din_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    placed = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{din_asset['id']}/placement",
+        json={"area_id": None, "row_number": 2, "start_position": 1},
+    )
+    assert placed.status_code == 200, placed.text
+
+    general_busbar = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Allgemeine Sammelschiene",
+            "component_type": "busbar",
+            "area_id": None,
+            "row_number": 2,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "start_phase": None,
+            "mounting_side": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert general_busbar.status_code == 201, general_busbar.text
+
+    phase_rail_over_asset = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Kammschiene über DIN-Gerät",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 2,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert phase_rail_over_asset.status_code == 201, phase_rail_over_asset.text
+    connections = client.get("/api/v1/electrical/connections").json()
+    generic_contact = next(
+        item for item in connections
+        if item["source"]["id"] == phase_rail_over_asset.json()["id"]
+        and item["target"]["kind"] == "asset"
+        and item["target"]["id"] == din_asset["id"]
+    )
+    # A four-TE generic DIN device physically touches four rail contacts. The
+    # repeated fourth L1 contact is represented once in the phase set.
+    assert generic_contact["phases"] == ["L1", "L2", "L3"]
+    assert generic_contact["phase_locked"] is True
+
+    breaker = device(client, distribution_assets[1]["id"], distribution["id"])
+    placed_breaker = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/protective-devices/{breaker['id']}/placement",
+        json={
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 1,
+            "assigned_rcd_id": None,
+            "neutral_rail_id": None,
+        },
+    )
+    assert placed_breaker.status_code == 204, placed_breaker.text
+    phase_rail = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Kammschiene",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert phase_rail.status_code == 201, phase_rail.text
+
+    later_din_asset = create(
+        client,
+        "assets",
+        {
+            "name": "Stromstoßschalter unter Kammschiene",
+            "asset_type_id": din_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    placed_under_rail = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{later_din_asset['id']}/placement",
+        json={"area_id": None, "row_number": 1, "start_position": 2},
+    )
+    assert placed_under_rail.status_code == 200, placed_under_rail.text
+    connections = client.get("/api/v1/electrical/connections").json()
+    rail_id = phase_rail.json()["id"]
+    assert any(
+        item["source"]["id"] == rail_id
+        and item["target"]["kind"] == "protective_device"
+        and item["target"]["id"] == breaker["id"]
+        for item in connections
+    )
+    relay_contact = next(
+        item for item in connections
+        if item["source"]["id"] == rail_id
+        and item["target"]["kind"] == "asset"
+        and item["target"]["id"] == later_din_asset["id"]
+    )
+    assert relay_contact["phases"] == ["L1", "L2", "L3"]
+    assert relay_contact["phase_locked"] is True
+
+    duplicate = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Überlappende Kammschiene",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 4,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 4,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "above",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert duplicate.status_code == 409
+    assert "Phasen-/Kammschienen dürfen sich nicht überdecken" in duplicate.text
+
+def test_four_pole_rcd_uses_three_phase_rail_contacts_and_leaves_n_free(
     layout_client: tuple[TestClient, Engine],
 ) -> None:
     client, _ = layout_client
@@ -786,44 +1002,58 @@ def test_busbar_overlays_din_assets_and_only_conflicts_on_same_mounting_side(
             "parent_distribution_id": None,
             "distribution_type": "main",
             "layout_mode": "rows",
-            "designation": "HV mit Kammschiene",
-            "rows": 1,
+            "designation": "HV mit vierpoligem FI",
+            "rows": 2,
             "modules_per_row": 12,
             "description": None,
             "notes": None,
         },
     )
-    din_type = create(
-        client,
-        "asset-types",
-        {
-            "name": "DIN-Hutschienengerät",
-            "description": "Vier TE breites Gerät",
-            "module_width": 4,
-        },
-    )
-    din_asset = create(
-        client,
-        "assets",
-        {
-            "name": "Sicherungsreihe",
-            "asset_type_id": din_type["id"],
-            "location_id": room["id"],
-            "status": "active",
-        },
-    )
-    placed = client.put(
-        f"/api/v1/electrical/distributions/{distribution['id']}"
-        f"/assets/{din_asset['id']}/placement",
-        json={"area_id": None, "row_number": 1, "start_position": 1},
-    )
-    assert placed.status_code == 200, placed.text
+    rcd_type = create(client, "asset-types", {"name": "FI/RCD", "module_width": 4})
 
-    below = client.post(
-        f"/api/v1/electrical/distributions/{distribution['id']}"
-        "/cabinet-components",
-        json={
-            "name": "Kammschiene unterhalb",
+    def rcd_asset(name: str) -> dict[str, Any]:
+        return create(
+            client,
+            "assets",
+            {
+                "name": name,
+                "asset_type_id": rcd_type["id"],
+                "location_id": room["id"],
+                "status": "active",
+            },
+        )
+
+    valid_rcd_asset = rcd_asset("FI O.G.")
+    valid_rcd = create(
+        client,
+        "electrical/protective-devices",
+        {
+            "asset_id": valid_rcd_asset["id"],
+            "distribution_id": distribution["id"],
+            "area_id": None,
+            "device_type": "rcd",
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 4,
+            "rated_current_a": 40,
+            "residual_current_ma": 30,
+            "characteristic": None,
+            "poles": 4,
+            "breaking_capacity_ka": None,
+            "rcd_type": "A",
+            "fuse_type": None,
+            "spd_type": None,
+            "assigned_rcd_id": None,
+            "neutral_rail_id": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    rail = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Kammschiene mit FI",
             "component_type": "phase_rail",
             "area_id": None,
             "row_number": 1,
@@ -833,78 +1063,77 @@ def test_busbar_overlays_din_assets_and_only_conflicts_on_same_mounting_side(
             "rated_current_a": 63,
             "max_cross_section_mm2": None,
             "outgoing_connections": 12,
-            "linked_rcd_device_id": None,
+            "linked_rcd_device_id": valid_rcd["id"],
+            "visible_protective_device_ids": [valid_rcd["id"]],
+            "visible_asset_ids": [],
             "start_phase": "L1",
             "mounting_side": "below",
             "description": None,
             "notes": None,
         },
     )
-    assert below.status_code == 201, below.text
+    assert rail["automatic_connection_count"] == 1
+    connections = client.get("/api/v1/electrical/connections").json()
+    contact = next(
+        item for item in connections
+        if item["source"]["id"] == rail["id"]
+        and item["target"]["kind"] == "protective_device"
+        and item["target"]["id"] == valid_rcd["id"]
+    )
+    assert contact["phases"] == ["L1", "L2", "L3"]
+    assert "N" not in contact["phases"]
+    assert "PE" not in contact["phases"]
 
-    above = client.post(
-        f"/api/v1/electrical/distributions/{distribution['id']}"
-        "/cabinet-components",
-        json={
-            "name": "Kammschiene oberhalb",
-            "component_type": "busbar",
+    invalid_rcd_asset = rcd_asset("FI falsch platziert")
+    invalid_rcd = create(
+        client,
+        "electrical/protective-devices",
+        {
+            "asset_id": invalid_rcd_asset["id"],
+            "distribution_id": distribution["id"],
             "area_id": None,
-            "row_number": 1,
+            "device_type": "rcd",
+            "row_number": 2,
+            "start_position": 2,
+            "module_width": 4,
+            "rated_current_a": 40,
+            "residual_current_ma": 30,
+            "characteristic": None,
+            "poles": 4,
+            "breaking_capacity_ka": None,
+            "rcd_type": "A",
+            "fuse_type": None,
+            "spd_type": None,
+            "assigned_rcd_id": None,
+            "neutral_rail_id": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    invalid_rail = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Unzulässige FI-Kammschiene",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 2,
             "start_position": 1,
             "module_width": 12,
             "phases": ["L1", "L2", "L3"],
             "rated_current_a": 63,
             "max_cross_section_mm2": None,
             "outgoing_connections": 12,
-            "linked_rcd_device_id": None,
-            "start_phase": "L1",
-            "mounting_side": "above",
-            "description": None,
-            "notes": None,
-        },
-    )
-    assert above.status_code == 201, above.text
-
-    later_asset = create(
-        client,
-        "assets",
-        {
-            "name": "Nachträglich platziertes DIN-Gerät",
-            "asset_type_id": din_type["id"],
-            "location_id": room["id"],
-            "status": "active",
-        },
-    )
-    later_placement = client.put(
-        f"/api/v1/electrical/distributions/{distribution['id']}"
-        f"/assets/{later_asset['id']}/placement",
-        json={"area_id": None, "row_number": 1, "start_position": 5},
-    )
-    assert later_placement.status_code == 200, later_placement.text
-
-    duplicate_below = client.post(
-        f"/api/v1/electrical/distributions/{distribution['id']}"
-        "/cabinet-components",
-        json={
-            "name": "Zweite Kammschiene unterhalb",
-            "component_type": "phase_rail",
-            "area_id": None,
-            "row_number": 1,
-            "start_position": 4,
-            "module_width": 4,
-            "phases": ["L1", "L2", "L3"],
-            "rated_current_a": 63,
-            "max_cross_section_mm2": None,
-            "outgoing_connections": 4,
-            "linked_rcd_device_id": None,
+            "linked_rcd_device_id": invalid_rcd["id"],
+            "visible_protective_device_ids": [invalid_rcd["id"]],
+            "visible_asset_ids": [],
             "start_phase": "L1",
             "mounting_side": "below",
             "description": None,
             "notes": None,
         },
     )
-    assert duplicate_below.status_code == 409
-    assert "Montageebene unterhalb" in duplicate_below.text
+    assert invalid_rail.status_code == 409
+    assert "gemeinsam mit der Phasen-/Kammschiene bei TE 1 beginnen" in invalid_rail.text
 
 
 def test_protective_device_inherits_din_width_from_asset_type(
@@ -978,7 +1207,7 @@ def test_protective_device_inherits_din_width_from_asset_type(
     assert created.json()["asset"]["effective_module_width"] == 1
 
 
-def test_busbar_assigns_phase_rcd_and_neutral_rail_without_manual_device_links(
+def test_phase_rail_assigns_phase_rcd_and_neutral_rail_without_manual_device_links(
     layout_client: tuple[TestClient, Engine],
 ) -> None:
     client, _ = layout_client
@@ -1026,8 +1255,8 @@ def test_busbar_assigns_phase_rcd_and_neutral_rail_without_manual_device_links(
         client,
         f"electrical/distributions/{distribution['id']}/cabinet-components",
         {
-            "name": "Sammelschiene FI Wohnen",
-            "component_type": "busbar",
+            "name": "Kammschiene FI Wohnen",
+            "component_type": "phase_rail",
             "area_id": None,
             "row_number": 1,
             "start_position": 5,
@@ -1038,6 +1267,7 @@ def test_busbar_assigns_phase_rcd_and_neutral_rail_without_manual_device_links(
             "outgoing_connections": 6,
             "linked_rcd_device_id": rcd["id"],
             "start_phase": "L2",
+            "mounting_side": "below",
             "description": None,
             "notes": None,
         },
@@ -1089,3 +1319,551 @@ def test_busbar_assigns_phase_rcd_and_neutral_rail_without_manual_device_links(
     assert stored["busbar_component_id"] == busbar["id"]
     assert stored["calculated_phases"] == ["L1"]
     assert stored["group_warnings"] == []
+
+
+def test_phase_rail_creates_and_updates_physical_connections_without_rcd(
+    layout_client: tuple[TestClient, Engine],
+) -> None:
+    client, engine = layout_client
+    room, distribution_assets = setup_assets(client, count=1)
+    distribution = create(
+        client,
+        "electrical/distributions",
+        {
+            "asset_id": distribution_assets[0]["id"],
+            "parent_distribution_id": None,
+            "distribution_type": "main",
+            "layout_mode": "rows",
+            "designation": "HV auto wiring",
+            "rows": 1,
+            "modules_per_row": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+    breaker_type = create(
+        client,
+        "asset-types",
+        {"name": "Sicherungsautomat", "module_width": 1},
+    )
+
+    def breaker_asset(name: str) -> dict[str, Any]:
+        return create(
+            client,
+            "assets",
+            {
+                "name": name,
+                "asset_type_id": breaker_type["id"],
+                "location_id": room["id"],
+                "status": "active",
+            },
+        )
+
+    def create_breaker(name: str, position: int) -> dict[str, Any]:
+        asset = breaker_asset(name)
+        return create(
+            client,
+            "electrical/protective-devices",
+            {
+                "asset_id": asset["id"],
+                "distribution_id": distribution["id"],
+                "area_id": None,
+                "device_type": "mcb",
+                "row_number": 1,
+                "start_position": position,
+                "module_width": 1,
+                "rated_current_a": 16,
+                "residual_current_ma": None,
+                "characteristic": "B",
+                "poles": 1,
+                "breaking_capacity_ka": 6,
+                "rcd_type": None,
+                "fuse_type": None,
+                "spd_type": None,
+                "assigned_rcd_id": None,
+                "neutral_rail_id": None,
+                "description": None,
+                "notes": None,
+            },
+        )
+
+    first = create_breaker("Keller", 1)
+    rail = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Kammschiene",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 6,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 6,
+            "linked_rcd_device_id": None,
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert rail["linked_rcd_device_id"] is None
+    assert rail["automatic_connection_count"] == 1
+
+    connections = client.get("/api/v1/electrical/connections").json()
+    first_link = next(
+        item for item in connections
+        if item["source"]["id"] == rail["id"] and item["target"]["id"] == first["id"]
+    )
+    assert first_link["connection_type"] == "busbar"
+    assert first_link["phases"] == ["L1"]
+    assert first_link["effective_phases"] == ["L1"]
+    assert first_link["phase_locked"] is True
+    assert first_link["locked_line_phases"] == ["L1"]
+
+    cannot_delete = client.delete(
+        f"/api/v1/electrical/connections/{first_link['id']}"
+    )
+    assert cannot_delete.status_code == 409
+    assert "automatisch" in cannot_delete.text
+
+    second = create_breaker("Waschmaschine", 2)
+    connections = client.get("/api/v1/electrical/connections").json()
+    second_link = next(
+        item for item in connections
+        if item["source"]["id"] == rail["id"] and item["target"]["id"] == second["id"]
+    )
+    assert second_link["phases"] == ["L2"]
+    assert second_link["locked_line_phases"] == ["L2"]
+
+    moved = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/protective-devices/{first['id']}/placement",
+        json={
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 3,
+            "module_width": 1,
+            "assigned_rcd_id": None,
+            "neutral_rail_id": None,
+        },
+    )
+    assert moved.status_code == 204, moved.text
+    connections = client.get("/api/v1/electrical/connections").json()
+    moved_link = next(item for item in connections if item["id"] == first_link["id"])
+    assert moved_link["phases"] == ["L3"]
+    assert moved_link["effective_phases"] == ["L3"]
+    assert moved_link["locked_line_phases"] == ["L3"]
+
+    # Topology reads reconcile missing derived contacts. This protects existing
+    # installations where a previous migration or interrupted transaction left
+    # the phase rail visible but omitted its automatic connection.
+    with Session(engine) as session:
+        stale = session.get(ElectricalConnection, UUID(first_link["id"]))
+        assert stale is not None
+        stale.deleted_at = datetime.now(UTC)
+        session.add(stale)
+        session.commit()
+    topology = client.get("/api/v1/electrical/topology")
+    assert topology.status_code == 200, topology.text
+    repaired_link = next(
+        item for item in topology.json()["connections"]
+        if item["source"]["id"] == rail["id"]
+        and item["target"]["id"] == first["id"]
+    )
+    assert repaired_link["effective_phases"] == ["L3"]
+    assert repaired_link["phase_locked"] is True
+
+    # Archiving the physical rail keeps the breakers placed but atomically
+    # deactivates both the upstream feed and all derived rail contacts.
+    archived = client.delete(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/cabinet-components/{rail['id']}"
+    )
+    assert archived.status_code == 204, archived.text
+    remaining_connections = client.get("/api/v1/electrical/connections").json()
+    assert all(
+        item["source"]["id"] != rail["id"] and item["target"]["id"] != rail["id"]
+        for item in remaining_connections
+    )
+    detail = client.get(f"/api/v1/electrical/distributions/{distribution['id']}")
+    assert detail.status_code == 200, detail.text
+    placed_ids = {item["id"] for item in detail.json()["protective_devices"]}
+    assert {first["id"], second["id"]}.issubset(placed_ids)
+
+
+def test_structured_phase_rail_replaces_manual_feeds_and_contacts_all_din_devices(
+    layout_client: tuple[TestClient, Engine],
+) -> None:
+    """Match the real mixed OG row: breakers plus a normal impulse relay."""
+    client, engine = layout_client
+    room, distribution_assets = setup_assets(client, count=1)
+    distribution = structured_distribution(client, distribution_assets[0]["id"])
+    section = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/sections",
+        {"name": "O.G.", "position": 1, "description": None},
+    )
+    area = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/sections/{section['id']}/areas",
+        {
+            "name": "Sicherungen",
+            "area_type": "device_rows",
+            "position": 1,
+            "rows": 1,
+            "modules_per_row": 12,
+            "width": "full",
+            "side": None,
+            "description": None,
+        },
+    )
+    breaker_type = create(
+        client, "asset-types", {"name": "Sicherungsautomat", "module_width": 1}
+    )
+
+    breakers: list[dict[str, Any]] = []
+    for position, name in enumerate(("Keller", "Waschmaschine", "Trockner"), start=1):
+        asset = create(
+            client,
+            "assets",
+            {
+                "name": name,
+                "asset_type_id": breaker_type["id"],
+                "location_id": room["id"],
+                "status": "active",
+            },
+        )
+        breakers.append(create(
+            client,
+            "electrical/protective-devices",
+            {
+                "asset_id": asset["id"],
+                "distribution_id": distribution["id"],
+                "area_id": area["id"],
+                "device_type": "mcb",
+                "row_number": 1,
+                "start_position": position,
+                "module_width": 1,
+                "rated_current_a": 16,
+                "residual_current_ma": None,
+                "characteristic": "B",
+                "poles": 1,
+                "breaking_capacity_ka": 6,
+                "rcd_type": None,
+                "fuse_type": None,
+                "spd_type": None,
+                "assigned_rcd_id": None,
+                "neutral_rail_id": None,
+                "description": None,
+                "notes": None,
+            },
+        ))
+
+    # Simulate a real upgraded database: the cabinet view still knows the
+    # effective 1-TE width through the asset type, while the legacy placement
+    # column itself is NULL. Automatic rail wiring must use the same inherited
+    # width as the UI and may not silently drop these visible breakers.
+    with Session(engine) as session:
+        for breaker in breakers:
+            stored = session.get(ElectricalProtectiveDevice, UUID(breaker["id"]))
+            assert stored is not None
+            stored.module_width = None
+            session.add(stored)
+        session.commit()
+
+    relay_type = create(
+        client, "asset-types", {"name": "Stromstoßschalter", "module_width": 1}
+    )
+    relay = create(
+        client,
+        "assets",
+        {
+            "name": "Stromstoßschalter",
+            "asset_type_id": relay_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    relay_placement = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{relay['id']}/placement",
+        json={"area_id": area["id"], "row_number": 1, "start_position": 4},
+    )
+    assert relay_placement.status_code == 200, relay_placement.text
+
+    old_block = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Phasenverteilerblock L1/L2/L3",
+            "component_type": "phase_distribution_block",
+            "area_id": area["id"],
+            "row_number": 1,
+            "start_position": 10,
+            "module_width": 3,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 125,
+            "max_cross_section_mm2": 35,
+            "outgoing_connections": 8,
+            "linked_rcd_device_id": None,
+            "start_phase": None,
+            "mounting_side": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    manual = create(
+        client,
+        "electrical/connections",
+        {
+            "source_kind": "cabinet_component",
+            "source_id": old_block["id"],
+            "target_kind": "protective_device",
+            "target_id": breakers[1]["id"],
+            "connection_type": "wire",
+            "label": None,
+            "phases": ["L1"],
+            "cable_type": None,
+            "cores": None,
+            "cross_section_mm2": None,
+            "length_m": None,
+            "route": None,
+            "notes": None,
+        },
+    )
+
+    rail = create(
+        client,
+        f"electrical/distributions/{distribution['id']}/cabinet-components",
+        {
+            "name": "Kammschiene 1 OG",
+            "component_type": "phase_rail",
+            "area_id": area["id"],
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 9,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 9,
+            "linked_rcd_device_id": None,
+            "visible_protective_device_ids": [item["id"] for item in breakers],
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+
+    assert rail["automatic_connection_count"] == 4
+    connections = client.get("/api/v1/electrical/connections").json()
+    automatic = {
+        item["target"]["id"]: item
+        for item in connections
+        if item["source"]["id"] == rail["id"]
+        and item["target"]["kind"] == "protective_device"
+    }
+    assert set(automatic) == {item["id"] for item in breakers}
+    assert automatic[breakers[0]["id"]]["phases"] == ["L1"]
+    assert automatic[breakers[1]["id"]]["phases"] == ["L2"]
+    assert automatic[breakers[2]["id"]]["phases"] == ["L3"]
+    assert all(item["phase_locked"] for item in automatic.values())
+    relay_contact = next(
+        item for item in connections
+        if item["source"]["id"] == rail["id"]
+        and item["target"]["kind"] == "asset"
+        and item["target"]["id"] == relay["id"]
+    )
+    assert relay_contact["phases"] == ["L1"]
+    assert relay_contact["phase_locked"] is True
+    assert all(item["id"] != manual["id"] for item in connections)
+
+    endpoint_page = client.get(
+        "/api/v1/electrical/connection-endpoints",
+        params={"page": 1, "page_size": 200},
+    )
+    assert endpoint_page.status_code == 200, endpoint_page.text
+    relay_endpoint = next(
+        item for item in endpoint_page.json()["items"]
+        if item["kind"] == "asset" and item["id"] == relay["id"]
+    )
+    assert relay_endpoint["effective_phases"] == ["L1"]
+
+    manual_relay_feed = client.post(
+        "/api/v1/electrical/connections",
+        json={
+            "source_kind": "cabinet_component",
+            "source_id": old_block["id"],
+            "target_kind": "asset",
+            "target_id": relay["id"],
+            "connection_type": "wire",
+            "label": None,
+            "phases": ["L1"],
+            "cable_type": None,
+            "cores": None,
+            "cross_section_mm2": None,
+            "length_m": None,
+            "route": None,
+            "notes": None,
+        },
+    )
+    assert manual_relay_feed.status_code == 422
+    assert "bereits physisch durch eine Phasen-/Kammschiene" in manual_relay_feed.text
+
+    consumer_type = create(client, "asset-types", {"name": "Verbraucher"})
+    consumer = create(
+        client,
+        "assets",
+        {
+            "name": "Tasterkreis",
+            "asset_type_id": consumer_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    relay_output = create(
+        client,
+        "electrical/connections",
+        {
+            "source_kind": "asset",
+            "source_id": relay["id"],
+            "target_kind": "asset",
+            "target_id": consumer["id"],
+            "connection_type": "wire",
+            "label": None,
+            "phases": ["L3"],
+            "cable_type": None,
+            "cores": None,
+            "cross_section_mm2": None,
+            "length_m": None,
+            "route": None,
+            "notes": None,
+        },
+    )
+    assert relay_output["phases"] == ["L1"]
+    assert relay_output["effective_phases"] == ["L1"]
+
+    # The dedicated post-save endpoint must rebuild contacts independently of
+    # the create transaction. This is the exact browser runtime path used by
+    # 1.6.3.4 and protects upgraded installations where the initial ORM lookup
+    # returned an empty device list.
+    with Session(engine) as session:
+        stored = session.exec(
+            select(ElectricalConnection).where(
+                ElectricalConnection.source_kind == "cabinet_component",
+                ElectricalConnection.source_id == UUID(rail["id"]),
+                ElectricalConnection.target_kind == "protective_device",
+            )
+        ).all()
+        now = datetime.now(UTC)
+        for item in stored:
+            item.deleted_at = now
+            item.updated_at = now
+            session.add(item)
+        session.commit()
+
+    synchronized = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/cabinet-components/{rail['id']}/synchronize",
+        json={
+            "protective_device_ids": [item["id"] for item in breakers],
+            "asset_ids": [relay["id"]],
+        },
+    )
+    assert synchronized.status_code == 200, synchronized.text
+    assert synchronized.json()["automatic_connection_count"] == 4
+
+
+def test_phase_rail_can_link_to_rcd_din_asset(layout_client: tuple[TestClient, Engine]) -> None:
+    client, _ = layout_client
+    root = create(client, "locations", {"name": "House FI", "location_type": "building"})
+    room = create(
+        client,
+        "locations",
+        {"name": "Cabinet FI", "location_type": "room", "parent_id": root["id"]},
+    )
+    distribution_type = create(client, "asset-types", {"name": "Verteilung FI"})
+    rcd_type = create(
+        client,
+        "asset-types",
+        {"name": "FI-Schutzschalter", "module_width": 4},
+    )
+    distribution_asset = create(
+        client,
+        "assets",
+        {
+            "name": "HV FI",
+            "asset_type_id": distribution_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    rcd_asset = create(
+        client,
+        "assets",
+        {
+            "name": "FI Zählerraum",
+            "asset_type_id": rcd_type["id"],
+            "location_id": room["id"],
+            "status": "active",
+        },
+    )
+    distribution = create(
+        client,
+        "electrical/distributions",
+        {
+            "asset_id": distribution_asset["id"],
+            "parent_distribution_id": None,
+            "distribution_type": "main",
+            "layout_mode": "rows",
+            "designation": "HV FI",
+            "rows": 2,
+            "modules_per_row": 12,
+            "description": None,
+            "notes": None,
+        },
+    )
+    placement = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{rcd_asset['id']}/placement",
+        json={"area_id": None, "row_number": 2, "start_position": 1},
+    )
+    assert placement.status_code == 200, placement.text
+    assert placement.json()["is_rcd"] is True
+
+    rail = client.post(
+        f"/api/v1/electrical/distributions/{distribution['id']}/cabinet-components",
+        json={
+            "name": "Kammschiene FI-Gruppe",
+            "component_type": "phase_rail",
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 1,
+            "module_width": 12,
+            "phases": ["L1", "L2", "L3"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": None,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "linked_rcd_asset_id": rcd_asset["id"],
+            "start_phase": "L1",
+            "mounting_side": "below",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert rail.status_code == 201, rail.text
+    body = rail.json()
+    assert body["linked_rcd_device_id"] is None
+    assert body["linked_rcd_asset_id"] == rcd_asset["id"]
+    assert body["linked_rcd_name"] == "FI Zählerraum"
+
+    unplace = client.delete(
+        f"/api/v1/electrical/distributions/{distribution['id']}"
+        f"/assets/{rcd_asset['id']}/placement"
+    )
+    assert unplace.status_code == 409, unplace.text
+    assert "Zuordnung" in unplace.text

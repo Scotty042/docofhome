@@ -1,7 +1,159 @@
 # Changelog
 
+
+
+
+## 1.7.3 – 2026-07-28
+
+### Getrennte Einspeisungen an FI/RCD und Schutzgeräten
+
+- eine N- oder PE-Einzelleiterverbindung bleibt auf Verbindungsebene exakt N
+  beziehungsweise PE;
+- parallele L1/L2/L3-Einspeisungen am selben Ziel werden nur in der aggregierten
+  Geräteversorgung zusammengeführt;
+- die falsche Warnung über abweichende gespeicherte Phasen entfällt;
+- Phasensperre und Phasenherkunft bleiben für reine N-/PE-Wege inaktiv;
+- der Verbindungsdialog erzwingt L1/L2/L3 nur, wenn die bearbeitete Verbindung
+  tatsächlich einen Außenleiter führt;
+- Regressionstest für „Phasenverteilerblock → FI: L1/L2/L3“ plus
+  „Netzanschluss → FI: N“ ergänzt.
+
+## 1.7.2 – 2026-07-28
+
+### N-/PE-Schienen und getrennte Leiterverkabelung
+
+- N- und PE-Bereiche werden als echte elektrische Schrankkomponenten angelegt
+  und stehen als Quelle oder Ziel der Versorgungstopologie bereit;
+- Migration `0049` materialisiert vorhandene aktive N-/PE-Bereiche ohne
+  Neuanlage durch den Benutzer;
+- die Schrankansicht erlaubt das Anlegen und Bearbeiten der jeweiligen Schiene
+  direkt im passenden Bereich;
+- N-Schienen erzwingen ausschließlich `N`, PE-Schienen ausschließlich `PE`;
+- reine N-/PE-Verbindungen übernehmen keine L1/L2/L3-Phase von FI/RCD,
+  Sicherung, Stromkreis oder DIN-Asset;
+- zusätzliche N-/PE-Verbindungen bleiben auch bei vorhandener
+  Phasen-/Kammschienenversorgung zulässig;
+- direkte Verbindungen zwischen N- und PE-Schiene werden verhindert.
+
+## 1.7.1 – 2026-07-28
+
+### Zusammenführung 1.6.3.8 und 1.7
+
+- Korrekturen aus 1.6.3.6 bis 1.6.3.8 wurden per Drei-Wege-Abgleich in den
+  1.7-Funktionsstand übernommen;
+- fehlende Asset-Codezähler werden durch Migration `0046` und einen
+  selbstheilenden Laufzeit-Fallback repariert;
+- das aktuelle DIN-Asset-Modell ersetzt den alten Neuanlageweg für neue
+  Hutschienengeräte, während historische Schutzgeräte kompatibel bleiben;
+- FI/RCD- und FI/LS-DIN-Assets können Phasen-/Kammschienen und N-Schienen
+  zugeordnet werden;
+- die Stromkreis-Pflichtzuordnung unterstützt nun aktuelle DIN-Sicherungen,
+  Leitungsschutzschalter und FI/LS/RCBO sowie historische Schutzgeräte;
+- ein DIN-Asset kann nicht aus der Verteilung entfernt werden, solange es als
+  FI/RCD einer Schiene oder als Endschutzgerät eines Stromkreises verknüpft ist;
+- die frühere 1.7-Migration wurde wegen der offiziellen Migrationen `0046` und
+  `0047` auf Revision `0048` verschoben.
+
+## 1.6.3.8 – 2026-07-28
+
+### FI/RCD-Zuordnung aus dem DIN-Asset-Modell
+
+- Phasen-/Kammschienen und N-Schienen bieten jetzt auch FI-Schutzschalter und
+  FI/LS-Schalter an, die als normale DIN-Assets in derselben Verteilung platziert sind;
+- historische FI/RCD-Datensätze aus `electrical_protective_devices` bleiben
+  rückwärtskompatibel auswählbar;
+- Schrankkomponenten speichern den neuen Asset-Verweis in `linked_rcd_asset_id` und
+  erlauben niemals gleichzeitig einen alten Schutzgeräte- und einen neuen Asset-Verweis;
+- der verknüpfte FI/RCD wird in den Schienendetails mit seinem Asset-Namen angezeigt;
+- zugeordnete FI/RCD-DIN-Assets können erst nach dem Lösen der Schienenzuordnung aus
+  dem Verteiler entfernt werden;
+- Migration `0047` ergänzt die neue Referenz ohne bestehende Gruppenzuordnungen zu verändern.
+
+
+## 1.6.3.6 – 2026-07-28
+
+### Asset-Erfassung und DocOfHome-Codes
+
+- der per Migration angelegte Asset-Typ **Smartes Relais / DIN-Schaltaktor**
+  besaß keinen Eintrag in `asset_code_counters`; beim Anlegen eines Assets
+  schlug deshalb die Reservierung von `SRA-001` mit HTTP 500 fehl;
+- Migration `0046_repair_asset_code_counters` ergänzt fehlende Zähler für alle
+  Asset-Typen und hebt veraltete Zähler mindestens auf die höchste vorhandene
+  DocOfHome-Nummer plus eins an;
+- die Codevergabe rekonstruiert einen fehlenden Zähler zusätzlich zur Laufzeit,
+  damit auch zukünftige inkonsistente Stammdaten nicht mehr zu HTTP 500 führen.
+
+## 1.6.3.5 – 2026-07-28
+
+### Kammschienen und DIN-Kontakte
+
+- automatische Schienenverbindungen gelten nun für jedes vollständig überdeckte
+  DIN-Gerät, unabhängig davon, ob es als Schutzgerät oder allgemeines DIN-Asset
+  modelliert ist;
+- allgemeine DIN-Assets werden als Topologie-Ziel `asset` angebunden und erhalten
+  die Phase aus ihrer TE-Position;
+- vierpolige FI/RCD- und FI/LS-Geräte verwenden auf einer dreiphasigen
+  Kammschiene nur die ersten drei Außenleiterkontakte; der vierte Pol bleibt für
+  N frei; diese Lage wird sowohl beim Platzieren des Geräts als auch beim späteren
+  Anlegen der Schiene validiert;
+- zusätzliche manuelle Einspeisungen zu automatisch kontaktierten DIN-Geräten
+  werden verhindert;
+- teilweise Überdeckungen werden sowohl beim Anlegen der Schiene als auch beim
+  Verschieben eines DIN-Geräts verhindert;
+- automatische Verbindungen werden beim Platzieren, Verschieben, Entfernen,
+  Topologieaufruf und Schienenupdate idempotent synchronisiert;
+- Migration `0045_phase_rail_all_din_contacts` ergänzt und repariert Kontakte im
+  vorhandenen Datenbestand;
+- Release- und Changeloganzeige unterstützen vierteilige Korrekturversionen wie
+  `1.6.3.5`.
+
+## 1.6.3 – 2026-07-27
+
+### Build-Korrektur
+
+- `phaseRailAutoWiring.test.ts` verwendet jetzt wie die übrigen Frontend-Quellvertragstests
+  einen Vite-`?raw`-Import. Dadurch benötigt `vue-tsc` im Browserprojekt weder `node:fs`
+  noch separate Node-Typdefinitionen.
+- Der Releasevertrag prüft ausdrücklich, dass dieser Test keine Node-Builtin-Imports mehr
+  in den produktiven TypeScript-Build einbringt.
+
+### Elektro-Integrität
+
+- zentrale und einheitliche Phasenberechnung für Phasenschiene, Schutzgerät,
+  Stromkreis, Topologie und Smart-Meter-Messpunkt;
+- automatische, schreibgeschützte Verbindungen von Phasen-/Kammschienen zu
+  vollständig überdeckten Schutzgeräten;
+- klare Trennung von automatisch verwalteter Phasenschiene und manuell
+  dokumentierter allgemeiner Sammelschiene;
+- legitime vorgelagerte FI/RCD-Einspeisungen einer Phasenschiene bleiben bei
+  der Automatiksynchronisierung erhalten;
+- Teilüberdeckungen, konkurrierende Phasenschienen und unzulässige DIN-Asset-
+  Überdeckungen werden zentral abgewiesen;
+- Stromkreisphasen werden aus Schutzgerät oder dokumentierter Einspeisung
+  übernommen und an Verbraucher weitergegeben;
+- Smart-Meter-Messphasen werden gegen die wirksamen Leiter der Verbindung
+  validiert und bei eindeutigen einphasigen Verbindungen automatisch gesetzt;
+- FI-, N- und PE-Beziehungen einschließlich Typwechsel, Archivierung und
+  RCBO-Sonderfall konsistent validiert;
+- Schutzgeräte, Stromkreise, Schrankkomponenten und Assets können bei aktiven
+  manuellen Elektro-Beziehungen nicht unbemerkt archiviert, ersetzt oder
+  verschoben werden;
+- Migration `0043_release_1_6_3_electrical_integrity` repariert eindeutige
+  Bestandsbeziehungen und ergänzt Schienen-Constraints.
+
 ## 1.6.2 – 2026-07-27
 
+- automatische Verbindungen zwischen Phasen-/Kammschiene und allen überspannten
+  Schutzgeräten; Synchronisierung bei späterer Platzierung und Verschiebung
+- FI/RCD-Zuordnung an Phasen-/Kammschienen als optional klargestellt; falsche
+  Warnung bei fehlender Zuordnung entfernt
+
+- Phasenschienen-Verbindungen sind im Bearbeitungsdialog vollständig gesperrt:
+  L1/L2/L3 werden nicht mehr als auswählbare Optionen angezeigt; nur N und PE
+  können ergänzt werden. Direkte Verbindungen Phasenschiene ↔ Schutzgerät werden
+  auch serverseitig aus Startphase und TE-Position berechnet.
+- Migration `0041` repariert vorhandene falsche Außenleiterwerte auch auf
+  Installationen, die Migration `0040` bereits ausgeführt hatten.
 ### Behoben
 
 - monatliche Zählerpläne erzeugen idempotente Aufgaben und werden durch eine
@@ -22,6 +174,9 @@
   abweichende Auswahl von L1/L2/L3 ist im Dialog und über die API ausgeschlossen.
 - Fehler beim Speichern von Schrankkomponenten und Versorgungsverbindungen werden
   im jeweils geöffneten Dialog angezeigt und nicht mehr hinter dem Overlay.
+- Migration `0040` verwendet für den Archivstatus von Schutzgeräten die
+  zugehörige Basistabelle `electrical_components`. Dadurch läuft das Upgrade auch
+  auf bestehenden 1.6.1/1.6.2-Datenbanken ohne nicht vorhandene `deleted_at`-Spalte.
 
 ### Hinzugefügt
 
@@ -572,3 +727,31 @@ Letzter Entwicklungsstand vor der Stabilisierung zu 1.0.0. Details der
 - Vorbelegung des Asset-Editors aus einem unbekannten FRITZ!Box-Gerätevorschlag.
 
 Die Produktversion bleibt bewusst `1.0.0`; es sind keine Datenbankmigrationen erforderlich.
+
+## 1.6.3 – Nachträgliche Elektro-Korrektur 2026-07-28
+
+- Drag-and-drop von Schutzgeräten innerhalb vollständig überdeckender
+  Phasen-/Kammschienen wieder zugelassen; Teilüberdeckung bleibt gesperrt.
+- Allgemeine DIN-Assets unter Kammschienen mit fachlich eindeutiger Meldung
+  abgewiesen.
+- automatische Schienenkontakte vor der Ableitung geflusht und bei
+  Topologieaufrufen selbstheilend abgeglichen.
+- Archivieren für Schutzgeräte und Schrankkomponenten in der Detailansicht
+  ergänzt.
+- Archivierung einer Phasenschiene deaktiviert deren Einspeisung und
+  automatisch erzeugte Ausgänge atomar, ohne die Schutzgeräte zu entfernen.
+
+### 1.6.3 – Korrektur gemischter Kammschienen-Reihen
+
+- Kammschienen können gemischte Reihen aus Schutzgeräten und allgemeinen DIN-Geräten überspannen.
+- Nur Schutzgeräte erhalten automatisch abgeleitete Kontakte und Phasen.
+- Fehlerhinweise beim Speichern von Schrankkomponenten werden vollständig im Dialog angezeigt.
+
+## 1.6.3.2 – Verbindliche Kammschienen-Autoverkabelung
+
+- sichtbare, vollständig überdeckte Schutzgeräte werden beim Speichern als
+  explizit serverseitig validierte Kontaktziele übermittelt;
+- direkter Fallback ergänzt den kanonischen Schutzgeräte-Repositorypfad;
+- alte manuelle Einspeisungen werden vor Aktivierung des neuen Kontakts
+  transaktionssicher ersetzt;
+- stille Erfolgsmeldungen mit null Kontakten bei erwarteten Geräten verhindert.

@@ -87,10 +87,11 @@ def main() -> int:
         "frontend/src/pages/ElectricalTopologyPage.vue",
         (
             "forcedLinePhases",
-            "Durch Sammel-/Phasenschiene fest vorgegeben",
+            "Durch Phasenschiene/Kammschiene fest vorgegeben",
             "updateConnectionPhases",
             "dialogError",
-            "L1/L2/L3 werden aus Position und Startphase der Schiene berechnet",
+            "Fest vorgegebene Außenleiterphase",
+            'label="Zusätzliche Leiter"',
         ),
     )
     require(
@@ -134,6 +135,63 @@ def main() -> int:
         ),
     )
     require(
+        "backend/migrations/versions/0040_phase_rail_authority.py",
+        (
+            'revision: str = "0040"',
+            'down_revision: str | None = "0039"',
+            "component_type='phase_rail'",
+            "phase_l1=:l1",
+            "phase_l2=:l2",
+            "phase_l3=:l3",
+        ),
+    )
+    require(
+        "backend/migrations/versions/0041_repair_phase_rail_connections.py",
+        (
+            'revision: str = "0041"',
+            'down_revision: str | None = "0040"',
+            "phase_l1=:l1",
+            "phase_l2=:l2",
+            "phase_l3=:l3",
+        ),
+    )
+    require(
+        "backend/app/services/phase_rail_connections.py",
+        (
+            "class PhaseRailConnectionService",
+            "sync_distribution",
+            "sync_rail",
+            'connection_type="busbar"',
+            "_device_phases",
+        ),
+    )
+    require(
+        "backend/migrations/versions/0042_auto_phase_rail_connections.py",
+        (
+            'revision: str = "0042"',
+            'down_revision: str | None = "0041"',
+            "INSERT INTO electrical_connections",
+            "component_type='phase_rail'",
+        ),
+    )
+    require(
+        "backend/app/repositories/electrical_topology.py",
+        (
+            'component.component_type == "phase_rail"',
+            "effective_phases=protective_device_phases(device)",
+        ),
+    )
+    require(
+        "frontend/src/pages/ElectricalTopologyPage.vue",
+        (
+            "return connection.effective_phases",
+            "Durch Phasenschiene/Kammschiene fest vorgegeben",
+            "Fest vorgegebene Außenleiterphase",
+            'label="Zusätzliche Leiter"',
+            "directPhaseRailConnection",
+        ),
+    )
+    require(
         "backend/app/core/project_info.py",
         (
             "https://github.com/Scotty042/docofhome",
@@ -143,7 +201,7 @@ def main() -> int:
     )
 
     source_info = json.loads(read("SOURCE_INFO.json"))
-    if source_info["version"] != "1.6.2" or source_info["alembic_head"] != "0039":
+    if source_info["version"] != "1.6.2" or source_info["alembic_head"] != "0042":
         raise AssertionError("SOURCE_INFO.json enthält falsche Release-Metadaten")
     if not source_info["repository"].startswith("https://github.com/"):
         raise AssertionError("SOURCE_INFO.json enthält keinen GitHub-Bezug")
@@ -153,8 +211,8 @@ def main() -> int:
         raise AssertionError("Eigene package-lock-Metadaten sind nicht 1.6.2")
 
     migrations = sorted((ROOT / "backend/migrations/versions").glob("*.py"))
-    if not migrations[-1].name.startswith("0039_"):
-        raise AssertionError("Alembic-Head muss für 1.6.2 bei 0039 liegen")
+    if not migrations[-1].name.startswith("0042_"):
+        raise AssertionError("Alembic-Head muss für 1.6.2 bei 0042 liegen")
 
     print(
         "Release 1.6.2: Aufgaben-, Dashboard-, Phasen-, Verteiler- und "

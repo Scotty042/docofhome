@@ -19,6 +19,7 @@ from app.schemas.electrical_layout import (
     ElectricalCabinetComponentWrite,
     ElectricalMeterPlacementRead,
     ElectricalMeterPlacementWrite,
+    PhaseRailSynchronizationWrite,
 )
 from app.services.electrical import (
     ElectricalConflictError,
@@ -333,6 +334,31 @@ def update_cabinet_component(
     try:
         return ElectricalLayoutService(session).update_cabinet_component(
             distribution_id, component_id, payload
+        )
+    except (
+        ElectricalNotFoundError,
+        ElectricalValidationError,
+        ElectricalConflictError,
+    ) as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.post(
+    "/{distribution_id}/cabinet-components/{component_id}/synchronize",
+    response_model=ElectricalCabinetComponentRead,
+)
+def synchronize_phase_rail_contacts(
+    distribution_id: UUID,
+    component_id: UUID,
+    payload: PhaseRailSynchronizationWrite,
+    session: SessionDependency,
+) -> ElectricalCabinetComponentRead:
+    try:
+        return ElectricalLayoutService(session).synchronize_phase_rail_contacts(
+            distribution_id,
+            component_id,
+            payload.protective_device_ids,
+            payload.asset_ids,
         )
     except (
         ElectricalNotFoundError,

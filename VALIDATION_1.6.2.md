@@ -1,94 +1,53 @@
 # DocOfHome 1.6.2 – Validierungsbericht
 
-Stand: 27. Juli 2026  
-Ausgangsbasis: `DocOfHome-1.6.1.zip`  
-SHA-256 der Ausgangsbasis: `07e92ea167921d05c65bc24e888b9e6407fa3bc5c962a29c88ed209c131cd8bf`
+Stand: 27. Juli 2026
 
-## Umgesetzter Prüfumfang
+## Gegenstand dieser Korrektur
 
-DocOfHome 1.6.2 übernimmt die Korrekturen aus dem Runbook vom 27. Juli 2026 auf
-Basis von 1.6.1. Der Schwerpunkt dieses Releases liegt auf:
+Die Phasen-/Kammschiene war im Schrankplan zwar sichtbar, ihre physisch zwingenden
+Kontakte zu den überspannten Sicherungsautomaten mussten aber weiterhin manuell als
+Versorgungsverbindungen angelegt werden. Außerdem wurde eine fehlende FI/RCD-Zuordnung
+fälschlich als Warnung dargestellt, obwohl Kammschienen auch ohne FI/RCD eingesetzt
+werden können.
 
-- idempotenten monatlichen Zähler-Ableseaufgaben;
-- getrennten Dashboardwerten für PV-Erzeugung und Netzeinspeisung;
-- wirksamen Phasen und sichtbaren Warnungen bei alten Phasenwidersprüchen;
-- Verteilungen als strukturellen Behältern sowie dem Aufbau Verteilerdose;
-- Kamm-/Phasenschienen ohne eigene TE-Belegung;
-- dauerhaft im ZIP enthaltenen Repository- und Releaseinformationen.
+## Umsetzung
 
-Die bereits in 1.6.1 vorhandenen Korrekturen für letzten Zählerwert, OBIS-Hinweise,
-Zählerwechsel, Bildsuchquellen, Schutzgerätezählung, vertikale Beschriftung,
-direkte Asset-Verbindungen und den Asset-Typ „Smartes Relais / DIN-Schaltaktor“
-bleiben erhalten und werden durch den Release-Vertragscheck mitgeprüft.
+- Neue zentrale Synchronisierung `PhaseRailConnectionService`.
+- Beim Anlegen oder Ändern einer Phasen-/Kammschiene werden Verbindungen zu allen
+  bereits platzierten und überspannten Schutzgeräten automatisch angelegt.
+- Wird ein Schutzgerät später unter der Schiene platziert oder verschoben, wird die
+  Verbindung automatisch erstellt, korrigiert oder archiviert.
+- Die Außenleiterphase wird ausschließlich aus Startphase, Schienenstart und
+  TE-Position berechnet.
+- Direkte automatische Schienenverbindungen enthalten nur L1/L2/L3. N und PE werden
+  separat dokumentiert.
+- Automatische Schienenverbindungen können in der Topologie weder gelöscht noch auf
+  andere Endpunkte oder Verbindungsarten umgehängt werden.
+- Eine FI/RCD-Zuordnung ist bei einer Phasen-/Kammschiene optional. Die bisherige
+  Warnung bei fehlender Zuordnung wurde entfernt und der Dialogtext klargestellt.
+- Migration `0042` legt fehlende Verbindungen für bestehende Installationen an,
+  korrigiert falsche Phasen und archiviert veraltete beziehungsweise umgekehrte
+  direkte Schienenverbindungen.
 
-## Erfolgreich ausgeführte Prüfungen
+## Erfolgreiche Prüfungen
 
-- Versionskonsistenz: `VERSION`, Backend, Frontend und Lockdatei = `1.6.2`.
-- Branding- und bestehende Korrekturverträge: bestanden.
-- Release-Vertragsprüfung 1.6.2: bestanden.
-- Python-AST-Prüfung aller 19 geänderten Python-Dateien: bestanden.
-- Prüfung geänderter Python-Dateien auf die konfigurierte Zeilenlänge: bestanden.
-- JSON- und Whitespace-Prüfung aller geänderten Dateien: bestanden.
-- TypeScript- und Vue-`script setup`-Syntax: 179 Einheiten bestanden.
-- Nach dem gemeldeten Vue-TSC-Fehler in `AssetDuplicateDialog.vue` wurde
-  `junction_box` aus der Auswahl für fortlaufende DIN-Serienplatzierung
-  ausgeschlossen. Die TypeScript-Narrowing-Regel wurde mit `tsc --noEmit
-  --strict` isoliert erfolgreich geprüft.
-- Quellweite Suche: keine weitere Stelle weist `DistributionLayoutMode` einer
-  engeren Typmenge `"rows" | "sections"` ungefiltert zu.
-- Die Schienen-Kollisionslogik unterscheidet nun TE-belegende Geräte von
-  Overlay-Schienen. Ein Regressionstest deckt DIN-Assets unter einer Schiene,
-  parallele Schienen auf unterschiedlichen Montageseiten und die Ablehnung einer
-  zweiten Schiene auf derselben Montageseite ab.
-- Der neue Regressionstest ist im Backend-Testbestand enthalten. Seine statische
-  Syntax- und Vertragsprüfung ist bestanden; der vollständige Pytest-Lauf bleibt
-  wegen der fehlenden Laufzeitabhängigkeiten in dieser Umgebung offen.
-- Verkabelungen an Schutzgeräten mit wirksamer Schienenphase werden nun zweifach
-  abgesichert: Der Dialog setzt die berechnete Außenleiterphase automatisch und
-  sperrt die freie Auswahl von L1/L2/L3; das Backend erzwingt dieselbe Phase auch
-  bei direkten API-Aufrufen. N und PE bleiben unabhängig auswählbar.
-- Ein zusätzlicher Backend-Regressionstest bildet eine Sicherung auf TE 3 unter
-  einer bei L1 startenden Dreiphasenschiene ab und erwartet für eine fälschlich
-  als L1 gesendete Verkabelung die gespeicherte Phase L3.
-- Speichermeldungen für Schrankkomponenten und Versorgungsverbindungen werden im
-  jeweils geöffneten Dialog angezeigt, nicht mehr hinter dessen Overlay.
-- Shell-Syntax des zentralen Prüflaufs: bestanden.
-- Dependency-freie Migrationsprüfungen 0030 bis 0037: bestanden.
-- Migration 0039: Upgrade, eindeutige Automationsschlüssel, Downgrade und
-  erneutes Upgrade gegen SQLite bestanden.
-- Automatische Ableseaufgaben: Quellvertrag für Erzeugung, Reaktivierung,
-  automatische Erledigung und Schutz vor manueller Änderung bestanden.
-- ZIP-Inhalte enthalten `SOURCE_INFO.json` und feste GitHub-/Release-/Issue-Links,
-  unabhängig von einem `.git`-Verzeichnis.
+- Python-Syntaxprüfung der Anwendung, Migrationen, Tests und Prüfscripte
+- TypeScript-Syntaxprüfung der geänderten Vue-/Test-Scripte mit dem lokalen
+  TypeScript-Parser
+- Versions- und Brandingprüfung
+- gesammelte Korrekturverträge und Releasevertrag 1.6.2
+- dependency-freier Phasenschienen-Vertragstest
+- ZIP-Kompressions- und Extraktionsprüfung
 
-## In dieser Build-Umgebung nicht vollständig ausführbare Gates
+## Nicht vollständig ausgeführte Gates
 
-Die Ausgangs-ZIP enthält bewusst keine installierten Python- oder
-Node-Abhängigkeiten. Die Ausführungsumgebung konnte keine externen Pakete
-nachladen. Daher waren folgende vollständige Gates hier nicht möglich:
+Die vollständige Python-Test- und Alembic-Suite konnte in dieser Umgebung nicht
+abhängigkeitsbasiert ausgeführt werden, weil die erforderlichen Python-Pakete nicht
+über den Paketindex verfügbar waren. `npm ci` konnte ebenfalls nicht vollständig
+abgeschlossen werden; deshalb wurden Vue-TSC, Vite und Vitest nicht vollständig
+neu ausgeführt. Die entsprechenden Regressionstests und Prüfscripte sind im Paket
+enthalten.
 
-- Backend-Pytest: Abbruch vor Teststart, weil das Paket `sqlmodel` nicht
-  installiert ist.
-- Ruff und mypy: die Programme sind in der Umgebung nicht installiert.
-- `npm ci`, Vitest, Vue-TSC und Vite-Build: die erforderlichen npm-Pakete waren
-  weder installiert noch im Offline-Cache vorhanden.
-- Docker-Compose-Build und Healthcheck: Docker ist in der Umgebung nicht
-  installiert.
+## Alembic-Head
 
-Die zugehörigen Tests, Lockdateien, Dockerdateien und CI-Prüfschritte sind im
-Release enthalten. Vor einem produktiven Update sollte der normale
-Docker-/GitHub-CI-Lauf deshalb zusätzlich vollständig durchlaufen.
-
-## Daten- und Migrationssicherheit
-
-- Migration 0039 überschreibt keine Zählerstände, Assets, Dokumente,
-  Produktbilder oder bestehenden elektrischen Verbindungen.
-- Alte widersprüchliche Verbindungsphasen bleiben gespeichert und werden
-  zusätzlich mit den wirksamen Phasen und einer Warnung angezeigt.
-- Ein Wechsel zur oder von einer Verteilerdose wird blockiert, solange noch
-  Schutzgeräte, DIN-Platzierungen, Schrankkomponenten oder Felder vorhanden sind.
-- Automatisch erzeugte Ableseaufgaben werden über einen eindeutigen Schlüssel
-  idempotent verwaltet.
-
-Vor dem Update ist trotzdem ein vollständiges Backup des persistenten
-`data`-Ordners erforderlich.
+`0042`

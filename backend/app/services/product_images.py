@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from io import BytesIO
 import html
 import ipaddress
 import re
@@ -15,6 +16,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import UploadFile
+from PIL import Image, UnidentifiedImageError
 from sqlmodel import Session
 
 from app.core.settings import settings
@@ -477,3 +479,61 @@ class ProductImageService:
     def _clean_title(value: str) -> str:
         title = value.removeprefix("File:")
         return title.rsplit(".", 1)[0].replace("_", " ")[:200]
+
+
+class AssetImageService:
+    """Stores optimized per-asset and asset-type images separately from products."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    @property
+    def upload_dir(self) -> Path:
+        return settings.data_dir / "uploads" / "asset-images"
+
+    async def upload(self, upload: UploadFile) -> ProductImageUploadRead:
+        content_type = (upload.content_type or "").lower()
+        if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise ProductImageValidationError("Unterstützt werden JPEG-, PNG- und WebP-Bilder.")
+        content = await upload.read(MAX_IMAGE_BYTES + 1)
+        if not content:
+            raise ProductImageValidationError("Die hochgeladene Bilddatei ist leer.")
+        if len(content) > MAX_IMAGE_BYTES:
+            raise ProductImageValidationError("Das Asset-Bild darf höchstens 10 MB groß sein.")
+        try:
+            with Image.open(BytesIO(content)) as source:
+                source.load()
+                image = source.convert("RGB")
+                image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                output = BytesIO()
+                image.save(output, format="WEBP", quality=84, method=6, optimize=True)
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise ProductImageValidationError("Die Datei ist kein gültiges unterstütztes Bild.") from exc
+        optimized = output.getvalue()
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha256(optimized).hexdigest()[:16]
+        reference = f"{digest}-{uuid4().hex[:12]}.webp"
+        (self.upload_dir / reference).write_bytes(optimized)
+        return ProductImageUploadRead(
+            image_url=f"/api/v1/assets/images/{reference}",
+            image_source=ProductImageSource.UPLOAD,
+            image_reference=reference,
+        )
+
+    def resolve(self, reference: str) -> Path:
+        safe_name = Path(reference).name
+        if safe_name != reference or not safe_name:
+            raise ProductImageValidationError("Ungültiger Asset-Bildpfad.")
+        candidate = (self.upload_dir / safe_name).resolve()
+        root = self.upload_dir.resolve()
+        if root not in candidate.parents or not candidate.is_file():
+            raise ProductImageValidationError("Asset-Bild wurde nicht gefunden.")
+        return candidate
+
+    def remove(self, reference: str | None) -> None:
+        if not reference:
+            return
+        try:
+            self.resolve(reference).unlink(missing_ok=True)
+        except ProductImageValidationError:
+            return

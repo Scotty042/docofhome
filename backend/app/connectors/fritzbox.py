@@ -60,7 +60,16 @@ class FritzBoxConnector:
                     ),
                 )
             )
-        return result
+        def sort_key(item: FritzBoxDeviceRead) -> tuple[int, int, str]:
+            try:
+                address = ipaddress.ip_address(item.ipv4 or "")
+                if address.version == 4:
+                    return (0, int(address), item.name.casefold())
+            except ValueError:
+                pass
+            return (1, 0, item.name.casefold())
+
+        return sorted(result, key=sort_key)
 
     def _soap(self, action: str, body: str) -> str:
         envelope = (

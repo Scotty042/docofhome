@@ -191,6 +191,9 @@ class ElectricalCabinetComponentWrite(BaseModel):
     max_cross_section_mm2: float | None = Field(default=None, gt=0, le=1000)
     outgoing_connections: int | None = Field(default=None, ge=1, le=1000)
     linked_rcd_device_id: UUID | None = None
+    linked_rcd_asset_id: UUID | None = None
+    visible_protective_device_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    visible_asset_ids: list[UUID] = Field(default_factory=list, max_length=2000)
     start_phase: ElectricalPhase | None = None
     mounting_side: ElectricalRailMountingSide | None = None
     description: str | None = None
@@ -221,34 +224,70 @@ class ElectricalCabinetComponentWrite(BaseModel):
         order = {phase: index for index, phase in enumerate(ElectricalPhase)}
         return sorted(value, key=order.__getitem__)
 
+    @field_validator("visible_protective_device_ids", "visible_asset_ids")
+    @classmethod
+    def visible_device_ids_are_unique(cls, value: list[UUID]) -> list[UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("Jedes sichtbare DIN-Gerät darf nur einmal angegeben werden")
+        return value
+
     @model_validator(mode="after")
     def component_specific_values_are_valid(self) -> "ElectricalCabinetComponentWrite":
         line_phases = [phase for phase in self.phases if phase in {
             ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3
         }]
-        rail_types = {
-            ElectricalCabinetComponentType.BUSBAR,
-            ElectricalCabinetComponentType.PHASE_RAIL,
-        }
-        if self.component_type in rail_types:
+        if self.component_type == ElectricalCabinetComponentType.PHASE_RAIL:
             if not line_phases:
-                raise ValueError("Eine Kamm-/Phasenschiene benötigt mindestens eine Phase")
+                raise ValueError("Eine Phasen-/Kammschiene benötigt mindestens eine Phase")
+            if len(line_phases) != len(self.phases):
+                raise ValueError(
+                    "Eine Phasen-/Kammschiene darf nur L1, L2 und L3 führen. "
+                    "Neutral- und Schutzleiter werden separat dokumentiert."
+                )
             if self.start_phase is None:
                 self.start_phase = line_phases[0]
             if self.start_phase not in line_phases:
-                raise ValueError("Die Startphase muss auf der Schiene vorhanden sein")
+                raise ValueError("Die Startphase muss auf der Phasenschiene vorhanden sein")
             if self.mounting_side is None:
                 self.mounting_side = ElectricalRailMountingSide.BELOW
         else:
             self.start_phase = None
             self.mounting_side = None
+        if self.component_type not in {
+            ElectricalCabinetComponentType.PHASE_RAIL,
+            ElectricalCabinetComponentType.NEUTRAL_RAIL,
+        }:
+            self.linked_rcd_device_id = None
+            self.linked_rcd_asset_id = None
+        if self.linked_rcd_device_id is not None and self.linked_rcd_asset_id is not None:
+            raise ValueError("Es darf nur ein FI/RCD ausgewählt werden")
         if self.component_type == ElectricalCabinetComponentType.NEUTRAL_RAIL:
             if self.phases != [ElectricalPhase.N]:
                 raise ValueError(
                     "Eine N-Schiene muss ausschließlich dem Neutralleiter N "
                     "zugeordnet sein"
                 )
+        if self.component_type == ElectricalCabinetComponentType.PROTECTIVE_EARTH_RAIL:
+            if self.phases != [ElectricalPhase.PE]:
+                raise ValueError(
+                    "Eine PE-Schiene muss ausschließlich dem Schutzleiter PE "
+                    "zugeordnet sein"
+                )
         return self
+
+
+class PhaseRailSynchronizationWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protective_device_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    asset_ids: list[UUID] = Field(default_factory=list, max_length=2000)
+
+    @field_validator("protective_device_ids", "asset_ids")
+    @classmethod
+    def device_ids_are_unique(cls, value: list[UUID]) -> list[UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("Jedes DIN-Gerät darf nur einmal angegeben werden")
+        return value
 
 
 class ElectricalCabinetComponentRead(BaseModel):
@@ -268,7 +307,9 @@ class ElectricalCabinetComponentRead(BaseModel):
     rated_current_a: float | None
     max_cross_section_mm2: float | None
     outgoing_connections: int | None
+    automatic_connection_count: int
     linked_rcd_device_id: UUID | None
+    linked_rcd_asset_id: UUID | None
     linked_rcd_name: str | None
     start_phase: ElectricalPhase | None
     mounting_side: ElectricalRailMountingSide | None
@@ -309,6 +350,7 @@ class ElectricalAssetPlacementRead(BaseModel):
     asset_name: str
     asset_code: str
     asset_type_name: str = "Unbekannter Asset-Typ"
+    is_rcd: bool = False
     product_name: str | None
     location_path: str | None
     row_number: int

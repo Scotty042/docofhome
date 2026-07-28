@@ -13,6 +13,8 @@ import type {
   NetworkDeviceCandidate,
   NetworkDeviceWrite,
   NetworkInterface,
+  NetworkIpOverview,
+  NetworkIpStatus,
   NetworkRole,
   NetworkSegment,
   NetworkSegmentWrite,
@@ -34,6 +36,11 @@ const candidates = ref<NetworkDeviceCandidate[]>([])
 const segments = ref<NetworkSegment[]>([])
 const interfaces = ref<NetworkInterface[]>([])
 const connections = ref<NetworkConnection[]>([])
+const ipAddresses = ref<NetworkIpOverview[]>([])
+const ipStatusFilter = ref<NetworkIpStatus | ''>('')
+const ipAssignmentFilter = ref<'static' | 'dhcp' | ''>('')
+const ipSourceFilter = ref('')
+const ipSearch = ref('')
 const fritzBoxDevices = ref<FritzBoxDevice[]>([])
 const fritzBoxLoading = ref(false)
 const fritzBoxError = ref<string | null>(null)
@@ -49,7 +56,7 @@ watch(error, (message) => {
 })
 const search = ref('')
 const roleFilter = ref<NetworkRole | ''>('')
-const allowedTabs = new Set(['devices', 'segments', 'connections', 'topology', 'fritzbox'])
+const allowedTabs = new Set(['devices', 'ip-addresses', 'segments', 'connections', 'topology', 'fritzbox'])
 const requestedTab = typeof route.query.tab === 'string' ? route.query.tab : 'devices'
 const tab = ref(allowedTabs.has(requestedTab) ? requestedTab : 'devices')
 
@@ -99,6 +106,16 @@ const fritzAssignmentItems = computed(() => [
   }))
 ])
 const fritzTargetNeedsRole = computed(() => fritzTargetDeviceId.value.startsWith('asset:'))
+const deviceHostnameError = computed(() => {
+  const value = deviceForm.value.hostname?.trim() ?? ''
+  if (!value) return ''
+  if (value.includes('_')) return 'Unterstriche sind in Hostnamen nicht erlaubt. Verwenden Sie stattdessen einen Bindestrich.'
+  return /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(value)
+    ? ''
+    : 'Nur Buchstaben, Ziffern, Punkte und Bindestriche sind erlaubt.'
+})
+const deviceHostnameSuggestion = computed(() => deviceForm.value.hostname?.replaceAll('_', '-') ?? '')
+function applyDeviceHostnameSuggestion() { deviceForm.value.hostname = deviceHostnameSuggestion.value || null }
 
 const connectionTypeLabels: Record<NetworkConnectionType, string> = {
   physical: 'Physisch', logical: 'Logisch', wireless: 'WLAN/Funk'
@@ -106,6 +123,35 @@ const connectionTypeLabels: Record<NetworkConnectionType, string> = {
 const connectionStatusLabels: Record<NetworkConnectionStatus, string> = {
   active: 'Aktiv', planned: 'Geplant', inactive: 'Inaktiv'
 }
+const ipStatusLabels: Record<NetworkIpStatus, string> = {
+  match: 'Übereinstimmung', mismatch: 'Abweichung', not_detected: 'Nicht erkannt',
+  observed_only: 'Nur erkannt', conflict: 'IP-Konflikt', no_integration: 'Keine Integration'
+}
+const ipStatusColors: Record<NetworkIpStatus, string | undefined> = {
+  match: 'success', mismatch: 'warning', not_detected: undefined, observed_only: 'info',
+  conflict: 'error', no_integration: undefined
+}
+const ipStatusItems = Object.entries(ipStatusLabels).map(([value, title]) => ({ value, title }))
+const ipSourceItems = computed(() => Array.from(new Set(
+  ipAddresses.value.map((item) => item.source).filter((value): value is string => Boolean(value))
+)).sort((left, right) => left.localeCompare(right, 'de')).map((value) => ({ value, title: value })))
+const filteredIpAddresses = computed(() => {
+  const query = ipSearch.value.trim().toLocaleLowerCase()
+  return ipAddresses.value.filter((item) => {
+    const matchesStatus = !ipStatusFilter.value || item.status === ipStatusFilter.value
+    const matchesSource = !ipSourceFilter.value || item.source === ipSourceFilter.value
+    const matchesAssignment = !ipAssignmentFilter.value || (
+      ipAssignmentFilter.value === 'static'
+        ? item.assignment_type === 'static' || item.assignment_type === 'reservation'
+        : item.assignment_type === 'dhcp'
+    )
+    const haystack = [
+      item.device_name, item.interface_name, item.documented_address,
+      item.observed_address, item.mac_address, item.source
+    ].filter(Boolean).join(' ').toLocaleLowerCase()
+    return matchesStatus && matchesSource && matchesAssignment && (!query || haystack.includes(query))
+  })
+})
 const interfaceItems = computed(() => interfaces.value.map((item) => ({
   value: item.id,
   title: `${item.device_name} · ${item.name}`,
@@ -154,19 +200,20 @@ async function loadAll() {
   error.value = null
   const labels = [
     'Geräte', 'Gerätekandidaten', 'IP-Netze', 'Schnittstellen',
-    'Verbindungen', 'Übersicht', 'Topologie'
+    'Verbindungen', 'IP-Abgleich', 'Übersicht', 'Topologie'
   ]
   const results = await Promise.allSettled([
     networkApi.devices(), networkApi.candidates(), networkApi.segments(), networkApi.interfaces(),
-    networkApi.connections(), networkApi.summary(), networkApi.topology()
+    networkApi.connections(), networkApi.ipAddresses(), networkApi.summary(), networkApi.topology()
   ])
 
-  const [deviceData, candidateData, segmentData, interfaceData, connectionData, summaryData, topologyData] = results
+  const [deviceData, candidateData, segmentData, interfaceData, connectionData, ipData, summaryData, topologyData] = results
   if (deviceData.status === 'fulfilled') devices.value = deviceData.value as NetworkDevice[]
   if (candidateData.status === 'fulfilled') candidates.value = candidateData.value as NetworkDeviceCandidate[]
   if (segmentData.status === 'fulfilled') segments.value = segmentData.value as NetworkSegment[]
   if (interfaceData.status === 'fulfilled') interfaces.value = interfaceData.value as NetworkInterface[]
   if (connectionData.status === 'fulfilled') connections.value = connectionData.value as NetworkConnection[]
+  if (ipData.status === 'fulfilled') ipAddresses.value = ipData.value as NetworkIpOverview[]
   if (summaryData.status === 'fulfilled') summary.value = summaryData.value as NetworkSummary
   if (topologyData.status === 'fulfilled') topology.value = topologyData.value as NetworkTopology
 
@@ -320,6 +367,7 @@ async function loadFritzBoxDevices() {
   fritzBoxError.value = null
   try {
     fritzBoxDevices.value = await releaseApi.fritzBoxDevices()
+    ipAddresses.value = await networkApi.ipAddresses()
   } catch (reason) {
     fritzBoxDevices.value = []
     fritzBoxError.value = reason instanceof Error ? reason.message : 'FRITZ!Box-Geräte konnten nicht geladen werden.'
@@ -333,6 +381,13 @@ function openFritzAssignment(device: FritzBoxDevice) {
   fritzTargetDeviceId.value = ''
   fritzTargetRole.value = 'other'
   fritzAssignDialog.value = true
+}
+
+function standardizedInterfaceSpeed(value: number | null): 100 | 1000 | 2500 | null {
+  if (!value) return null
+  if (value <= 100) return 100
+  if (value <= 1000) return 1000
+  return 2500
 }
 
 function fritzInterfaceType(device: FritzBoxDevice): 'ethernet' | 'wifi' | 'other' {
@@ -396,7 +451,7 @@ async function assignFritzDevice() {
       name: `FRITZ ${normalizedMac(discovered.mac_address).slice(-6)}`,
       interface_type: fritzInterfaceType(discovered),
       mac_address: discovered.mac_address,
-      speed_mbps: discovered.connection_rate_mbps,
+      speed_mbps: standardizedInterfaceSpeed(discovered.connection_rate_mbps),
       poe_mode: 'unknown',
       enabled: true,
       is_primary: false,
@@ -428,6 +483,32 @@ async function assignFritzDevice() {
   } finally {
     saving.value = false
   }
+}
+
+async function acceptObservedIp(item: NetworkIpOverview) {
+  if (!item.observed_address_id) return
+  try {
+    await networkApi.acceptObservedAddress(item.observed_address_id)
+    notifications.success('Die ausgelesene IP-Adresse wurde dokumentiert.')
+    ipAddresses.value = await networkApi.ipAddresses()
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'IP-Adresse konnte nicht übernommen werden.'
+  }
+}
+
+async function ignoreObservedIp(item: NetworkIpOverview) {
+  if (!item.observed_address_id) return
+  try {
+    await networkApi.ignoreObservedAddress(item.observed_address_id)
+    notifications.success('Die Abweichung wurde bewusst ignoriert.')
+    ipAddresses.value = await networkApi.ipAddresses()
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'Abweichung konnte nicht ignoriert werden.'
+  }
+}
+
+function formatObservedTime(value: string | null): string {
+  return value ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '–'
 }
 
 function otherNode(edge: NetworkTopologyEdge, nodeId: string): string {
@@ -480,6 +561,7 @@ onMounted(() => void loadAll())
 
     <v-tabs v-model="tab" class="mb-4">
       <v-tab value="devices" prepend-icon="mdi-server-network">Geräte</v-tab>
+      <v-tab value="ip-addresses" prepend-icon="mdi-ip-outline">IP-Adressen</v-tab>
       <v-tab value="segments" prepend-icon="mdi-ip-network-outline">IP-Netze</v-tab>
       <v-tab value="connections" prepend-icon="mdi-lan-connect">Verbindungen</v-tab>
       <v-tab value="topology" prepend-icon="mdi-vector-polyline">Topologie</v-tab>
@@ -495,33 +577,63 @@ onMounted(() => void loadAll())
           </v-card-text>
         </v-card>
         <v-row v-if="filteredDevices.length">
-          <v-col v-for="device in filteredDevices" :key="device.id" cols="12" md="6" xl="4">
-            <v-card class="h-100" :to="`/network/devices/${device.id}`">
-              <v-card-title class="d-flex align-center ga-2">
-                <v-icon :icon="networkRoleIcons[device.role]" />
-                <span class="text-truncate">{{ device.asset_name }}</span>
-              </v-card-title>
-              <v-card-subtitle>{{ networkRoleLabels[device.role] }} · {{ device.asset_code }}</v-card-subtitle>
-              <v-card-text>
-                <div class="d-flex flex-wrap ga-2 mb-3">
-                  <v-chip v-if="device.hostname" size="small" prepend-icon="mdi-console-network-outline">{{ device.hostname }}</v-chip>
-                  <v-chip v-if="device.location_name" size="small" prepend-icon="mdi-map-marker-outline">{{ device.location_name }}</v-chip>
+          <v-col v-for="device in filteredDevices" :key="device.id" cols="12" sm="6" lg="3">
+            <v-card class="h-100 compact-device-card" :to="`/network/devices/${device.id}`">
+              <v-card-text class="pa-3">
+                <div class="d-flex align-center ga-2 mb-1">
+                  <v-icon :icon="networkRoleIcons[device.role]" size="small" />
+                  <v-tooltip :text="device.asset_name"><template #activator="{ props: tooltipProps }"><strong v-bind="tooltipProps" class="text-truncate flex-grow-1">{{ device.asset_name }}</strong></template></v-tooltip>
+                  <v-menu @click.stop.prevent><template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="x-small" variant="text" @click.stop.prevent /></template><v-list density="compact"><v-list-item prepend-icon="mdi-pencil" title="Bearbeiten" @click="openDevice(device)" /><v-list-item prepend-icon="mdi-archive-outline" title="Archivieren" base-color="warning" @click="removeDevice(device)" /></v-list></v-menu>
                 </div>
-                <div class="d-flex ga-4 text-caption text-medium-emphasis">
-                  <span><v-icon icon="mdi-ethernet" size="small" /> {{ device.interface_count }}</span>
-                  <span><v-icon icon="mdi-ip-outline" size="small" /> {{ device.address_count }}</span>
-                  <span><v-icon icon="mdi-lan-connect" size="small" /> {{ device.connection_count }}</span>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ networkRoleLabels[device.role] }} · {{ device.asset_code }}</div>
+                <v-tooltip :text="[device.hostname, device.location_name].filter(Boolean).join(' · ') || 'Hostname und Standort nicht hinterlegt'"><template #activator="{ props: tooltipProps }"><div v-bind="tooltipProps" class="text-caption text-truncate mt-1">{{ [device.hostname, device.location_name].filter(Boolean).join(' · ') || '—' }}</div></template></v-tooltip>
+                <div class="d-flex ga-3 text-caption text-medium-emphasis mt-2">
+                  <span><v-icon icon="mdi-ethernet" size="x-small" /> {{ device.interface_count }}</span><span><v-icon icon="mdi-ip-outline" size="x-small" /> {{ device.address_count }}</span><span><v-icon icon="mdi-lan-connect" size="x-small" /> {{ device.connection_count }}</span>
                 </div>
               </v-card-text>
-              <v-card-actions @click.stop.prevent>
-                <v-btn variant="text" prepend-icon="mdi-pencil" @click="openDevice(device)">Bearbeiten</v-btn>
-                <v-spacer />
-                <v-btn icon="mdi-archive-outline" color="warning" variant="text" aria-label="Netzwerkgerät archivieren" @click="removeDevice(device)" />
-              </v-card-actions>
             </v-card>
           </v-col>
         </v-row>
         <v-empty-state v-else icon="mdi-server-network-off" title="Keine Netzwerkgeräte" text="Lege aus einem vorhandenen Asset eine Netzwerkrolle an." />
+      </v-window-item>
+
+      <v-window-item value="ip-addresses">
+        <v-card>
+          <v-card-title class="d-flex flex-wrap align-center ga-2">
+            <v-icon icon="mdi-ip-outline" /><span>Dokumentierte und ausgelesene IP-Adressen</span>
+          </v-card-title>
+          <v-card-text>
+            <div class="d-flex flex-wrap ga-3 mb-4">
+              <v-text-field v-model="ipSearch" label="Gerät, IP oder MAC suchen" prepend-inner-icon="mdi-magnify" density="compact" hide-details clearable class="flex-grow-1" style="min-width: 240px" />
+              <v-select v-model="ipStatusFilter" :items="[{ value: '', title: 'Alle Status' }, ...ipStatusItems]" label="Status" density="compact" hide-details style="min-width: 200px; max-width: 240px" />
+              <v-select v-model="ipAssignmentFilter" :items="[{ value: '', title: 'Statisch und DHCP' }, { value: 'static', title: 'Statisch / Reservierung' }, { value: 'dhcp', title: 'DHCP' }]" label="Zuweisung" density="compact" hide-details style="min-width: 200px; max-width: 240px" />
+              <v-select v-model="ipSourceFilter" :items="[{ value: '', title: 'Alle Quellen' }, ...ipSourceItems]" label="Quelle" density="compact" hide-details style="min-width: 180px; max-width: 220px" />
+            </div>
+            <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+              Der Abgleich erfolgt über die normalisierte MAC-Adresse. Ausgelesene Werte überschreiben dokumentierte Adressen nur nach bewusster Übernahme.
+            </v-alert>
+            <v-table v-if="filteredIpAddresses.length" density="compact">
+              <thead><tr><th>Status</th><th>Gerät / Schnittstelle</th><th>Dokumentierte IP</th><th>MAC-Adresse</th><th>Zuweisung</th><th>Ausgelesene IP</th><th>Quelle / zuletzt erkannt</th><th class="text-right">Aktionen</th></tr></thead>
+              <tbody>
+                <tr v-for="item in filteredIpAddresses" :key="item.key">
+                  <td><v-chip size="small" :color="ipStatusColors[item.status]" variant="tonal">{{ ipStatusLabels[item.status] }}</v-chip><div v-if="item.ignored" class="text-caption">bewusst ignoriert</div></td>
+                  <td><strong>{{ item.device_name }}</strong><div class="text-caption text-medium-emphasis">{{ item.interface_name || 'Keine Zuordnung' }}</div></td>
+                  <td><code>{{ item.documented_address || '–' }}</code></td>
+                  <td><code>{{ item.mac_address || '–' }}</code></td>
+                  <td>{{ item.assignment_type === 'static' ? 'Statisch' : item.assignment_type === 'reservation' ? 'DHCP-Reservierung' : item.assignment_type.toUpperCase() }}</td>
+                  <td><code>{{ item.observed_address || '–' }}</code></td>
+                  <td>{{ item.source || '–' }}<div class="text-caption text-medium-emphasis">{{ formatObservedTime(item.last_seen_at) }}</div></td>
+                  <td class="text-right">
+                    <v-btn v-if="item.device_id" icon="mdi-open-in-new" size="small" variant="text" :to="`/network/devices/${item.device_id}`" title="Gerät öffnen" />
+                    <v-btn v-if="item.observed_address_id && item.observed_address !== item.documented_address && item.interface_id" icon="mdi-content-save-check-outline" size="small" color="primary" variant="text" title="Ausgelesene IP übernehmen" @click="acceptObservedIp(item)" />
+                    <v-btn v-if="item.observed_address_id && item.status === 'mismatch' && !item.ignored" icon="mdi-eye-off-outline" size="small" variant="text" title="Abweichung ignorieren" @click="ignoreObservedIp(item)" />
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+            <v-empty-state v-else icon="mdi-ip-outline" title="Keine IP-Adressen" text="Dokumentiere IP-Adressen oder lies die FRITZ!Box-Geräte neu ein." />
+          </v-card-text>
+        </v-card>
       </v-window-item>
 
       <v-window-item value="segments">
@@ -665,7 +777,8 @@ onMounted(() => void loadAll())
           <v-text-field v-if="editingDevice" :model-value="editingDevice.asset_name" label="Asset" disabled class="mb-3" />
           <v-select v-else v-model="deviceForm.asset_id" :items="candidateItems" item-title="title" item-value="value" label="Asset" hint="Nur Assets ohne aktive Netzwerkrolle werden angeboten." persistent-hint class="mb-3" />
           <v-select v-model="deviceForm.role" :items="roleItems" label="Rolle" class="mb-3" />
-          <v-text-field v-model="deviceForm.hostname" label="Hostname" prepend-inner-icon="mdi-console-network-outline" class="mb-3" />
+          <v-text-field v-model="deviceForm.hostname" label="Hostname" prepend-inner-icon="mdi-console-network-outline" :error-messages="deviceHostnameError ? [deviceHostnameError] : []" class="mb-1" />
+          <v-btn v-if="deviceHostnameError && deviceHostnameSuggestion !== deviceForm.hostname" size="small" variant="text" prepend-icon="mdi-auto-fix" class="mb-3" @click="applyDeviceHostnameSuggestion">Vorschlag übernehmen: {{ deviceHostnameSuggestion }}</v-btn>
           <v-text-field v-model="deviceForm.management_url" label="Management-URL" placeholder="https://switch.example.test" prepend-inner-icon="mdi-web" class="mb-3" />
           <v-textarea v-model="deviceForm.notes" label="Netzwerknotizen" rows="3" />
         </v-card-text>
@@ -703,4 +816,6 @@ onMounted(() => void loadAll())
 
 <style scoped>
 code { color: rgb(var(--v-theme-primary)); }
+.compact-device-card { min-height: 126px; }
+.compact-device-card :deep(.v-card-text) { line-height: 1.25; }
 </style>

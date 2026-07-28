@@ -29,6 +29,8 @@ from app.models.electrical import (
     ElectricalMeterPlacement,
     ElectricalProtectiveDevice,
 )
+from app.models.electrical_circuit import ElectricalCircuit
+from app.models.electrical_topology import ElectricalConnection
 from app.repositories.asset_engine import (
     AssetRepository,
     LocationProjection,
@@ -61,6 +63,8 @@ from app.schemas.asset_engine import (
     RelationshipWrite,
     SortOrder,
 )
+from app.services.product_images import AssetImageService
+
 
 
 class ResourceNotFoundError(LookupError):
@@ -165,7 +169,19 @@ class AssetTypeService(CrudService[AssetType, AssetTypeWrite]):
         return asset_type
 
     def update(self, record_id: UUID, payload: AssetTypeWrite) -> AssetType:
-        return self._update(record_id, payload)
+        record = self.get(record_id)
+        previous_reference = record.image_reference if record.image_source == "upload" else None
+        updated = self._update(record_id, payload)
+        if previous_reference and previous_reference != updated.image_reference:
+            AssetImageService(self.session).remove(previous_reference)
+        return updated
+
+    def delete(self, record_id: UUID) -> None:
+        record = self.get(record_id)
+        previous_reference = record.image_reference if record.image_source == "upload" else None
+        super().delete(record_id)
+        if previous_reference:
+            AssetImageService(self.session).remove(previous_reference)
 
     def _available_prefix(self, name: str) -> str:
         words = re.findall(r"[A-Z0-9]+", name.upper())
@@ -627,10 +643,12 @@ class AssetService(CrudService[Asset, AssetWrite]):
             raise ResourceConflictError("A replaced asset is immutable historical data")
         self._validate(payload)
         asset = self.get(record_id)
+        previous_image_reference = asset.image_reference if asset.image_source == "upload" else None
         self._validate_inventory_number(payload.inventory_number, exclude_id=record_id)
         self._validate_electrical_lifecycle(asset, payload)
         self._validate_meter_placement_lifecycle(asset, payload)
         self._validate_din_placement_lifecycle(asset, payload)
+        self._validate_topology_lifecycle(asset, payload)
         self._validate_network_lifecycle(asset, payload)
         asset.sqlmodel_update(payload.model_dump(mode="python", exclude={"label_ids"}))
         asset.updated_at = datetime.now(UTC)
@@ -640,17 +658,25 @@ class AssetService(CrudService[Asset, AssetWrite]):
         except Exception:
             self.session.rollback()
             raise
+        if previous_image_reference and previous_image_reference != asset.image_reference:
+            AssetImageService(self.session).remove(previous_image_reference)
         return self._to_read(asset)
 
     def delete(self, record_id: UUID) -> None:
         if self.asset_repository.replacement_for(record_id) is not None:
             raise ResourceConflictError("A replaced asset is immutable historical data")
+        asset = self.get(record_id)
+        previous_image_reference = asset.image_reference if asset.image_source == "upload" else None
         self._require_archived_electrical_role(record_id)
         self._require_unplaced_meter_asset(record_id)
         self._require_unplaced_din_asset(record_id)
+        self._require_no_active_circuit_protection(record_id)
+        self._require_no_electrical_connections(record_id)
         self._require_archived_network_role(record_id)
         self._require_no_smart_meter_measurement_points(record_id)
         super().delete(record_id)
+        if previous_image_reference:
+            AssetImageService(self.session).remove(previous_image_reference)
 
     def replace(
         self,
@@ -664,6 +690,8 @@ class AssetService(CrudService[Asset, AssetWrite]):
         self._require_archived_electrical_role(record_id)
         self._require_unplaced_meter_asset(record_id)
         self._require_unplaced_din_asset(record_id)
+        self._require_no_active_circuit_protection(record_id)
+        self._require_no_electrical_connections(record_id)
         self._require_archived_network_role(record_id)
         self._require_no_smart_meter_measurement_points(record_id)
         if payload.status == "retired":
@@ -1014,6 +1042,37 @@ class AssetService(CrudService[Asset, AssetWrite]):
                 "bevor Status, Produkt, Asset-Typ oder DIN-Breite geändert werden."
             )
 
+    def _has_active_electrical_connections(self, asset_id: UUID) -> bool:
+        return self.session.exec(
+            select(ElectricalConnection).where(
+                col(ElectricalConnection.deleted_at).is_(None),
+                (
+                    (ElectricalConnection.source_kind == "asset")
+                    & (ElectricalConnection.source_id == asset_id)
+                )
+                | (
+                    (ElectricalConnection.target_kind == "asset")
+                    & (ElectricalConnection.target_id == asset_id)
+                ),
+            )
+        ).first() is not None
+
+    def _validate_topology_lifecycle(self, asset: Asset, payload: AssetWrite) -> None:
+        if not self._has_active_electrical_connections(asset.id):
+            return
+        if payload.status != "active" or payload.location_id != asset.location_id:
+            raise ResourceConflictError(
+                "Entferne die aktiven Versorgungsverbindungen, bevor Status oder "
+                "Standort des Assets geändert werden."
+            )
+
+    def _require_no_electrical_connections(self, asset_id: UUID) -> None:
+        if self._has_active_electrical_connections(asset_id):
+            raise ResourceConflictError(
+                "Das Asset ist noch in der Versorgungstopologie verkabelt. "
+                "Entferne zuerst diese Verbindungen."
+            )
+
     def _validate_network_lifecycle(self, asset: Asset, payload: AssetWrite) -> None:
         if self.network.active_device_for_asset(asset.id) is None:
             return
@@ -1055,6 +1114,19 @@ class AssetService(CrudService[Asset, AssetWrite]):
             raise ResourceConflictError(
                 "Entferne das DIN-Hutschienengerät vor dem Löschen oder Ersetzen "
                 "aus dem Zählerschrank."
+            )
+
+    def _require_no_active_circuit_protection(self, asset_id: UUID) -> None:
+        circuit = self.session.exec(
+            select(ElectricalCircuit).where(
+                ElectricalCircuit.protective_device_asset_id == asset_id,
+                col(ElectricalCircuit.deleted_at).is_(None),
+            )
+        ).first()
+        if circuit is not None:
+            raise ResourceConflictError(
+                f"Das DIN-Gerät schützt noch den Stromkreis „{circuit.name}“. "
+                "Ordne dem Stromkreis zuerst ein anderes Schutzgerät zu."
             )
 
     def _require_archived_network_role(self, asset_id: UUID) -> None:
@@ -1177,8 +1249,15 @@ class AssetService(CrudService[Asset, AssetWrite]):
             {
                 **asset.model_dump(),
                 "asset_type": ReferenceRead(id=asset_type.id, name=asset_type.name),
+                "asset_type_is_meter": asset_type.is_meter,
                 "product": ReferenceRead(id=product.id, name=product.name) if product else None,
                 "product_image_url": product.image_url if product else None,
+                "asset_type_image_url": asset_type.image_url,
+                "effective_image_url": (
+                    asset.image_url
+                    or asset_type.image_url
+                    or (product.image_url if product else None)
+                ),
                 "effective_breaker_characteristic": (
                     asset.breaker_characteristic
                     if asset.breaker_characteristic is not None

@@ -71,7 +71,8 @@ class SmartMeterMeasurementService:
         payload: SmartMeterMeasurementPointWrite,
     ) -> SmartMeterMeasurementPointRead:
         self._smart_meter_asset(asset_id)
-        self._validate_connection(payload.connection_id)
+        connection = self._validate_connection(payload.connection_id)
+        self._validate_measurement_phase(connection, payload)
         self._validate_channel(asset_id, payload.channel_name)
         record = SmartMeterMeasurementPoint(
             smart_meter_asset_id=asset_id,
@@ -91,7 +92,8 @@ class SmartMeterMeasurementService:
     ) -> SmartMeterMeasurementPointRead:
         self._smart_meter_asset(asset_id)
         record = self._point(asset_id, point_id)
-        self._validate_connection(payload.connection_id)
+        connection = self._validate_connection(payload.connection_id)
+        self._validate_measurement_phase(connection, payload)
         self._validate_channel(asset_id, payload.channel_name, exclude_id=point_id)
         record.sqlmodel_update(payload.model_dump(mode="python", exclude={"entities"}))
         record.updated_at = datetime.now(UTC)
@@ -160,6 +162,32 @@ class SmartMeterMeasurementService:
                 "Die ausgewählte Verkabelung existiert nicht oder ist archiviert"
             )
         return record
+
+    def _validate_measurement_phase(
+        self,
+        connection: ElectricalConnection,
+        payload: SmartMeterMeasurementPointWrite,
+    ) -> None:
+        from app.services.electrical_topology import ElectricalTopologyService
+
+        connection_read = ElectricalTopologyService(self.session)._connection_read(connection)
+        measurable = {
+            phase.value
+            for phase in connection_read.effective_phases
+            if phase.value in {"L1", "L2", "L3", "N"}
+        }
+        selected = payload.phase.value if payload.phase is not None else None
+        if selected is not None and selected not in measurable:
+            available = ", ".join(sorted(measurable)) or "keine messbaren Leiter"
+            raise ElectricalValidationError(
+                f"Messphase {selected} liegt auf der ausgewählten Verbindung nicht an. "
+                f"Verfügbar: {available}."
+            )
+        line_phases = sorted(measurable & {"L1", "L2", "L3"})
+        if selected is None and len(line_phases) == 1:
+            from app.schemas.smart_meter import SmartMeterMeasurementPhase
+
+            payload.phase = SmartMeterMeasurementPhase(line_phases[0])
 
     def _validate_channel(
         self,

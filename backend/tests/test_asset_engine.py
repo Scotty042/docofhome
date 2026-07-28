@@ -344,6 +344,43 @@ def test_parallel_asset_code_allocation_is_unique(tmp_path: Path) -> None:
     assert sorted(int(code.rsplit("-", 1)[1]) for code in codes) == [1, 2, 3, 4]
 
 
+
+def test_asset_creation_repairs_missing_code_counter(tmp_path: Path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'missing-counter.sqlite3'}",
+        connect_args={"check_same_thread": False},
+    )
+    SQLModel.metadata.create_all(engine)
+    asset_type_id = uuid4()
+    with Session(engine) as session:
+        session.add(
+            AssetType(
+                id=asset_type_id,
+                name="Smartes Relais / DIN-Schaltaktor",
+                code_prefix="SRA",
+            )
+        )
+        session.add(
+            Asset(
+                name="Existing relay",
+                jarvis_code="SRA-007",
+                asset_type_id=asset_type_id,
+            )
+        )
+        session.commit()
+
+    with Session(engine) as session:
+        first = AssetService(session).create(
+            AssetWrite(name="Shelly Pro 1", asset_type_id=asset_type_id)
+        )
+        second = AssetService(session).create(
+            AssetWrite(name="Shelly Pro 1 second", asset_type_id=asset_type_id)
+        )
+
+    assert first.jarvis_code == "SRA-008"
+    assert second.jarvis_code == "SRA-009"
+
+
 def test_sqlite_enforces_foreign_keys_and_unique_asset_constraints(tmp_path: Path) -> None:
     engine = create_engine(
         f"sqlite:///{tmp_path / 'constraints.sqlite3'}",
@@ -554,3 +591,55 @@ def test_asset_duplicate_and_series_leave_unique_fields_unset(asset_client: Test
     ]
     assert all(item["serial_number"] is None for item in body["items"])
     assert all(item["inventory_number"] is None for item in body["items"])
+
+
+def test_release_1_7_asset_image_fallback_and_meter_capability(asset_client: TestClient) -> None:
+    meter_type = create(
+        asset_client,
+        "asset-types",
+        {
+            "name": "Stromzähler",
+            "description": "Electricity meter",
+            "icon": "mdi-meter-electric",
+            "image_url": "https://example.invalid/type-meter.webp",
+            "image_source": "url",
+            "image_reference": None,
+            "is_meter": True,
+        },
+    )
+    meter = create(
+        asset_client,
+        "assets",
+        {
+            "name": "Hauptzähler",
+            "asset_type_id": meter_type["id"],
+            "status": "active",
+        },
+    )
+    assert meter["asset_type_is_meter"] is True
+    assert meter["effective_image_url"] == "https://example.invalid/type-meter.webp"
+
+    update = {
+        "name": "Hauptzähler",
+        "description": None,
+        "asset_type_id": meter_type["id"],
+        "product_id": None,
+        "location_id": None,
+        "serial_number": None,
+        "inventory_number": None,
+        "image_url": "https://example.invalid/individual-meter.webp",
+        "image_source": "url",
+        "image_reference": None,
+        "module_width": None,
+        "breaker_characteristic": None,
+        "rated_current_a": None,
+        "coil_voltage_v": None,
+        "coil_voltage_type": None,
+        "contact_count": None,
+        "contact_type": None,
+        "status": "active",
+        "label_ids": [],
+    }
+    response = asset_client.put(f"/api/v1/assets/{meter['id']}", json=update)
+    assert response.status_code == 200, response.text
+    assert response.json()["effective_image_url"] == "https://example.invalid/individual-meter.webp"

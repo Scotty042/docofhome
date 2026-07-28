@@ -23,6 +23,10 @@ class ElectricalConnection(SQLModel, table=True):
             name="ck_electrical_connections_type",
         ),
         CheckConstraint(
+            "phase_source IN ('manual', 'wire', 'busbar')",
+            name="ck_electrical_connections_phase_source",
+        ),
+        CheckConstraint(
             "source_kind <> target_kind OR source_id <> target_id",
             name="ck_electrical_connections_distinct_endpoints",
         ),
@@ -49,6 +53,8 @@ class ElectricalConnection(SQLModel, table=True):
     phase_l3: bool = False
     neutral: bool = False
     protective_earth: bool = False
+    phase_source: str = Field(default="manual", index=True, max_length=20)
+    source_connection_id: UUID | None = Field(default=None, index=True)
     cable_type: str | None = Field(default=None, max_length=150)
     cores: int | None = Field(default=None, ge=1, le=100)
     cross_section_mm2: float | None = Field(default=None, gt=0, le=1000)

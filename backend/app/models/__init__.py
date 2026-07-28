@@ -44,9 +44,11 @@ from app.models.integration_setting import IntegrationSetting
 from app.models.knowledge import DomainNote, WikiPage
 from app.models.network import (
     NetworkAddress,
+    NetworkAddressChange,
     NetworkConnection,
     NetworkDevice,
     NetworkInterface,
+    NetworkObservedAddress,
     NetworkSegment,
 )
 from app.models.quality import QualityIssue, QualityRun
@@ -97,9 +99,11 @@ __all__ = [
     "ImmichAssetLink",
     "Label",
     "NetworkAddress",
+    "NetworkAddressChange",
     "NetworkConnection",
     "NetworkDevice",
     "NetworkInterface",
+    "NetworkObservedAddress",
     "NetworkSegment",
     "Location",
     "Product",

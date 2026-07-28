@@ -50,7 +50,8 @@ const fieldLabels: Record<string, string> = {
   source_interface_id: 'Quell-Schnittstelle', target_interface_id: 'Ziel-Schnittstelle',
   segment_id: 'IP-Netz', meter_id: 'Verbrauchszähler', parent_meter_id: 'Übergeordneter Zähler',
   work_item_id: 'Aufgabe', distribution_id: 'Verteilung', parent_distribution_id: 'Übergeordnete Verteilung',
-  circuit_id: 'Stromkreis', protective_device_id: 'Schutzgerät', target_type: 'Bezugsart', target_id: 'Bezogenes Objekt'
+  circuit_id: 'Stromkreis', protective_device_id: 'Historisches Schutzgerät',
+  protective_device_asset_id: 'DIN-Schutzgerät', target_type: 'Bezugsart', target_id: 'Bezogenes Objekt'
 }
 
 const fieldValueLabels: Record<string, Record<string, string>> = {

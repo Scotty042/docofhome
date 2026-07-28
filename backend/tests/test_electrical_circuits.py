@@ -41,7 +41,7 @@ def create(client: TestClient, endpoint: str, payload: dict[str, Any]) -> dict[s
 
 def prepare_electrical_records(
     client: TestClient,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     building = create(
         client,
         "locations",
@@ -101,7 +101,7 @@ def prepare_electrical_records(
         },
     )
 
-    def device(name: str, distribution_id: str) -> dict[str, Any]:
+    def device(name: str, distribution_id: str, position: int) -> dict[str, Any]:
         return create(
             client,
             "electrical/protective-devices",
@@ -110,9 +110,9 @@ def prepare_electrical_records(
                 "distribution_id": distribution_id,
                 "area_id": None,
                 "device_type": "mcb",
-                "row_number": None,
-                "start_position": None,
-                "module_width": None,
+                "row_number": 1,
+                "start_position": position,
+                "module_width": 1,
                 "rated_current_a": 16,
                 "residual_current_ma": None,
                 "characteristic": "B",
@@ -129,8 +129,10 @@ def prepare_electrical_records(
     return (
         distribution_one,
         distribution_two,
-        device("Kitchen breaker", distribution_one["id"]),
-        device("Garage breaker", distribution_two["id"]),
+        device("Kitchen breaker", distribution_one["id"], 1),
+        device("Lighting breaker", distribution_one["id"], 2),
+        device("Spare breaker", distribution_one["id"], 3),
+        device("Garage breaker", distribution_two["id"], 1),
     )
 
 
@@ -139,7 +141,7 @@ def circuit_payload(
     *,
     name: str,
     number: str | None,
-    device_id: str | None = None,
+    device_id: str,
 ) -> dict[str, Any]:
     return {
         "distribution_id": distribution_id,
@@ -155,7 +157,14 @@ def test_circuit_crud_search_filter_pagination_and_archive_guards(
     circuit_client: tuple[TestClient, Engine],
 ) -> None:
     client, _ = circuit_client
-    distribution, other_distribution, device, other_device = prepare_electrical_records(client)
+    (
+        distribution,
+        other_distribution,
+        device,
+        lighting_device,
+        spare_device,
+        other_device,
+    ) = prepare_electrical_records(client)
     circuit = create(
         client,
         "electrical/circuits",
@@ -169,12 +178,16 @@ def test_circuit_crud_search_filter_pagination_and_archive_guards(
     create(
         client,
         "electrical/circuits",
-        circuit_payload(distribution["id"], name="Lighting", number="F2"),
+        circuit_payload(
+            distribution["id"], name="Lighting", number="F2", device_id=lighting_device["id"]
+        ),
     )
     create(
         client,
         "electrical/circuits",
-        circuit_payload(other_distribution["id"], name="Garage", number="F1"),
+        circuit_payload(
+            other_distribution["id"], name="Garage", number="F1", device_id=other_device["id"]
+        ),
     )
 
     assert circuit["name"] == "Kitchen sockets"
@@ -216,7 +229,9 @@ def test_circuit_crud_search_filter_pagination_and_archive_guards(
 
     duplicate = client.post(
         "/api/v1/electrical/circuits",
-        json=circuit_payload(distribution["id"], name="Duplicate", number="f3"),
+        json=circuit_payload(
+            distribution["id"], name="Duplicate", number="f3", device_id=spare_device["id"]
+        ),
     )
     wrong_device = client.post(
         "/api/v1/electrical/circuits",
@@ -229,11 +244,31 @@ def test_circuit_crud_search_filter_pagination_and_archive_guards(
     )
     missing_distribution = client.post(
         "/api/v1/electrical/circuits",
-        json=circuit_payload(str(uuid4()), name="Missing", number="F5"),
+        json=circuit_payload(
+            str(uuid4()), name="Missing", number="F5", device_id=spare_device["id"]
+        ),
+    )
+    missing_device = client.post(
+        "/api/v1/electrical/circuits",
+        json={
+            "distribution_id": distribution["id"],
+            "name": "No breaker",
+            "circuit_number": "F6",
+        },
     )
     assert duplicate.status_code == 409
     assert wrong_device.status_code == 409
     assert missing_distribution.status_code == 422
+    assert missing_device.status_code == 422
+
+    options = client.get(
+        "/api/v1/electrical/circuits/protective-device-options",
+        params={"distribution_id": distribution["id"]},
+    )
+    assert options.status_code == 200
+    option_by_id = {item["id"]: item for item in options.json()}
+    assert option_by_id[device["id"]]["occupied"] is True
+    assert option_by_id[spare_device["id"]]["occupied"] is False
 
     assert client.delete(f"/api/v1/electrical/protective-devices/{device['id']}").status_code == 409
     move_device = client.put(
@@ -277,7 +312,7 @@ def test_circuit_database_foreign_keys_and_active_number_uniqueness(
     circuit_client: tuple[TestClient, Engine],
 ) -> None:
     client, engine = circuit_client
-    distribution, _, _, _ = prepare_electrical_records(client)
+    distribution, _, _, _, _, _ = prepare_electrical_records(client)
     with Session(engine) as session:
         session.add(ElectricalCircuit(distribution_id=uuid4(), name="Invalid"))
         with pytest.raises(IntegrityError):
@@ -306,7 +341,7 @@ def test_circuit_asset_assignments_are_searchable_and_historic(
     circuit_client: tuple[TestClient, Engine],
 ) -> None:
     client, _ = circuit_client
-    distribution, _, device, _ = prepare_electrical_records(client)
+    distribution, _, device, second_device, _, _ = prepare_electrical_records(client)
     circuit = create(
         client,
         "electrical/circuits",
@@ -378,6 +413,7 @@ def test_circuit_asset_assignments_are_searchable_and_historic(
             distribution["id"],
             name="Second supply",
             number="F11",
+            device_id=second_device["id"],
         ),
     )
     rejected_archived_asset = client.post(
@@ -394,3 +430,141 @@ def test_circuit_asset_assignments_are_searchable_and_historic(
         f"/api/v1/electrical/circuits/{circuit['id']}/assets/{assignable['id']}"
     )
     assert cannot_change_archived.status_code == 404
+
+
+def test_current_din_asset_can_be_required_circuit_protection(
+    circuit_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = circuit_client
+    distribution, _, _, _, _, _ = prepare_electrical_records(client)
+    breaker_type = create(
+        client,
+        "asset-types",
+        {
+            "name": "Sicherungsautomat",
+            "module_width": 1,
+            "breaker_characteristic": "B",
+            "rated_current_a": 16,
+        },
+    )
+    breaker = create(
+        client,
+        "assets",
+        {
+            "name": "Küche Steckdosen",
+            "asset_type_id": breaker_type["id"],
+            "status": "active",
+        },
+    )
+    placed = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}/assets/{breaker['id']}/placement",
+        json={
+            "area_id": None,
+            "row_number": 1,
+            "start_position": 8,
+            "module_width": 1,
+        },
+    )
+    assert placed.status_code == 200, placed.text
+
+    options = client.get(
+        "/api/v1/electrical/circuits/protective-device-options",
+        params={"distribution_id": distribution["id"]},
+    )
+    assert options.status_code == 200, options.text
+    option = next(item for item in options.json() if item["id"] == breaker["id"])
+    assert option["reference_type"] == "asset"
+    assert option["device_type"] == "mcb"
+    assert option["rated_current_a"] == 16
+    assert "Reihe 1, Position 8" in option["label"]
+
+    circuit = create(
+        client,
+        "electrical/circuits",
+        {
+            "distribution_id": distribution["id"],
+            "protective_device_id": None,
+            "protective_device_asset_id": breaker["id"],
+            "name": "Küche Steckdosen",
+            "circuit_number": "F8",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert circuit["protective_device_id"] is None
+    assert circuit["protective_device_asset_id"] == breaker["id"]
+    assert circuit["protective_device_name"] == "Küche Steckdosen"
+    assert circuit["protective_device_type"] == "mcb"
+    assert circuit["protective_device_rating"] == "B16 A"
+
+    duplicate = client.post(
+        "/api/v1/electrical/circuits",
+        json={
+            "distribution_id": distribution["id"],
+            "protective_device_id": None,
+            "protective_device_asset_id": breaker["id"],
+            "name": "Doppelte Zuordnung",
+            "circuit_number": "F9",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert duplicate.status_code == 409
+
+    unplace = client.delete(
+        f"/api/v1/electrical/distributions/{distribution['id']}/assets/{breaker['id']}/placement"
+    )
+    assert unplace.status_code == 409
+    assert "schützt noch den Stromkreis" in unplace.text
+
+
+def test_standalone_rcd_din_asset_is_not_single_circuit_protection(
+    circuit_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = circuit_client
+    distribution, _, _, _, _, _ = prepare_electrical_records(client)
+    rcd_type = create(
+        client,
+        "asset-types",
+        {"name": "FI-Schutzschalter", "module_width": 4},
+    )
+    rcd = create(
+        client,
+        "assets",
+        {
+            "name": "FI Küche",
+            "asset_type_id": rcd_type["id"],
+            "status": "active",
+        },
+    )
+    placed = client.put(
+        f"/api/v1/electrical/distributions/{distribution['id']}/assets/{rcd['id']}/placement",
+        json={
+            "area_id": None,
+            "row_number": 2,
+            "start_position": 5,
+            "module_width": 4,
+        },
+    )
+    assert placed.status_code == 200, placed.text
+
+    options = client.get(
+        "/api/v1/electrical/circuits/protective-device-options",
+        params={"distribution_id": distribution["id"]},
+    )
+    assert options.status_code == 200
+    assert rcd["id"] not in {item["id"] for item in options.json()}
+
+    rejected = client.post(
+        "/api/v1/electrical/circuits",
+        json={
+            "distribution_id": distribution["id"],
+            "protective_device_id": None,
+            "protective_device_asset_id": rcd["id"],
+            "name": "Ungültiger FI-Stromkreis",
+            "circuit_number": "F10",
+            "description": None,
+            "notes": None,
+        },
+    )
+    assert rejected.status_code == 422

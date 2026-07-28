@@ -54,8 +54,8 @@ export const endpointKindIcons: Record<ElectricalEndpointKind, string> = {
 
 export const electricalPhaseColors: Record<ElectricalPhase, string> = {
   L1: 'brown',
-  L2: 'grey',
-  L3: 'black',
+  L2: 'black',
+  L3: 'grey',
   N: 'blue',
   PE: 'green'
 }

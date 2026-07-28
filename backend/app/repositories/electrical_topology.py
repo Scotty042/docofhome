@@ -4,8 +4,14 @@ from uuid import UUID
 
 from sqlmodel import Session, col, select
 
+from app.electrical_phase_rail import (
+    phase_rail_device_phases,
+    phase_rail_din_asset_phases,
+    rail_fully_covers_device,
+)
 from app.models.asset_engine import Asset, AssetType, Location
 from app.models.electrical import (
+    ElectricalAssetPlacement,
     ElectricalCabinetComponent,
     ElectricalComponent,
     ElectricalDistribution,
@@ -15,6 +21,7 @@ from app.models.electrical_circuit import ElectricalCircuit
 from app.models.electrical_topology import ElectricalConnection
 from app.models.energy import EnergyConfiguration
 from app.schemas.electrical_topology import ElectricalEndpointKind, ElectricalPhase
+from app.services.din_width import effective_asset_module_width
 
 
 GRID_CONNECTION_ENDPOINT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -139,6 +146,18 @@ class ElectricalEndpointRepository:
         cabinet_components = list(
             self.session.exec(select(ElectricalCabinetComponent)).all()
         )
+        protective_devices = list(
+            self.session.exec(select(ElectricalProtectiveDevice)).all()
+        )
+        asset_placements = {
+            item.asset_id: item
+            for item in self.session.exec(
+                select(ElectricalAssetPlacement).where(
+                    col(ElectricalAssetPlacement.deleted_at).is_(None)
+                )
+            ).all()
+        }
+        protective_devices_by_id = {item.id: item for item in protective_devices}
         distributions = {
             item.id: item
             for item in self.session.exec(select(ElectricalDistribution)).all()
@@ -184,48 +203,98 @@ class ElectricalEndpointRepository:
         def protective_device_phases(
             device: ElectricalProtectiveDevice,
         ) -> tuple[ElectricalPhase, ...] | None:
-            if device.row_number is None or device.start_position is None:
+            component = components.get(device.id)
+            device_asset = assets.get(component.asset_id) if component is not None else None
+            device_width = device.module_width
+            if device_width is None and device_asset is not None:
+                device_width = effective_asset_module_width(self.session, device_asset)
+            if (
+                device.row_number is None
+                or device.start_position is None
+                or device_width is None
+            ):
                 return None
             candidates = [
-                component
-                for component in cabinet_components
-                if component.deleted_at is None
-                and component.distribution_id == device.distribution_id
-                and component.area_id == device.area_id
-                and component.row_number == device.row_number
-                and component.component_type in {"busbar", "phase_rail"}
-                and component.start_position <= device.start_position
-                <= component.start_position + component.module_width - 1
+                cabinet_component
+                for cabinet_component in cabinet_components
+                if cabinet_component.deleted_at is None
+                and cabinet_component.distribution_id == device.distribution_id
+                and cabinet_component.area_id == device.area_id
+                and cabinet_component.row_number == device.row_number
+                and cabinet_component.component_type == "phase_rail"
+                and rail_fully_covers_device(
+                    rail_start=cabinet_component.start_position,
+                    rail_width=cabinet_component.module_width,
+                    device_start=device.start_position,
+                    device_width=device_width,
+                )
             ]
             candidates.sort(
-                key=lambda item: (item.module_width, item.start_position, item.name.casefold())
+                key=lambda item: (
+                    item.module_width,
+                    item.start_position,
+                    item.name.casefold(),
+                    str(item.id),
+                )
             )
             if not candidates:
                 return None
             rail = candidates[0]
-            enabled = [
-                phase
-                for phase, selected in (
-                    (ElectricalPhase.L1, rail.phase_l1),
-                    (ElectricalPhase.L2, rail.phase_l2),
-                    (ElectricalPhase.L3, rail.phase_l3),
-                )
-                if selected
-            ]
-            if not enabled:
-                return None
-            standard = [ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3]
-            start = (
-                ElectricalPhase(rail.start_phase)
-                if rail.start_phase in {item.value for item in standard}
-                else enabled[0]
+            phases = phase_rail_device_phases(
+                rail_start=rail.start_position,
+                rail_width=rail.module_width,
+                phase_l1=rail.phase_l1,
+                phase_l2=rail.phase_l2,
+                phase_l3=rail.phase_l3,
+                start_phase=rail.start_phase,
+                device_start=device.start_position,
+                device_width=device_width,
+                device_type=device.device_type,
+                poles=device.poles,
             )
-            rotated = standard[standard.index(start):] + standard[:standard.index(start)]
-            pattern = [phase for phase in rotated if phase in enabled]
-            offset = device.start_position - rail.start_position
-            count = min(3, device.poles or 1)
-            phases = [pattern[(offset + index) % len(pattern)] for index in range(count)]
-            return tuple(dict.fromkeys(phases))
+            return phases or None
+
+        def din_asset_phases(asset: Asset) -> tuple[ElectricalPhase, ...] | None:
+            placement = asset_placements.get(asset.id)
+            if placement is None:
+                return None
+            candidates = [
+                cabinet_component
+                for cabinet_component in cabinet_components
+                if cabinet_component.deleted_at is None
+                and cabinet_component.distribution_id == placement.distribution_id
+                and cabinet_component.area_id == placement.area_id
+                and cabinet_component.row_number == placement.row_number
+                and cabinet_component.component_type == "phase_rail"
+                and rail_fully_covers_device(
+                    rail_start=cabinet_component.start_position,
+                    rail_width=cabinet_component.module_width,
+                    device_start=placement.start_position,
+                    device_width=placement.module_width,
+                )
+            ]
+            candidates.sort(
+                key=lambda item: (
+                    item.module_width,
+                    item.start_position,
+                    item.name.casefold(),
+                    str(item.id),
+                )
+            )
+            if not candidates:
+                return None
+            rail = candidates[0]
+            phases = phase_rail_din_asset_phases(
+                rail_start=rail.start_position,
+                rail_width=rail.module_width,
+                phase_l1=rail.phase_l1,
+                phase_l2=rail.phase_l2,
+                phase_l3=rail.phase_l3,
+                start_phase=rail.start_phase,
+                asset_start=placement.start_position,
+                asset_width=placement.module_width,
+            )
+            return phases or None
 
         for asset in assets.values():
             if asset.id in component_asset_ids:
@@ -240,6 +309,7 @@ class ElectricalEndpointRepository:
                 location_name=location_name,
                 device_type=None,
                 deleted_at=deleted_at,
+                effective_phases=din_asset_phases(asset),
             )
             projections[item.key] = item
 
@@ -265,7 +335,7 @@ class ElectricalEndpointRepository:
             )
             projections[item.key] = item
 
-        for device in self.session.exec(select(ElectricalProtectiveDevice)).all():
+        for device in protective_devices:
             component = components.get(device.id)
             device_asset = assets.get(component.asset_id) if component else None
             if component is None or device_asset is None:
@@ -338,6 +408,21 @@ class ElectricalEndpointRepository:
             projections[item.key] = item
 
         for circuit in self.session.exec(select(ElectricalCircuit)).all():
+            circuit_device = (
+                protective_devices_by_id.get(circuit.protective_device_id)
+                if circuit.protective_device_id is not None
+                else None
+            )
+            circuit_device_component = (
+                components.get(circuit_device.id) if circuit_device is not None else None
+            )
+            circuit_phases = (
+                protective_device_phases(circuit_device)
+                if circuit_device is not None
+                and circuit_device_component is not None
+                and circuit_device_component.deleted_at is None
+                else None
+            )
             item = ElectricalEndpointProjection(
                 kind=ElectricalEndpointKind.CIRCUIT,
                 id=circuit.id,
@@ -347,6 +432,7 @@ class ElectricalEndpointRepository:
                 location_name=None,
                 device_type=None,
                 deleted_at=circuit.deleted_at,
+                effective_phases=circuit_phases,
             )
             projections[item.key] = item
         return projections

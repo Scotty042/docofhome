@@ -6,12 +6,15 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
+from app.models.integration_setting import IntegrationSetting
 from app.models.asset_engine import Asset, AssetType, Location, Product
 from app.models.network import (
     NetworkAddress,
     NetworkConnection,
     NetworkDevice,
     NetworkInterface,
+    NetworkObservedAddress,
+    NetworkAddressChange,
     NetworkSegment,
 )
 from app.repositories.network import NetworkRepository
@@ -29,6 +32,9 @@ from app.schemas.network import (
     NetworkInterfaceRead,
     NetworkInterfaceType,
     NetworkInterfaceWrite,
+    NetworkIpActionRead,
+    NetworkIpOverviewRead,
+    NetworkIpStatus,
     NetworkPoeMode,
     NetworkRole,
     NetworkSegmentRead,
@@ -38,6 +44,8 @@ from app.schemas.network import (
     NetworkTopologyNodeRead,
     NetworkTopologyRead,
 )
+
+from app.schemas.release import FritzBoxDeviceRead
 
 
 class NetworkError(RuntimeError):
@@ -406,6 +414,297 @@ class NetworkService:
         self.session.add(record)
         self._commit()
 
+    # Observed IP addresses / integration reconciliation
+    @staticmethod
+    def _normalized_mac(value: str | None) -> str | None:
+        if not value:
+            return None
+        compact = "".join(char for char in value if char in "0123456789abcdefABCDEF")
+        if len(compact) != 12:
+            return None
+        return ":".join(compact[index:index + 2] for index in range(0, 12, 2)).upper()
+
+    def sync_observed_addresses(
+        self, devices: list[FritzBoxDeviceRead], *, source: str = "fritzbox"
+    ) -> None:
+        now = datetime.now(UTC)
+        existing = list(self.session.exec(
+            select(NetworkObservedAddress).where(
+                NetworkObservedAddress.source == source,
+                col(NetworkObservedAddress.deleted_at).is_(None),
+            )
+        ).all())
+        for item in existing:
+            item.active = False
+            item.updated_at = now
+            self.session.add(item)
+        interfaces = self.repository.list_interfaces()
+        by_mac = {
+            self._normalized_mac(item.mac_address): item
+            for item in interfaces
+            if self._normalized_mac(item.mac_address)
+        }
+        for device in devices:
+            if not device.ipv4:
+                continue
+            try:
+                address = str(ip_address(device.ipv4))
+            except ValueError:
+                continue
+            mac = self._normalized_mac(device.mac_address)
+            interface = by_mac.get(mac) if mac else None
+            record = next((
+                item for item in existing
+                if item.address == address
+                and item.mac_address == mac
+                and item.source == source
+            ), None)
+            assignment = (
+                NetworkAssignmentType.RESERVATION.value
+                if device.dhcp_reservation
+                else NetworkAssignmentType.DHCP.value
+            )
+            if record is None:
+                record = NetworkObservedAddress(
+                    interface_id=interface.id if interface else None,
+                    mac_address=mac,
+                    address=address,
+                    hostname=device.name,
+                    assignment_type=assignment,
+                    source=source,
+                    active=True,
+                    last_seen_at=device.last_seen or now,
+                )
+            else:
+                record.interface_id = interface.id if interface else None
+                record.hostname = device.name
+                record.assignment_type = assignment
+                record.active = True
+                record.last_seen_at = device.last_seen or now
+                record.updated_at = now
+            self.session.add(record)
+        self._commit()
+
+    def list_ip_overview(
+        self, *, device_id: UUID | None = None, status: NetworkIpStatus | None = None
+    ) -> list[NetworkIpOverviewRead]:
+        interfaces = self.repository.list_interfaces(device_id=device_id)
+        interface_by_id = {item.id: item for item in interfaces}
+        devices = {item.id: item for item in self.repository.list_devices()}
+        assets = {item.id: item for item in self.session.exec(select(Asset)).all()}
+        documented = [
+            item for item in self.repository.list_addresses()
+            if item.interface_id in interface_by_id
+        ]
+        all_observed = list(self.session.exec(
+            select(NetworkObservedAddress).where(
+                NetworkObservedAddress.active == True,  # noqa: E712
+                col(NetworkObservedAddress.deleted_at).is_(None),
+            )
+        ).all())
+        observed = [
+            item for item in all_observed
+            if device_id is None
+            or (item.interface_id is not None and item.interface_id in interface_by_id)
+        ]
+        integration_active = self.session.exec(
+            select(IntegrationSetting).where(
+                IntegrationSetting.kind == "fritzbox",
+                IntegrationSetting.enabled == True,  # noqa: E712
+            )
+        ).first() is not None
+        observed_by_interface: dict[UUID, list[NetworkObservedAddress]] = {}
+        for item in observed:
+            if item.interface_id is not None:
+                observed_by_interface.setdefault(item.interface_id, []).append(item)
+        conflicting_addresses = {
+            address for address in {item.address for item in all_observed}
+            if len({item.mac_address for item in all_observed if item.address == address and item.mac_address}) > 1
+        }
+        rows: list[NetworkIpOverviewRead] = []
+        used_observed: set[UUID] = set()
+        for address in documented:
+            interface = interface_by_id[address.interface_id]
+            device = devices.get(interface.network_device_id)
+            asset = assets.get(device.asset_id) if device else None
+            candidates = observed_by_interface.get(interface.id, [])
+            same = next((item for item in candidates if item.address == address.address), None)
+            chosen = same or (max(candidates, key=lambda item: item.last_seen_at) if candidates else None)
+            if chosen:
+                used_observed.add(chosen.id)
+            row_status = (
+                NetworkIpStatus.CONFLICT
+                if (chosen and chosen.address in conflicting_addresses) or address.address in conflicting_addresses
+                else NetworkIpStatus.MATCH
+                if same
+                else NetworkIpStatus.MISMATCH
+                if chosen
+                else NetworkIpStatus.NOT_DETECTED
+                if integration_active
+                else NetworkIpStatus.NO_INTEGRATION
+            )
+            row = NetworkIpOverviewRead(
+                key=f"documented:{address.id}",
+                status=row_status,
+                device_id=device.id if device else None,
+                device_name=asset.name if asset else "Unbekanntes Gerät",
+                interface_id=interface.id,
+                interface_name=interface.name,
+                documented_address_id=address.id,
+                documented_address=address.address,
+                mac_address=interface.mac_address,
+                assignment_type=self._assignment_type(address.assignment_type),
+                observed_address_id=chosen.id if chosen else None,
+                observed_address=chosen.address if chosen else None,
+                source=chosen.source if chosen else None,
+                last_seen_at=chosen.last_seen_at if chosen else None,
+                ignored=chosen.ignored if chosen else False,
+            )
+            if status is None or row.status == status:
+                rows.append(row)
+        for item in observed:
+            if item.id in used_observed:
+                continue
+            interface = interface_by_id.get(item.interface_id) if item.interface_id else None
+            device = devices.get(interface.network_device_id) if interface else None
+            asset = assets.get(device.asset_id) if device else None
+            row_status = NetworkIpStatus.CONFLICT if item.address in conflicting_addresses else NetworkIpStatus.OBSERVED_ONLY
+            row = NetworkIpOverviewRead(
+                key=f"observed:{item.id}",
+                status=row_status,
+                device_id=device.id if device else None,
+                device_name=asset.name if asset else (item.hostname or "Nur erkannt"),
+                interface_id=interface.id if interface else None,
+                interface_name=interface.name if interface else None,
+                documented_address_id=None,
+                documented_address=None,
+                mac_address=item.mac_address,
+                assignment_type=self._assignment_type(item.assignment_type),
+                observed_address_id=item.id,
+                observed_address=item.address,
+                source=item.source,
+                last_seen_at=item.last_seen_at,
+                ignored=item.ignored,
+            )
+            if status is None or row.status == status:
+                rows.append(row)
+        def sort_key(row: NetworkIpOverviewRead) -> tuple[int, int, str]:
+            candidate = row.documented_address or row.observed_address or ""
+            try:
+                parsed = ip_address(candidate)
+                return (0, int(parsed), row.device_name.casefold())
+            except ValueError:
+                return (1, 0, row.device_name.casefold())
+        return sorted(rows, key=sort_key)
+
+    def accept_observed_address(self, observed_id: UUID) -> NetworkIpActionRead:
+        observed = self.session.get(NetworkObservedAddress, observed_id)
+        if observed is None or observed.deleted_at is not None or not observed.active:
+            raise NetworkNotFoundError("Die erkannte IP-Adresse wurde nicht gefunden")
+        if observed.interface_id is None:
+            raise NetworkValidationError(
+                "Die erkannte Adresse ist keiner dokumentierten Schnittstelle zugeordnet"
+            )
+        existing = self.repository.list_addresses(interface_id=observed.interface_id)
+        documented = next(
+            (item for item in existing if item.is_primary),
+            existing[0] if existing else None,
+        )
+        old_address = documented.address if documented else None
+        segment_id = self._matching_segment_id(
+            observed.address,
+            preferred_id=documented.segment_id if documented else None,
+        )
+        payload = NetworkAddressWrite(
+            interface_id=observed.interface_id,
+            segment_id=segment_id,
+            address=observed.address,
+            assignment_type=self._assignment_type(observed.assignment_type),
+            hostname=observed.hostname,
+            is_primary=documented.is_primary if documented else True,
+            notes=documented.notes if documented else "Aus FRITZ!Box übernommen",
+        )
+        self._validate_address(payload, exclude_id=documented.id if documented else None)
+        interface = self._require_interface(observed.interface_id)
+        if payload.is_primary:
+            self._clear_primary_addresses(
+                interface.network_device_id,
+                exclude_id=documented.id if documented else None,
+            )
+        now = datetime.now(UTC)
+        if documented is None:
+            documented = NetworkAddress(
+                interface_id=payload.interface_id,
+                segment_id=payload.segment_id,
+                address=payload.address,
+                assignment_type=payload.assignment_type.value,
+                hostname=payload.hostname,
+                is_primary=payload.is_primary,
+                notes=payload.notes,
+            )
+        else:
+            documented.segment_id = payload.segment_id
+            documented.address = payload.address
+            documented.assignment_type = payload.assignment_type.value
+            documented.hostname = payload.hostname
+            documented.is_primary = payload.is_primary
+            documented.notes = payload.notes
+            documented.updated_at = now
+        observed.ignored = False
+        observed.updated_at = now
+        self.session.add(documented)
+        self.session.add(observed)
+        self.session.add(
+            NetworkAddressChange(
+                observed_address_id=observed.id,
+                documented_address_id=documented.id,
+                action="accept",
+                old_address=old_address,
+                new_address=observed.address,
+            )
+        )
+        self._commit()
+        return NetworkIpActionRead(documented_address_id=documented.id, status="accepted")
+
+    def _matching_segment_id(
+        self, address: str, *, preferred_id: UUID | None
+    ) -> UUID | None:
+        parsed = ip_address(address)
+        if preferred_id is not None:
+            preferred = self.repository.get_segment(preferred_id)
+            if preferred is not None and parsed in ip_network(preferred.cidr):
+                return preferred.id
+        matching = [
+            segment
+            for segment in self.repository.list_segments()
+            if parsed in ip_network(segment.cidr)
+        ]
+        matching.sort(
+            key=lambda segment: (
+                -ip_network(segment.cidr).prefixlen,
+                segment.name.casefold(),
+                str(segment.id),
+            )
+        )
+        return matching[0].id if matching else None
+
+    def ignore_observed_address(self, observed_id: UUID) -> NetworkIpActionRead:
+        observed = self.session.get(NetworkObservedAddress, observed_id)
+        if observed is None or observed.deleted_at is not None:
+            raise NetworkNotFoundError("Die erkannte IP-Adresse wurde nicht gefunden")
+        observed.ignored = True
+        observed.updated_at = datetime.now(UTC)
+        self.session.add(observed)
+        self.session.add(NetworkAddressChange(
+            observed_address_id=observed.id,
+            documented_address_id=None,
+            action="ignore",
+            old_address=None,
+            new_address=observed.address,
+        ))
+        self._commit()
+        return NetworkIpActionRead(documented_address_id=None, status="ignored")
+
     # Connections
     def list_connections(self, *, device_id: UUID | None = None) -> list[NetworkConnectionRead]:
         if device_id is not None:
@@ -743,6 +1042,7 @@ class NetworkService:
             asset_name=asset.name if asset else "Unbekanntes Asset",
             asset_code=asset.jarvis_code if asset else "–",
             asset_type=asset_type.name if asset_type else "Asset",
+            switch_port_layout=(asset_type.switch_port_layout if asset_type else "odd_even"),
             product_name=product.name if product else None,
             location_name=location.name if location else None,
             role=self._network_role(record.role),

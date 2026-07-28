@@ -8,6 +8,8 @@ import type {
   NetworkDeviceWrite,
   NetworkInterface,
   NetworkInterfaceWrite,
+  NetworkIpOverview,
+  NetworkIpStatus,
   NetworkRole,
   NetworkSegment,
   NetworkSegmentWrite,
@@ -90,6 +92,15 @@ export const networkApi = {
     `/interfaces/${id}`, { method: 'PUT', body: JSON.stringify(payload) }
   ),
   deleteInterface: (id: string) => request<void>(`/interfaces/${id}`, { method: 'DELETE' }),
+  ipAddresses: (values: { deviceId?: string; status?: NetworkIpStatus | '' } = {}) => request<NetworkIpOverview[]>(
+    `/ip-addresses${queryString({ device_id: values.deviceId, status: values.status || undefined })}`
+  ),
+  acceptObservedAddress: (id: string) => request<{ documented_address_id: string | null; status: string }>(
+    `/ip-addresses/${id}/accept`, { method: 'POST' }
+  ),
+  ignoreObservedAddress: (id: string) => request<{ documented_address_id: string | null; status: string }>(
+    `/ip-addresses/${id}/ignore`, { method: 'POST' }
+  ),
   addresses: (values: { interfaceId?: string; deviceId?: string; segmentId?: string } = {}) => (
     request<NetworkAddress[]>(`/addresses${queryString({
       interface_id: values.interfaceId,

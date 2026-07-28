@@ -302,6 +302,44 @@ class ElectricalCabinetComponent(SQLModel, table=True):
             "mounting_side IS NULL OR mounting_side IN ('above', 'below')",
             name="ck_electrical_cabinet_components_mounting_side",
         ),
+        CheckConstraint(
+            "component_type != 'phase_rail' OR "
+            "(neutral = 0 AND protective_earth = 0 AND "
+            "(phase_l1 = 1 OR phase_l2 = 1 OR phase_l3 = 1) AND "
+            "start_phase IS NOT NULL AND mounting_side IS NOT NULL)",
+            name="ck_electrical_cabinet_components_phase_rail_conductors",
+        ),
+        CheckConstraint(
+            "component_type != 'neutral_rail' OR "
+            "(phase_l1 = 0 AND phase_l2 = 0 AND phase_l3 = 0 "
+            "AND neutral = 1 AND protective_earth = 0)",
+            name="ck_electrical_cabinet_components_neutral_rail_conductors",
+        ),
+        CheckConstraint(
+            "component_type != 'protective_earth_rail' OR "
+            "(phase_l1 = 0 AND phase_l2 = 0 AND phase_l3 = 0 "
+            "AND neutral = 0 AND protective_earth = 1)",
+            name="ck_electrical_cabinet_components_pe_rail_conductors",
+        ),
+        CheckConstraint(
+            "component_type = 'phase_rail' OR "
+            "(start_phase IS NULL AND mounting_side IS NULL)",
+            name="ck_electrical_cabinet_components_phase_metadata",
+        ),
+        CheckConstraint(
+            "linked_rcd_device_id IS NULL OR "
+            "component_type IN ('phase_rail', 'neutral_rail')",
+            name="ck_electrical_cabinet_components_rcd_link_type",
+        ),
+        CheckConstraint(
+            "linked_rcd_asset_id IS NULL OR "
+            "component_type IN ('phase_rail', 'neutral_rail')",
+            name="ck_electrical_cabinet_components_rcd_asset_link_type",
+        ),
+        CheckConstraint(
+            "linked_rcd_device_id IS NULL OR linked_rcd_asset_id IS NULL",
+            name="ck_electrical_cabinet_components_single_rcd_reference",
+        ),
         Index(
             "ix_electrical_cabinet_components_area_row",
             "area_id",
@@ -337,6 +375,11 @@ class ElectricalCabinetComponent(SQLModel, table=True):
     linked_rcd_device_id: UUID | None = Field(
         default=None,
         foreign_key="electrical_protective_devices.id",
+        index=True,
+    )
+    linked_rcd_asset_id: UUID | None = Field(
+        default=None,
+        foreign_key="assets.id",
         index=True,
     )
     start_phase: str | None = Field(default=None, max_length=2)

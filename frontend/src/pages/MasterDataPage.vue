@@ -42,7 +42,7 @@ const editorOpen = ref(false)
 const editorKind = ref<MasterDataTab>('asset-types')
 const editingId = ref<string | null>(null)
 const archiveTarget = ref<ArchiveTarget | null>(null)
-const assetTypeForm = ref<AssetTypeWrite>({ name: '', description: null, icon: null, module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null })
+const assetTypeForm = ref<AssetTypeWrite>({ name: '', description: null, icon: null, image_url: null, image_source: 'url', image_reference: null, is_meter: false, switch_port_layout: 'odd_even', module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null })
 const productForm = ref<ProductWrite>({
   name: '',
   manufacturer: null,
@@ -184,7 +184,7 @@ function optionalText(value: string | null | undefined): string | null {
 function openCreate(kind: MasterDataTab) {
   editorKind.value = kind
   editingId.value = null
-  assetTypeForm.value = { name: '', description: null, icon: null, module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null }
+  assetTypeForm.value = { name: '', description: null, icon: null, image_url: null, image_source: 'url', image_reference: null, is_meter: false, switch_port_layout: 'odd_even', module_width: null, breaker_characteristic: null, rated_current_a: null, coil_voltage_v: null, coil_voltage_type: null, contact_count: null, contact_type: null }
   productForm.value = {
     name: '',
     manufacturer: null,
@@ -204,7 +204,7 @@ function openCreate(kind: MasterDataTab) {
 function editAssetType(item: AssetType) {
   editorKind.value = 'asset-types'
   editingId.value = item.id
-  assetTypeForm.value = { name: item.name, description: item.description, icon: item.icon, module_width: item.module_width, breaker_characteristic: item.breaker_characteristic, rated_current_a: item.rated_current_a, coil_voltage_v: item.coil_voltage_v, coil_voltage_type: item.coil_voltage_type, contact_count: item.contact_count, contact_type: item.contact_type }
+  assetTypeForm.value = { name: item.name, description: item.description, icon: item.icon, image_url: item.image_url, image_source: item.image_source, image_reference: item.image_reference, is_meter: item.is_meter, switch_port_layout: item.switch_port_layout, module_width: item.module_width, breaker_characteristic: item.breaker_characteristic, rated_current_a: item.rated_current_a, coil_voltage_v: item.coil_voltage_v, coil_voltage_type: item.coil_voltage_type, contact_count: item.contact_count, contact_type: item.contact_type }
   editorOpen.value = true
 }
 
@@ -245,6 +245,11 @@ async function saveEditor() {
         name: assetTypeForm.value.name.trim(),
         description: optionalText(assetTypeForm.value.description),
         icon: optionalText(assetTypeForm.value.icon),
+        image_url: optionalText(assetTypeForm.value.image_url),
+        image_source: assetTypeForm.value.image_source ?? 'url',
+        image_reference: optionalText(assetTypeForm.value.image_reference),
+        is_meter: assetTypeForm.value.is_meter,
+        switch_port_layout: assetTypeForm.value.switch_port_layout ?? 'odd_even',
         module_width: assetTypeForm.value.module_width,
         breaker_characteristic: assetTypeForm.value.breaker_characteristic ?? null,
         rated_current_a: assetTypeForm.value.rated_current_a ?? null,
@@ -531,6 +536,34 @@ function assetTypeName(id: string | null): string {
                 autofocus
               />
               <AssetTypeIconPicker v-model="assetTypeForm.icon" class="mt-3" />
+              <ProductImageField
+                v-model="assetTypeForm.image_url"
+                v-model:source="assetTypeForm.image_source"
+                v-model:reference="assetTypeForm.image_reference"
+                title="Bild des Asset-Typs"
+                upload-kind="asset"
+                :search-terms="assetTypeForm.name"
+                class="mt-3"
+              />
+              <v-switch
+                v-model="assetTypeForm.is_meter"
+                color="primary"
+                label="Als Zähler klassifizieren"
+                hint="Erlaubt die direkte Platzierung im Zählerfeld für Strom-, Wasser-, Gas- und Wärmezähler."
+                persistent-hint
+                class="mt-2"
+              />
+              <v-select
+                v-model="assetTypeForm.switch_port_layout"
+                :items="[
+                  { value: 'odd_even', title: 'Ungerade oben / gerade unten' },
+                  { value: 'sequential_halves', title: 'Erste Hälfte oben / zweite Hälfte unten' }
+                ]"
+                label="Switch-Portlayout"
+                hint="Wird für Assets dieses Typs verwendet, wenn sie als Switch dokumentiert sind. Die Front bleibt immer zweireihig."
+                persistent-hint
+                class="mt-3"
+              />
               <v-text-field
                 v-model.number="assetTypeForm.module_width"
                 label="Standard-DIN-Breite (optional)"

@@ -1,62 +1,78 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { onBeforeUnmount, watch } from 'vue'
 
 import { useNotificationStore, type NotificationType } from '../stores/notifications'
 
 const notifications = useNotificationStore()
+const timers = new Map<number, ReturnType<typeof setTimeout>>()
 
-const icon = computed(() => ({
+const icons: Record<NotificationType, string> = {
   success: 'mdi-check-circle-outline',
   error: 'mdi-alert-circle-outline',
   warning: 'mdi-alert-outline',
   info: 'mdi-information-outline'
-} satisfies Record<NotificationType, string>)[notifications.current?.type ?? 'info'])
-
-function updateVisibility(visible: boolean) {
-  if (!visible) notifications.dismissCurrent()
 }
+
+watch(() => notifications.queue.map((item) => `${item.id}:${item.timeout}`).join('|'), () => {
+  const activeIds = new Set(notifications.queue.map((item) => item.id))
+  for (const [id, timer] of timers) {
+    if (!activeIds.has(id)) {
+      clearTimeout(timer)
+      timers.delete(id)
+    }
+  }
+  for (const item of notifications.queue) {
+    if (item.timeout <= 0 || timers.has(item.id)) continue
+    timers.set(item.id, setTimeout(() => notifications.dismiss(item.id), item.timeout))
+  }
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  for (const timer of timers.values()) clearTimeout(timer)
+  timers.clear()
+})
 </script>
 
 <template>
-  <v-snackbar
-    v-if="notifications.current"
-    :key="notifications.current.id"
-    :model-value="true"
-    :timeout="notifications.current.timeout"
-    :color="notifications.current.type"
-    location="top center"
-    variant="elevated"
-    class="global-notification"
-    @update:model-value="updateVisibility"
-  >
-    <div class="d-flex align-center ga-3">
-      <v-icon :icon="icon" />
-      <span>{{ notifications.current.message }}</span>
+  <Teleport to="body">
+    <div class="global-notification-stack" role="region" aria-label="Anwendungsmeldungen">
+      <v-alert
+        v-for="item in notifications.queue"
+        :key="item.id"
+        :type="item.type"
+        :icon="icons[item.type]"
+        variant="elevated"
+        closable
+        class="global-notification-item"
+        @click:close="notifications.dismiss(item.id)"
+      >
+        {{ item.message }}
+      </v-alert>
     </div>
-    <template #actions>
-      <v-btn
-        icon="mdi-close"
-        variant="text"
-        aria-label="Meldung schließen"
-        title="Meldung schließen"
-        @click="notifications.dismissCurrent"
-      />
-    </template>
-  </v-snackbar>
+  </Teleport>
 </template>
 
 <style>
-.global-notification {
-  z-index: 10000 !important;
+.global-notification-stack {
+  position: fixed;
+  z-index: 32000;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(720px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
 }
-
-.global-notification .v-snackbar__wrapper {
-  max-width: min(680px, calc(100vw - 24px));
+.global-notification-item {
+  pointer-events: auto;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .28);
 }
-
 @media (max-width: 600px) {
-  .global-notification {
-    margin-top: max(8px, env(safe-area-inset-top));
+  .global-notification-stack {
+    top: max(8px, env(safe-area-inset-top));
+    width: calc(100vw - 16px);
   }
 }
 </style>

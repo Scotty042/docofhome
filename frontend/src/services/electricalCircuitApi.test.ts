@@ -26,6 +26,7 @@ describe('electrical circuit API', () => {
     await electricalApi.listCircuits({
       distribution_id: 'distribution-1',
       protective_device_id: 'device-1',
+      protective_device_asset_id: 'asset-device-1',
       search: 'Kitchen sockets',
       page: 2,
       page_size: 25
@@ -35,6 +36,7 @@ describe('electrical circuit API', () => {
     expect(url).toContain('/api/v1/electrical/circuits?')
     expect(url).toContain('distribution_id=distribution-1')
     expect(url).toContain('protective_device_id=device-1')
+    expect(url).toContain('protective_device_asset_id=asset-device-1')
     expect(url).toContain('search=Kitchen+sockets')
     expect(url).toContain('page=2')
   })
@@ -52,6 +54,7 @@ describe('electrical circuit API', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       distribution_id: 'distribution-1',
       protective_device_id: null,
+      protective_device_asset_id: null,
       name: 'Kitchen',
       circuit_number: 'F1',
       description: null,
@@ -65,8 +68,14 @@ describe('electrical circuit API', () => {
       distribution_id: 'distribution-1',
       distribution_name: 'HV',
       protective_device_id: 'device-1',
+      protective_device_asset_id: null,
       protective_device_name: 'Breaker',
       protective_device_code: 'MCB-001',
+      protective_device_type: 'mcb',
+      protective_device_rating: 'B16 A',
+      protective_device_position: 'Position 1',
+      protective_device_phases: ['L1'],
+      protective_device_assignment_missing: false,
       name: 'Kitchen',
       circuit_number: 'F1',
       description: null,
@@ -79,6 +88,7 @@ describe('electrical circuit API', () => {
     expect(editableElectricalCircuit(circuit)).toEqual({
       distribution_id: 'distribution-1',
       protective_device_id: 'device-1',
+      protective_device_asset_id: null,
       name: 'Kitchen',
       circuit_number: 'F1',
       description: null,

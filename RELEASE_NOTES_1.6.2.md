@@ -46,6 +46,25 @@ stillschweigend umgeschrieben.
 - Validierungsfehler beim Bearbeiten von Schrankkomponenten und elektrischen
   Verbindungen erscheinen innerhalb des geöffneten Dialogs statt verdeckt im
   Seitenhintergrund.
+- Der Bearbeitungsdialog zeigt bei einer Verbindung zwischen Phasenschiene und
+  Schutzgerät keine auswählbaren Außenleiter mehr. Die berechnete Phase wird als
+  gesperrter Wert angezeigt; ausschließlich N und PE bleiben ergänzbar. Auch bei
+  fehlenden Phasenmetadaten bleibt Speichern gesperrt, statt auf eine freie
+  Phasenauswahl zurückzufallen.
+- Das Backend berechnet die Phase einer direkten Verbindung
+  Phasenschiene → Schutzgerät zusätzlich aus den tatsächlich gespeicherten
+  Schienen- und Gerätepositionen. Ein manuell übermitteltes L1/L2/L3 wird beim
+  Speichern verbindlich durch die Positionsphase ersetzt.
+
+- Phasen-/Kammschienen erzeugen ihre physisch zwingenden Verbindungen zu allen
+  bereits vorhandenen und später platzierten Schutzgeräten automatisch. Die
+  Verbindungen werden bei Verschieben, Polzahländerung oder Änderung des
+  Schienenbereichs aktualisiert.
+- Die Zuordnung zu einem FI/RCD ist bei einer Phasen-/Kammschiene ausdrücklich
+  optional. Eine fehlende FI-Zuordnung erzeugt keine Warnung mehr.
+- Der Startfehler der Migration `0040` auf vorhandenen Datenbanken ist behoben.
+  Schutzgeräte besitzen selbst keine Spalte `deleted_at`; der aktive Zustand wird
+  nun korrekt über `electrical_components.deleted_at` ermittelt.
 
 ## Datenbank
 
@@ -54,6 +73,28 @@ Alembic-Migration `0039`:
 - ergänzt den eindeutigen Automationsschlüssel für erzeugte Ableseaufgaben;
 - ergänzt die Montageposition `above`/`below` für Kamm-/Phasenschienen;
 - erlaubt den Verteilungsaufbau `junction_box`.
+
+Alembic-Migration `0040`:
+
+- trennt allgemeine Sammelschienen von positionsgebundenen Phasenschienen;
+- repariert eindeutige bestehende Phasenzuordnungen;
+- ermittelt aktive Schutzgeräte über die Basistabelle `electrical_components` und
+  funktioniert damit mit dem tatsächlich vorhandenen Datenbankschema.
+
+Alembic-Migration `0041`:
+
+- repariert bestehende Verbindungen nach bereits ausgeführter Migration `0040`
+  erneut anhand der tatsächlichen Phasenschienen- und TE-Positionen;
+- ist erforderlich, weil Installationen, die bereits auf Alembic-Head `0040`
+  stehen, die korrigierte Reparaturlogik sonst nicht erneut ausführen würden.
+
+Alembic-Migration `0042`:
+
+- legt für alle von einer Phasen-/Kammschiene überspannten Schutzgeräte die
+  physische Verbindung automatisch an;
+- korrigiert die Phase anhand von Startphase und TE-Position;
+- entfernt veraltete oder umgekehrt gerichtete direkte Schienenverbindungen;
+- benötigt keine FI/RCD-Zuordnung.
 
 Die Migration ersetzt keine vorhandenen Zählerstände, Assets, Bilder,
 Dokumente oder Verkabelungen. Vor dem Update ist trotzdem ein vollständiges
@@ -66,5 +107,5 @@ Backup des persistenten `data`-Ordners erforderlich.
 3. Version 1.6.2 in einen neuen Ordner entpacken.
 4. Lokale `.env`- und Compose-Anpassungen übernehmen.
 5. `docker compose build --no-cache` und `docker compose up -d` ausführen.
-6. Prüfen, dass Migration `0039` erfolgreich ausgeführt wurde.
+6. Prüfen, dass die Migrationen `0039`, `0040`, `0041` und `0042` erfolgreich ausgeführt wurden.
 7. Aufgaben, Zähler-Dashboard, Topologie und Verteilerdosen praktisch prüfen.

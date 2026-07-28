@@ -84,3 +84,42 @@ def test_fritzbox_rejects_redirects_and_unsafe_xml() -> None:
     )
     with pytest.raises(FritzBoxConnectorError, match="Unsicheres XML"):
         connector.devices()
+
+
+def test_fritzbox_sorts_ipv4_numerically_and_invalid_addresses_last() -> None:
+    hosts = [
+        ("Hundred", "192.168.178.100"),
+        ("Ten", "192.168.178.10"),
+        ("One", "192.168.178.1"),
+        ("Unknown", ""),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        action = request.headers["SOAPAction"]
+        if "GetHostNumberOfEntries" in action:
+            return httpx.Response(200, content=soap({"NewHostNumberOfEntries": str(len(hosts))}))
+        body = request.content.decode()
+        index = int(body.split("<NewIndex>", 1)[1].split("</NewIndex>", 1)[0])
+        name, address = hosts[index]
+        return httpx.Response(
+            200,
+            content=soap({
+                "NewHostName": name,
+                "NewMACAddress": f"AA:BB:CC:DD:EE:{index:02X}",
+                "NewIPAddress": address,
+                "NewActive": "1",
+            }),
+        )
+
+    devices = FritzBoxConnector(
+        base_url="http://fritz.box",
+        account="readonly",
+        secret="secret",
+        transport=httpx.MockTransport(handler),
+    ).devices()
+    assert [item.ipv4 for item in devices] == [
+        "192.168.178.1",
+        "192.168.178.10",
+        "192.168.178.100",
+        None,
+    ]

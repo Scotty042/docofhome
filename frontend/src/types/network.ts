@@ -17,12 +17,33 @@ export type NetworkAssignmentType = 'static' | 'dhcp' | 'reservation' | 'link_lo
 export type NetworkConnectionType = 'physical' | 'logical' | 'wireless'
 export type NetworkConnectionStatus = 'active' | 'planned' | 'inactive'
 
+export type NetworkIpStatus = 'match' | 'mismatch' | 'not_detected' | 'observed_only' | 'conflict' | 'no_integration'
+
+export interface NetworkIpOverview {
+  key: string
+  status: NetworkIpStatus
+  device_id: string | null
+  device_name: string
+  interface_id: string | null
+  interface_name: string | null
+  documented_address_id: string | null
+  documented_address: string | null
+  mac_address: string | null
+  assignment_type: NetworkAssignmentType
+  observed_address_id: string | null
+  observed_address: string | null
+  source: string | null
+  last_seen_at: string | null
+  ignored: boolean
+}
+
 export interface NetworkDevice {
   id: string
   asset_id: string
   asset_name: string
   asset_code: string
   asset_type: string
+  switch_port_layout: 'odd_even' | 'sequential_halves'
   product_name: string | null
   location_name: string | null
   role: NetworkRole

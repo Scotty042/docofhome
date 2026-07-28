@@ -4,6 +4,8 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
+from app.electrical_device_classification import is_rcd_asset_type_name
+from app.electrical_phase_rail import rail_fully_covers_device, spans_overlap
 from app.models.asset_engine import Asset, AssetType, Location, Product
 from app.models.consumption import ConsumptionMeter, ConsumptionReading
 from app.models.electrical import (
@@ -16,6 +18,7 @@ from app.models.electrical import (
     ElectricalMeterPlacement,
     ElectricalProtectiveDevice,
 )
+from app.models.electrical_circuit import ElectricalCircuit
 from app.models.electrical_topology import ElectricalConnection
 from app.models.home_assistant import HomeAssistantAssetLink
 from app.repositories.asset_engine import LocationRepository
@@ -45,17 +48,23 @@ from app.schemas.home_assistant import (
     HomeAssistantEntityRole,
     HomeAssistantObjectType,
 )
+from app.services.din_width import effective_asset_module_width
 from app.services.electrical import (
     ElectricalConflictError,
     ElectricalNotFoundError,
     ElectricalValidationError,
 )
-from app.services.din_width import effective_asset_module_width
+from app.services.electrical_placement import (
+    ElectricalPlacementIssue,
+    covering_phase_rails,
+    validate_protective_device_placement,
+)
 from app.services.home_assistant import (
     HomeAssistantConfigurationError,
     HomeAssistantConnectionError,
     HomeAssistantService,
 )
+from app.services.phase_rail_connections import PhaseRailConnectionService
 
 
 class ElectricalLayoutService:
@@ -136,6 +145,8 @@ class ElectricalLayoutService:
             description=payload.description,
         )
         self.session.add(area)
+        self.session.flush()
+        self._ensure_area_rail_component(distribution_id, area)
         self._commit(self._area_conflict_message(payload))
         return self._area_read(area)
 
@@ -151,7 +162,14 @@ class ElectricalLayoutService:
         active_assets = self._active_asset_placements(area.id)
         active_components = self._active_cabinet_components(area.id)
         active_meters = self._active_meter_placements(area.id)
-        has_rail_devices = active_devices or active_assets or active_components
+        desired_rail_component_type = self._area_rail_component_type(payload.area_type.value)
+        incompatible_components = [
+            component
+            for component in active_components
+            if desired_rail_component_type is None
+            or component.component_type != desired_rail_component_type
+        ]
+        has_rail_devices = active_devices or active_assets or incompatible_components
         if (
             has_rail_devices
             and payload.area_type != DistributionAreaType.DEVICE_ROWS
@@ -174,6 +192,7 @@ class ElectricalLayoutService:
         area.side = payload.side.value if payload.side is not None else None
         area.description = payload.description
         area.updated_at = datetime.now(UTC)
+        self._ensure_area_rail_component(distribution_id, area)
         self._commit(self._area_conflict_message(payload))
         return self._area_read(area)
 
@@ -354,6 +373,8 @@ class ElectricalLayoutService:
             existing.updated_at = now
         self.session.add(existing)
         self._commit("Das Asset ist bereits an einer anderen Stelle platziert.")
+        PhaseRailConnectionService(self.session).sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
         self.session.refresh(existing)
         return self._asset_placement_read(existing, {}, None, area=area)
 
@@ -368,11 +389,35 @@ class ElectricalLayoutService:
         ).first()
         if placement is None:
             raise ElectricalNotFoundError
+        linked_component = self.session.exec(
+            select(ElectricalCabinetComponent).where(
+                ElectricalCabinetComponent.linked_rcd_asset_id == asset_id,
+                col(ElectricalCabinetComponent.deleted_at).is_(None),
+            )
+        ).first()
+        if linked_component is not None:
+            raise ElectricalConflictError(
+                "Der FI/RCD ist noch einer Phasen-/Kammschiene oder N-Schiene "
+                "zugeordnet. Löse diese Zuordnung zuerst."
+            )
+        linked_circuit = self.session.exec(
+            select(ElectricalCircuit).where(
+                ElectricalCircuit.protective_device_asset_id == asset_id,
+                col(ElectricalCircuit.deleted_at).is_(None),
+            )
+        ).first()
+        if linked_circuit is not None:
+            raise ElectricalConflictError(
+                f"Das DIN-Gerät schützt noch den Stromkreis „{linked_circuit.name}“. "
+                "Ordne dem Stromkreis zuerst ein anderes Schutzgerät zu."
+            )
         now = datetime.now(UTC)
         placement.deleted_at = now
         placement.updated_at = now
         self.session.add(placement)
         self._commit()
+        PhaseRailConnectionService(self.session).sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
 
     def list_cabinet_components(
         self, distribution_id: UUID
@@ -404,8 +449,8 @@ class ElectricalLayoutService:
         distribution, area = self._placement_context(
             distribution_id, payload.area_id, allow_junction_box=True
         )
-        self._validate_cabinet_component_kind(distribution, payload)
-        self._validate_cabinet_component_links(distribution_id, payload)
+        self._validate_cabinet_component_kind(distribution, area, payload)
+        self._validate_cabinet_component_links(distribution_id, payload, component_id=None)
         self._validate_module_placement(
             distribution,
             area,
@@ -423,7 +468,21 @@ class ElectricalLayoutService:
             **self._cabinet_component_values(payload),
         )
         self.session.add(record)
+        PhaseRailConnectionService(self.session).sync_component(record, verify=False)
         self._commit("Die Position ist bereits durch eine andere Schrankkomponente belegt.")
+        # Reconcile once more after the component is durably persisted. This second,
+        # idempotent pass is essential for upgraded real-world databases where the
+        # same-transaction ORM query could omit existing DIN contacts.
+        synchronizer = PhaseRailConnectionService(self.session)
+        if record.component_type == ElectricalCabinetComponentType.PHASE_RAIL.value:
+            synchronizer.sync_rail_with_visible_devices(
+                record,
+                payload.visible_protective_device_ids,
+                payload.visible_asset_ids,
+            )
+        else:
+            synchronizer.sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
         self.session.refresh(record)
         return self._cabinet_component_read(record)
 
@@ -434,11 +493,32 @@ class ElectricalLayoutService:
         payload: ElectricalCabinetComponentWrite,
     ) -> ElectricalCabinetComponentRead:
         record = self._cabinet_component(component_id, distribution_id)
+        previous_component_type = record.component_type
+        if (
+            previous_component_type == ElectricalCabinetComponentType.NEUTRAL_RAIL.value
+            and payload.component_type != ElectricalCabinetComponentType.NEUTRAL_RAIL
+        ):
+            assigned_device = self.session.exec(
+                select(ElectricalProtectiveDevice)
+                .join(
+                    ElectricalComponent,
+                    ElectricalComponent.id == ElectricalProtectiveDevice.id,
+                )
+                .where(
+                    ElectricalProtectiveDevice.neutral_rail_id == record.id,
+                    col(ElectricalComponent.deleted_at).is_(None),
+                )
+            ).first()
+            if assigned_device is not None:
+                raise ElectricalConflictError(
+                    "Die N-Schiene ist noch Schutzgeräten zugeordnet und kann nicht "
+                    "in einen anderen Komponententyp umgewandelt werden."
+                )
         distribution, area = self._placement_context(
             distribution_id, payload.area_id, allow_junction_box=True
         )
-        self._validate_cabinet_component_kind(distribution, payload)
-        self._validate_cabinet_component_links(distribution_id, payload)
+        self._validate_cabinet_component_kind(distribution, area, payload)
+        self._validate_cabinet_component_links(distribution_id, payload, component_id=record.id)
         self._validate_module_placement(
             distribution,
             area,
@@ -455,69 +535,112 @@ class ElectricalLayoutService:
         record.sqlmodel_update(self._cabinet_component_values(payload))
         record.updated_at = datetime.now(UTC)
         self.session.add(record)
+        PhaseRailConnectionService(self.session).sync_component(
+            record, previous_component_type=previous_component_type, verify=False
+        )
         self._commit("Die Position ist bereits durch eine andere Schrankkomponente belegt.")
+        synchronizer = PhaseRailConnectionService(self.session)
+        if record.component_type == ElectricalCabinetComponentType.PHASE_RAIL.value:
+            synchronizer.sync_rail_with_visible_devices(
+                record,
+                payload.visible_protective_device_ids,
+                payload.visible_asset_ids,
+            )
+        else:
+            synchronizer.sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
         self.session.refresh(record)
         return self._cabinet_component_read(record)
+
+    def synchronize_phase_rail_contacts(
+        self,
+        distribution_id: UUID,
+        component_id: UUID,
+        protective_device_ids: list[UUID],
+        asset_ids: list[UUID],
+    ) -> ElectricalCabinetComponentRead:
+        record = self._cabinet_component(component_id, distribution_id)
+        if record.component_type != ElectricalCabinetComponentType.PHASE_RAIL.value:
+            raise ElectricalValidationError(
+                "Automatische Kontakte können nur für eine Phasen-/Kammschiene "
+                "synchronisiert werden."
+            )
+        synchronizer = PhaseRailConnectionService(self.session)
+        try:
+            synchronizer.sync_rail_with_visible_devices(
+                record,
+                protective_device_ids,
+                asset_ids,
+                verify=True,
+            )
+        except RuntimeError as exc:
+            raise ElectricalValidationError(str(exc)) from exc
+        self._commit(
+            "Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen."
+        )
+        self.session.refresh(record)
+        result = self._cabinet_component_read(record)
+        if (protective_device_ids or asset_ids) and result.automatic_connection_count == 0:
+            raise ElectricalValidationError(
+                "Die Verteilerschrankansicht hat passende DIN-Geräte gemeldet, "
+                "aber es wurde kein automatischer Kontakt gespeichert."
+            )
+        return result
 
     def archive_cabinet_component(
         self, distribution_id: UUID, component_id: UUID
     ) -> None:
         record = self._cabinet_component(component_id, distribution_id)
-        attached_connection = self.session.exec(
-            select(ElectricalConnection).where(
-                col(ElectricalConnection.deleted_at).is_(None),
-                (
-                    (ElectricalConnection.source_kind == "cabinet_component")
-                    & (ElectricalConnection.source_id == record.id)
-                )
-                | (
-                    (ElectricalConnection.target_kind == "cabinet_component")
-                    & (ElectricalConnection.target_id == record.id)
-                ),
-            )
-        ).first()
-        if attached_connection is not None:
-            raise ElectricalConflictError(
-                "Die Schrankkomponente ist noch verkabelt. Entferne zuerst ihre Verbindungen."
-            )
-        if record.component_type in {
-            ElectricalCabinetComponentType.BUSBAR.value,
-            ElectricalCabinetComponentType.PHASE_RAIL.value,
-        }:
-            rail_end = record.start_position + record.module_width - 1
-            covered_device = self.session.exec(
-                select(ElectricalProtectiveDevice)
-                .join(
-                    ElectricalComponent,
-                    ElectricalComponent.id == ElectricalProtectiveDevice.id,
-                )
-                .where(
-                    ElectricalProtectiveDevice.distribution_id == distribution_id,
-                    ElectricalProtectiveDevice.area_id == record.area_id,
-                    ElectricalProtectiveDevice.row_number == record.row_number,
-                    ElectricalProtectiveDevice.start_position >= record.start_position,
-                    ElectricalProtectiveDevice.start_position <= rail_end,
-                    col(ElectricalComponent.deleted_at).is_(None),
+        phase_rail = record.component_type == ElectricalCabinetComponentType.PHASE_RAIL.value
+
+        if phase_rail:
+            # Removing a physical phase rail leaves the DIN devices in place,
+            # but every incoming and derived outgoing connection of the rail must be
+            # deactivated atomically. This keeps the topology free of references to
+            # archived cabinet components and makes the archive action usable directly
+            # from the detail drawer.
+            PhaseRailConnectionService(self.session).archive_component_connections(record.id)
+        else:
+            attached_connection = self.session.exec(
+                select(ElectricalConnection).where(
+                    col(ElectricalConnection.deleted_at).is_(None),
+                    (
+                        (ElectricalConnection.source_kind == "cabinet_component")
+                        & (ElectricalConnection.source_id == record.id)
+                    )
+                    | (
+                        (ElectricalConnection.target_kind == "cabinet_component")
+                        & (ElectricalConnection.target_id == record.id)
+                    ),
                 )
             ).first()
-            if covered_device is not None:
+            if attached_connection is not None:
                 raise ElectricalConflictError(
-                    "Die Kamm-/Phasenschiene versorgt noch Schutzgeräte. "
-                    "Verschiebe oder entferne diese zuerst."
+                    "Die Schrankkomponente ist noch verkabelt. Entferne zuerst ihre "
+                    "manuell dokumentierten Verbindungen."
                 )
-        if self.session.exec(
-            select(ElectricalProtectiveDevice).where(
-                ElectricalProtectiveDevice.neutral_rail_id == record.id
+
+        assigned_device = self.session.exec(
+            select(ElectricalProtectiveDevice)
+            .join(
+                ElectricalComponent,
+                ElectricalComponent.id == ElectricalProtectiveDevice.id,
             )
-        ).first() is not None:
+            .where(
+                ElectricalProtectiveDevice.neutral_rail_id == record.id,
+                col(ElectricalComponent.deleted_at).is_(None),
+            )
+        ).first()
+        if assigned_device is not None:
             raise ElectricalConflictError(
-                "Die N-Schiene ist noch Schutzgeräten zugeordnet. "
+                "Die N-Schiene ist noch aktiven Schutzgeräten zugeordnet. "
                 "Entferne zuerst diese Zuordnungen."
             )
         now = datetime.now(UTC)
         record.deleted_at = now
         record.updated_at = now
         self.session.add(record)
+        PhaseRailConnectionService(self.session).sync_component(record)
         self._commit()
 
     def list_meter_placements(
@@ -599,9 +722,11 @@ class ElectricalLayoutService:
         if asset is None or asset.deleted_at is not None or asset.status != "active":
             raise ElectricalNotFoundError
         asset_type = self.session.get(AssetType, asset.asset_type_id)
-        if asset_type is None or asset_type.name.strip().casefold() != "zähler":
+        if asset_type is None or not asset_type.is_meter:
+            detected = asset_type.name if asset_type is not None else "unbekannt"
             raise ElectricalValidationError(
-                "Direkt platzierbare Assets müssen vom Typ „Zähler“ sein"
+                "Direkt platzierbare Assets benötigen die Zähler-Capability "
+                f"(erkannter Typ: {detected})."
             )
         area = self._area(payload.area_id, distribution_id)
         if area.area_type != DistributionAreaType.METER.value:
@@ -733,7 +858,12 @@ class ElectricalLayoutService:
             device.start_position = None
             device.module_width = None
             component.updated_at = datetime.now(UTC)
+            PhaseRailConnectionService(self.session).sync_distribution(
+                distribution_id, verify=False
+            )
             self._commit()
+            PhaseRailConnectionService(self.session).sync_distribution(distribution_id)
+            self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
             return
         assert row_number is not None and start_position is not None
         asset = self.session.get(Asset, component.asset_id)
@@ -758,21 +888,40 @@ class ElectricalLayoutService:
                 "Das Schutzgeräte-Asset benötigt eine DIN-Breite am Asset, Asset-Typ "
                 "oder Produkt, bevor es auf der Hutschiene platziert werden kann."
             )
-        _, area = self._placement_context(distribution_id, area_id)
-        self._validate_module_placement(
-            distribution,
-            area,
+        try:
+            area = validate_protective_device_placement(
+                self.session,
+                distribution,
+                area_id=area_id,
+                row_number=row_number,
+                start_position=start_position,
+                module_width=resolved_width,
+                exclude_device_id=device_id,
+            )
+        except ElectricalPlacementIssue as exc:
+            error_type = ElectricalConflictError if exc.conflict else ElectricalValidationError
+            raise error_type(exc.message) from exc
+        self._validate_effective_device_group_links(
+            distribution_id,
+            device_id=device_id,
+            area_id=area.id if area else None,
             row_number=row_number,
             start_position=start_position,
             module_width=resolved_width,
-            exclude_device_id=device_id,
+            assigned_rcd_id=assigned_rcd_id,
+            neutral_rail_id=neutral_rail_id,
         )
         device.area_id = area.id if area else None
         device.row_number = row_number
         device.start_position = start_position
         device.module_width = resolved_width
         component.updated_at = datetime.now(UTC)
+        PhaseRailConnectionService(self.session).sync_distribution(
+            distribution_id, verify=False
+        )
         self._commit()
+        PhaseRailConnectionService(self.session).sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
 
     def update_device_technical(
         self,
@@ -794,6 +943,40 @@ class ElectricalLayoutService:
             payload.assigned_rcd_id,
             payload.neutral_rail_id,
         )
+        active_circuit = self.session.exec(
+            select(ElectricalCircuit).where(
+                ElectricalCircuit.protective_device_id == device_id,
+                col(ElectricalCircuit.deleted_at).is_(None),
+            )
+        ).first()
+        if (
+            active_circuit is not None
+            and payload.device_type.value not in {"fuse", "mcb", "rcbo"}
+        ):
+            raise ElectricalConflictError(
+                "Das Schutzgerät ist aktiven Stromkreisen zugeordnet und muss eine "
+                "Sicherung, ein LS oder ein FI/LS bleiben."
+            )
+        self._validate_layout_rcd_role_change(
+            device_id,
+            current_type=device.device_type,
+            requested_type=payload.device_type.value,
+        )
+        if (
+            device.row_number is not None
+            and device.start_position is not None
+            and device.module_width is not None
+        ):
+            self._validate_effective_device_group_links(
+                distribution_id,
+                device_id=device_id,
+                area_id=device.area_id,
+                row_number=device.row_number,
+                start_position=device.start_position,
+                module_width=device.module_width,
+                assigned_rcd_id=payload.assigned_rcd_id,
+                neutral_rail_id=payload.neutral_rail_id,
+            )
         device.device_type = payload.device_type.value
         device.rated_current_a = payload.rated_current_a
         device.residual_current_ma = payload.residual_current_ma
@@ -808,7 +991,12 @@ class ElectricalLayoutService:
         device.description = payload.description
         device.notes = payload.notes
         component.updated_at = datetime.now(UTC)
+        PhaseRailConnectionService(self.session).sync_distribution(
+            distribution_id, verify=False
+        )
         self._commit()
+        PhaseRailConnectionService(self.session).sync_distribution(distribution_id)
+        self._commit("Die automatische Verkabelung der Phasen-/Kammschiene ist fehlgeschlagen.")
 
     def _validate_placement(
         self,
@@ -819,14 +1007,19 @@ class ElectricalLayoutService:
         module_width: int,
     ) -> None:
         distribution = self._distribution_for_area(area)
-        self._validate_module_placement(
-            distribution,
-            area,
-            row_number=row_number,
-            start_position=start_position,
-            module_width=module_width,
-            exclude_device_id=device_id,
-        )
+        try:
+            validate_protective_device_placement(
+                self.session,
+                distribution,
+                area_id=area.id,
+                row_number=row_number,
+                start_position=start_position,
+                module_width=module_width,
+                exclude_device_id=device_id,
+            )
+        except ElectricalPlacementIssue as exc:
+            error_type = ElectricalConflictError if exc.conflict else ElectricalValidationError
+            raise error_type(exc.message) from exc
 
     def _validate_area_level(
         self,
@@ -930,9 +1123,19 @@ class ElectricalLayoutService:
                     "Für diese Verteilung muss ein Gerätebereich ausgewählt werden."
                 )
             area = self._area(area_id, distribution_id)
-            if area.area_type != DistributionAreaType.DEVICE_ROWS.value:
+            allowed_area_types = {DistributionAreaType.DEVICE_ROWS.value}
+            if allow_junction_box:
+                allowed_area_types.update(
+                    {
+                        DistributionAreaType.NEUTRAL_RAIL.value,
+                        DistributionAreaType.PROTECTIVE_EARTH_RAIL.value,
+                    }
+                )
+            if area.area_type not in allowed_area_types:
                 raise ElectricalValidationError(
-                    "DIN-Komponenten können nur in einem Gerätebereich platziert werden."
+                    "DIN-Komponenten können nur in einem Gerätebereich platziert werden. "
+                    "N- und PE-Schrankkomponenten dürfen zusätzlich in den jeweils "
+                    "passenden Schienenbereichen liegen."
                 )
             return distribution, area
         if area_id is not None:
@@ -970,61 +1173,135 @@ class ElectricalLayoutService:
                 f"{modules_per_row} TE."
             )
         area_id = area.id if area else None
-        overlay_rail_types = {
-            ElectricalCabinetComponentType.BUSBAR.value,
-            ElectricalCabinetComponentType.PHASE_RAIL.value,
-        }
-        placing_overlay_rail = placing_component_type in overlay_rail_types
+        busbar_type = ElectricalCabinetComponentType.BUSBAR.value
+        phase_rail_type = ElectricalCabinetComponentType.PHASE_RAIL.value
+        placing_busbar = placing_component_type == busbar_type
+        placing_phase_rail = placing_component_type == phase_rail_type
+
         for device in self._active_devices_for_context(distribution.id, area_id):
-            if placing_overlay_rail:
-                continue
             if device.id == exclude_device_id or device.row_number != row_number:
                 continue
-            if device.start_position is None or device.module_width is None:
+            device_width = self._protective_device_module_width(device)
+            if device.start_position is None or device_width is None:
                 continue
-            other_end = device.start_position + device.module_width - 1
-            if start_position <= other_end and end_position >= device.start_position:
-                raise ElectricalConflictError(
-                    "Die Position überschneidet sich mit einem vorhandenen Schutzgerät."
-                )
+            if not spans_overlap(
+                start_position,
+                module_width,
+                device.start_position,
+                device_width,
+            ):
+                continue
+            if placing_busbar:
+                continue
+            if placing_phase_rail:
+                if not rail_fully_covers_device(
+                    rail_start=start_position,
+                    rail_width=module_width,
+                    device_start=device.start_position,
+                    device_width=device_width,
+                ):
+                    raise ElectricalConflictError(
+                        "Eine Phasen-/Kammschiene darf ein Schutzgerät nicht nur "
+                        "teilweise überdecken. Passe Schienenbereich oder Geräteposition an."
+                    )
+                if (
+                    device.device_type in {"rcd", "rcbo"}
+                    and (device.poles or 1) == 4
+                    and (
+                        start_position != 1
+                        or device.start_position != 1
+                        or device_width < 4
+                    )
+                ):
+                    raise ElectricalConflictError(
+                        "Ein vierpoliger FI/RCD oder FI/LS muss gemeinsam mit der "
+                        "Phasen-/Kammschiene bei TE 1 beginnen. L1, L2 und L3 werden "
+                        "über die ersten drei Kontakte geführt; der vierte Pol bleibt "
+                        "für N frei."
+                    )
+                continue
+            raise ElectricalConflictError(
+                "Die Position überschneidet sich mit einem vorhandenen Schutzgerät."
+            )
+
         for placement in self._active_asset_placements_for_context(
             distribution.id, area_id
         ):
-            # Kamm-/Phasenschienen sind Anschlusskomponenten ohne eigene
-            # TE-Belegung und dürfen deshalb über bereits platzierten
-            # DIN-Hutschienengeräten liegen.
-            if placing_overlay_rail:
-                continue
             if (
                 placement.id == exclude_asset_placement_id
                 or placement.row_number != row_number
             ):
                 continue
-            other_end = placement.start_position + placement.module_width - 1
-            if start_position <= other_end and end_position >= placement.start_position:
-                raise ElectricalConflictError(
-                    "Die Position überschneidet sich mit einem vorhandenen DIN-Hutschienengerät."
-                )
+            if not spans_overlap(
+                start_position,
+                module_width,
+                placement.start_position,
+                placement.module_width,
+            ):
+                continue
+            if placing_busbar:
+                continue
+            if placing_phase_rail:
+                if not rail_fully_covers_device(
+                    rail_start=start_position,
+                    rail_width=module_width,
+                    device_start=placement.start_position,
+                    device_width=placement.module_width,
+                ):
+                    raise ElectricalConflictError(
+                        "Eine Phasen-/Kammschiene darf ein DIN-Gerät nicht nur "
+                        "teilweise überdecken. Passe Schienenbereich oder "
+                        "Geräteposition an."
+                    )
+                continue
+            raise ElectricalConflictError(
+                "Die Position überschneidet sich mit einem vorhandenen "
+                "DIN-Hutschienengerät."
+            )
+
         for component in self._active_cabinet_components_for_context(
             distribution.id, area_id
         ):
             if (
                 component.id == exclude_cabinet_component_id
                 or component.row_number != row_number
+                or not spans_overlap(
+                    start_position,
+                    module_width,
+                    component.start_position,
+                    component.module_width,
+                )
             ):
                 continue
-            other_end = component.start_position + component.module_width - 1
-            if start_position > other_end or end_position < component.start_position:
-                continue
-            existing_overlay_rail = component.component_type in overlay_rail_types
-            if placing_overlay_rail:
-                # Zwei Schienen können denselben TE-Bereich nutzen, wenn sie auf
-                # unterschiedlichen Montageseiten liegen. Auf derselben Seite
-                # würden sie sich dagegen physisch überschneiden. Andere
-                # Schrankkomponenten belegen für eine Overlay-Schiene keine TE.
-                if (
-                    existing_overlay_rail
-                    and component.mounting_side == placing_component_mounting_side
+            existing_busbar = component.component_type == busbar_type
+            existing_phase_rail = component.component_type == phase_rail_type
+
+            if placing_phase_rail:
+                if existing_phase_rail:
+                    raise ElectricalConflictError(
+                        "Phasen-/Kammschienen dürfen sich nicht überdecken, weil sonst "
+                        "die Phasenzuordnung der Schutzgeräte mehrdeutig wäre."
+                    )
+                if existing_busbar:
+                    if component.mounting_side == placing_component_mounting_side:
+                        side_name = (
+                            "oberhalb"
+                            if placing_component_mounting_side == "above"
+                            else "unterhalb"
+                        )
+                        raise ElectricalConflictError(
+                            "Die Phasen-/Kammschiene überschneidet sich mit einer "
+                            f"Sammelschiene auf der Montageebene {side_name}."
+                        )
+                    continue
+                raise ElectricalConflictError(
+                    "Die Phasen-/Kammschiene überschneidet sich mit einer anderen "
+                    "Schrankkomponente."
+                )
+
+            if placing_busbar:
+                if (existing_busbar or existing_phase_rail) and (
+                    component.mounting_side == placing_component_mounting_side
                 ):
                     side_name = (
                         "oberhalb"
@@ -1032,17 +1309,45 @@ class ElectricalLayoutService:
                         else "unterhalb"
                     )
                     raise ElectricalConflictError(
-                        "Die Position überschneidet sich mit einer vorhandenen "
-                        f"Kamm-/Phasenschiene auf der Montageebene {side_name}."
+                        "Die Position überschneidet sich mit einer vorhandenen Schiene "
+                        f"auf der Montageebene {side_name}."
                     )
                 continue
-            # Bereits vorhandene Overlay-Schienen blockieren weder Schutzgeräte
-            # noch normale DIN-Assets, weil sie selbst keine TE belegen.
-            if existing_overlay_rail and placing_component_type is None:
+
+            # General busbars are non-TE overlays. A phase/comb rail may share
+            # its span with a DIN device only when the device is completely covered;
+            # every covered DIN device then receives a derived physical contact.
+            if existing_busbar:
+                continue
+            if existing_phase_rail and placing_component_type is None:
+                if not rail_fully_covers_device(
+                    rail_start=component.start_position,
+                    rail_width=component.module_width,
+                    device_start=start_position,
+                    device_width=module_width,
+                ):
+                    raise ElectricalConflictError(
+                        "Das DIN-Gerät liegt nur teilweise unter der Phasen-/"
+                        "Kammschiene. Verschiebe das Gerät vollständig in den "
+                        "Schienenbereich oder außerhalb davon."
+                    )
                 continue
             raise ElectricalConflictError(
-                "Die Position überschneidet sich mit einer vorhandenen Schrankkomponente."
+                "Die Position überschneidet sich mit einer vorhandenen "
+                "Schrankkomponente."
             )
+
+    def _protective_device_module_width(
+        self, device: ElectricalProtectiveDevice
+    ) -> int | None:
+        component = self.session.get(ElectricalComponent, device.id)
+        asset = self.session.get(Asset, component.asset_id) if component is not None else None
+        inherited_width = (
+            effective_asset_module_width(self.session, asset)
+            if asset is not None and asset.deleted_at is None
+            else None
+        )
+        return inherited_width if inherited_width is not None else device.module_width
 
     def _active_devices_for_context(
         self, distribution_id: UUID, area_id: UUID | None
@@ -1093,6 +1398,55 @@ class ElectricalLayoutService:
         )
         return list(self.session.exec(statement).all())
 
+    @staticmethod
+    def _area_rail_component_type(area_type: str) -> str | None:
+        if area_type == DistributionAreaType.NEUTRAL_RAIL.value:
+            return ElectricalCabinetComponentType.NEUTRAL_RAIL.value
+        if area_type == DistributionAreaType.PROTECTIVE_EARTH_RAIL.value:
+            return ElectricalCabinetComponentType.PROTECTIVE_EARTH_RAIL.value
+        return None
+
+    def _ensure_area_rail_component(
+        self,
+        distribution_id: UUID,
+        area: ElectricalDistributionArea,
+    ) -> ElectricalCabinetComponent | None:
+        component_type = self._area_rail_component_type(area.area_type)
+        if component_type is None:
+            return None
+        existing = self.session.exec(
+            select(ElectricalCabinetComponent).where(
+                ElectricalCabinetComponent.distribution_id == distribution_id,
+                ElectricalCabinetComponent.area_id == area.id,
+                ElectricalCabinetComponent.component_type == component_type,
+                col(ElectricalCabinetComponent.deleted_at).is_(None),
+            )
+        ).first()
+        if existing is not None:
+            return existing
+        record = ElectricalCabinetComponent(
+            distribution_id=distribution_id,
+            area_id=area.id,
+            component_type=component_type,
+            name=area.name,
+            row_number=1,
+            start_position=1,
+            module_width=1,
+            phase_l1=False,
+            phase_l2=False,
+            phase_l3=False,
+            neutral=component_type == ElectricalCabinetComponentType.NEUTRAL_RAIL.value,
+            protective_earth=(
+                component_type
+                == ElectricalCabinetComponentType.PROTECTIVE_EARTH_RAIL.value
+            ),
+            description=(
+                "Automatisch aus dem Schienenbereich erzeugter elektrischer Endpunkt."
+            ),
+        )
+        self.session.add(record)
+        return record
+
     def _cabinet_component(
         self, component_id: UUID, distribution_id: UUID
     ) -> ElectricalCabinetComponent:
@@ -1116,6 +1470,22 @@ class ElectricalLayoutService:
             if record.area_id is not None
             else None
         )
+        automatic_connection_count = 0
+        if record.component_type == "phase_rail":
+            automatic_connection_count = len(
+                self.session.exec(
+                    select(ElectricalConnection).where(
+                        ElectricalConnection.source_kind == "cabinet_component",
+                        ElectricalConnection.source_id == record.id,
+                        (
+                            (ElectricalConnection.target_kind == "protective_device")
+                            | (ElectricalConnection.target_kind == "asset")
+                        ),
+                        ElectricalConnection.connection_type == "busbar",
+                        col(ElectricalConnection.deleted_at).is_(None),
+                    )
+                ).all()
+            )
         return ElectricalCabinetComponentRead(
             id=record.id,
             distribution_id=record.distribution_id,
@@ -1131,8 +1501,13 @@ class ElectricalLayoutService:
             rated_current_a=record.rated_current_a,
             max_cross_section_mm2=record.max_cross_section_mm2,
             outgoing_connections=record.outgoing_connections,
+            automatic_connection_count=automatic_connection_count,
             linked_rcd_device_id=record.linked_rcd_device_id,
-            linked_rcd_name=self._protective_device_display_name(record.linked_rcd_device_id),
+            linked_rcd_asset_id=record.linked_rcd_asset_id,
+            linked_rcd_name=self._rcd_reference_display_name(
+                record.linked_rcd_device_id,
+                record.linked_rcd_asset_id,
+            ),
             start_phase=(
                 ElectricalPhase(record.start_phase) if record.start_phase is not None else None
             ),
@@ -1168,6 +1543,7 @@ class ElectricalLayoutService:
             "max_cross_section_mm2": payload.max_cross_section_mm2,
             "outgoing_connections": payload.outgoing_connections,
             "linked_rcd_device_id": payload.linked_rcd_device_id,
+            "linked_rcd_asset_id": payload.linked_rcd_asset_id,
             "start_phase": (
                 payload.start_phase.value if payload.start_phase is not None else None
             ),
@@ -1204,6 +1580,24 @@ class ElectricalLayoutService:
             return None
         return asset.name if asset else str(device_id)
 
+    def _rcd_asset_display_name(self, asset_id: UUID | None) -> str | None:
+        if asset_id is None:
+            return None
+        asset = self.session.get(Asset, asset_id)
+        if asset is None or asset.deleted_at is not None:
+            return None
+        return asset.name
+
+    def _rcd_reference_display_name(
+        self,
+        device_id: UUID | None,
+        asset_id: UUID | None,
+    ) -> str | None:
+        return (
+            self._protective_device_display_name(device_id)
+            or self._rcd_asset_display_name(asset_id)
+        )
+
     def _validate_rcd(self, distribution_id: UUID, device_id: UUID | None) -> None:
         if device_id is None:
             return
@@ -1218,6 +1612,116 @@ class ElectricalLayoutService:
         ):
             raise ElectricalValidationError(
                 "Der ausgewählte FI/RCD ist in dieser Verteilung nicht verfügbar."
+            )
+
+    def _validate_rcd_asset(
+        self,
+        distribution_id: UUID,
+        asset_id: UUID | None,
+    ) -> None:
+        if asset_id is None:
+            return
+        asset = self.session.get(Asset, asset_id)
+        asset_type = (
+            self.session.get(AssetType, asset.asset_type_id)
+            if asset is not None
+            else None
+        )
+        placement = self.session.exec(
+            select(ElectricalAssetPlacement).where(
+                ElectricalAssetPlacement.distribution_id == distribution_id,
+                ElectricalAssetPlacement.asset_id == asset_id,
+                col(ElectricalAssetPlacement.deleted_at).is_(None),
+            )
+        ).first()
+        if (
+            asset is None
+            or asset.deleted_at is not None
+            or asset.status != "active"
+            or placement is None
+            or asset_type is None
+            or not is_rcd_asset_type_name(asset_type.name)
+        ):
+            raise ElectricalValidationError(
+                "Der ausgewählte FI/RCD ist nicht als aktives FI-DIN-Gerät "
+                "in dieser Verteilung platziert."
+            )
+
+    def _validate_layout_rcd_role_change(
+        self,
+        device_id: UUID,
+        *,
+        current_type: str,
+        requested_type: str,
+    ) -> None:
+        if current_type != "rcd" or requested_type == "rcd":
+            return
+        linked_component = self.session.exec(
+            select(ElectricalCabinetComponent).where(
+                ElectricalCabinetComponent.linked_rcd_device_id == device_id,
+                col(ElectricalCabinetComponent.deleted_at).is_(None),
+            )
+        ).first()
+        assigned_device = self.session.exec(
+            select(ElectricalProtectiveDevice)
+            .join(
+                ElectricalComponent,
+                ElectricalComponent.id == ElectricalProtectiveDevice.id,
+            )
+            .where(
+                ElectricalProtectiveDevice.assigned_rcd_id == device_id,
+                col(ElectricalComponent.deleted_at).is_(None),
+            )
+        ).first()
+        if linked_component is not None or assigned_device is not None:
+            raise ElectricalConflictError(
+                "Der FI/RCD wird noch von Schienen oder Schutzgeräten referenziert "
+                "und kann deshalb nicht in einen anderen Gerätetyp umgewandelt werden."
+            )
+
+    def _validate_effective_device_group_links(
+        self,
+        distribution_id: UUID,
+        *,
+        device_id: UUID,
+        area_id: UUID | None,
+        row_number: int,
+        start_position: int,
+        module_width: int,
+        assigned_rcd_id: UUID | None,
+        neutral_rail_id: UUID | None,
+    ) -> None:
+        rails = covering_phase_rails(
+            self.session,
+            distribution_id,
+            area_id=area_id,
+            row_number=row_number,
+            start_position=start_position,
+            module_width=module_width,
+            device_id=device_id,
+        )
+        phase_rail_rcd_id = rails[0].linked_rcd_device_id if rails else None
+        neutral_rail = (
+            self.session.get(ElectricalCabinetComponent, neutral_rail_id)
+            if neutral_rail_id is not None
+            else None
+        )
+        neutral_rail_rcd_id = (
+            neutral_rail.linked_rcd_device_id if neutral_rail is not None else None
+        )
+        distinct = {
+            linked_id
+            for linked_id in (
+                assigned_rcd_id,
+                phase_rail_rcd_id,
+                neutral_rail_rcd_id,
+            )
+            if linked_id is not None
+        }
+        if len(distinct) > 1:
+            raise ElectricalValidationError(
+                "Schutzgerät, Phasen-/Kammschiene und N-Schiene verweisen auf "
+                "unterschiedliche FI/RCD. Korrigiere die Gruppenzuordnung."
             )
 
     def _validate_device_group_links(
@@ -1252,9 +1756,29 @@ class ElectricalLayoutService:
     @staticmethod
     def _validate_cabinet_component_kind(
         distribution: ElectricalDistribution,
+        area: ElectricalDistributionArea | None,
         payload: ElectricalCabinetComponentWrite,
     ) -> None:
         if distribution.layout_mode != DistributionLayoutMode.JUNCTION_BOX.value:
+            if area is None:
+                return
+            if area.area_type == DistributionAreaType.NEUTRAL_RAIL.value:
+                if payload.component_type != ElectricalCabinetComponentType.NEUTRAL_RAIL:
+                    raise ElectricalValidationError(
+                        "In einem N-Schienenbereich kann ausschließlich eine N-Schiene "
+                        "platziert werden."
+                    )
+                return
+            if area.area_type == DistributionAreaType.PROTECTIVE_EARTH_RAIL.value:
+                if (
+                    payload.component_type
+                    != ElectricalCabinetComponentType.PROTECTIVE_EARTH_RAIL
+                ):
+                    raise ElectricalValidationError(
+                        "In einem PE-Schienenbereich kann ausschließlich eine PE-Schiene "
+                        "platziert werden."
+                    )
+                return
             return
         allowed = {
             ElectricalCabinetComponentType.TERMINAL_BLOCK,
@@ -1272,19 +1796,110 @@ class ElectricalLayoutService:
         self,
         distribution_id: UUID,
         payload: ElectricalCabinetComponentWrite,
+        *,
+        component_id: UUID | None,
     ) -> None:
         self._validate_rcd(distribution_id, payload.linked_rcd_device_id)
+        self._validate_rcd_asset(distribution_id, payload.linked_rcd_asset_id)
         if (
-            payload.linked_rcd_device_id is not None
+            (
+                payload.linked_rcd_device_id is not None
+                or payload.linked_rcd_asset_id is not None
+            )
             and payload.component_type not in {
-                ElectricalCabinetComponentType.BUSBAR,
                 ElectricalCabinetComponentType.PHASE_RAIL,
                 ElectricalCabinetComponentType.NEUTRAL_RAIL,
             }
         ):
             raise ElectricalValidationError(
-                "Eine FI-Zuordnung ist nur für Kamm-/Phasenschienen und N-Schienen vorgesehen."
+                "Eine FI-Zuordnung ist nur für Kamm-/Phasenschienen und N-Schienen "
+                "vorgesehen."
             )
+        linked_rcd_id = payload.linked_rcd_device_id
+        if linked_rcd_id is None:
+            return
+
+        if payload.component_type == ElectricalCabinetComponentType.PHASE_RAIL:
+            for device in self._active_devices_for_context(
+                distribution_id, payload.area_id
+            ):
+                if (
+                    device.row_number != payload.row_number
+                    or device.start_position is None
+                    or device.module_width is None
+                    or device.id == linked_rcd_id
+                    or not rail_fully_covers_device(
+                        rail_start=payload.start_position,
+                        rail_width=payload.module_width,
+                        device_start=device.start_position,
+                        device_width=device.module_width,
+                    )
+                ):
+                    continue
+                related_ids = {device.assigned_rcd_id}
+                if device.neutral_rail_id is not None:
+                    neutral_rail = self.session.get(
+                        ElectricalCabinetComponent, device.neutral_rail_id
+                    )
+                    if neutral_rail is not None and neutral_rail.deleted_at is None:
+                        related_ids.add(neutral_rail.linked_rcd_device_id)
+                related_ids.discard(None)
+                if any(item != linked_rcd_id for item in related_ids):
+                    raise ElectricalConflictError(
+                        "Die neue FI-Zuordnung der Phasen-/Kammschiene widerspricht "
+                        "bereits dokumentierten FI- oder N-Schienen-Zuordnungen der "
+                        "überdeckten Schutzgeräte."
+                    )
+
+        if (
+            payload.component_type == ElectricalCabinetComponentType.NEUTRAL_RAIL
+            and component_id is not None
+        ):
+            assigned_devices = self.session.exec(
+                select(ElectricalProtectiveDevice)
+                .join(
+                    ElectricalComponent,
+                    ElectricalComponent.id == ElectricalProtectiveDevice.id,
+                )
+                .where(
+                    ElectricalProtectiveDevice.neutral_rail_id == component_id,
+                    col(ElectricalComponent.deleted_at).is_(None),
+                )
+            ).all()
+            for device in assigned_devices:
+                if (
+                    device.assigned_rcd_id is not None
+                    and device.assigned_rcd_id != linked_rcd_id
+                ):
+                    raise ElectricalConflictError(
+                        "Die neue FI-Zuordnung der N-Schiene widerspricht der "
+                        "manuellen FI-Zuordnung eines Schutzgeräts."
+                    )
+                if (
+                    device.row_number is None
+                    or device.start_position is None
+                    or device.module_width is None
+                ):
+                    continue
+                rails = covering_phase_rails(
+                    self.session,
+                    distribution_id,
+                    area_id=device.area_id,
+                    row_number=device.row_number,
+                    start_position=device.start_position,
+                    module_width=device.module_width,
+                    device_id=device.id,
+                )
+                if (
+                    rails
+                    and rails[0].id != component_id
+                    and rails[0].linked_rcd_device_id is not None
+                    and rails[0].linked_rcd_device_id != linked_rcd_id
+                ):
+                    raise ElectricalConflictError(
+                        "Die neue FI-Zuordnung der N-Schiene widerspricht der "
+                        "FI-Zuordnung einer Phasen-/Kammschiene."
+                    )
 
     def _structured_distribution(
         self,
@@ -1543,6 +2158,7 @@ class ElectricalLayoutService:
             asset_name=asset.name,
             asset_code=asset.jarvis_code,
             asset_type_name=asset_type.name if asset_type else "Unbekannter Asset-Typ",
+            is_rcd=is_rcd_asset_type_name(asset_type.name if asset_type else None),
             product_name=product.name if product else None,
             location_path=location_path,
             row_number=placement.row_number,

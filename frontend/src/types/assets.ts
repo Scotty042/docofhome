@@ -5,6 +5,7 @@ export type { Location } from './locations'
 export type AssetStatus = 'active' | 'inactive' | 'maintenance' | 'retired'
 export type SortOrder = 'asc' | 'desc'
 export type ProductImageSource = 'url' | 'upload' | 'immich' | 'online'
+export type SwitchPortLayout = 'odd_even' | 'sequential_halves'
 export type BreakerCharacteristic = 'B' | 'C' | 'D' | 'K' | 'Z'
 export type CoilVoltageType = 'AC' | 'DC'
 export type ContactType = 'normally_open' | 'normally_closed' | 'changeover'
@@ -34,6 +35,11 @@ export interface AssetType extends AssetRecord {
   code_prefix: string
   description: string | null
   icon: string | null
+  image_url: string | null
+  image_source: ProductImageSource
+  image_reference: string | null
+  is_meter: boolean
+  switch_port_layout: SwitchPortLayout
   module_width: number | null
   breaker_characteristic: BreakerCharacteristic | null
   rated_current_a: number | null
@@ -47,6 +53,11 @@ export interface AssetTypeWrite {
   name: string
   description: string | null
   icon: string | null
+  image_url?: string | null
+  image_source?: ProductImageSource
+  image_reference?: string | null
+  is_meter?: boolean
+  switch_port_layout?: SwitchPortLayout
   module_width: number | null
   breaker_characteristic?: BreakerCharacteristic | null
   rated_current_a?: number | null
@@ -101,6 +112,11 @@ export interface Asset extends AssetRecord {
   location_id: string | null
   serial_number: string | null
   inventory_number: string | null
+  image_url: string | null
+  image_source: ProductImageSource
+  image_reference: string | null
+  asset_type_image_url: string | null
+  effective_image_url: string | null
   module_width: number | null
   effective_module_width: number | null
   breaker_characteristic: BreakerCharacteristic | null
@@ -117,6 +133,7 @@ export interface Asset extends AssetRecord {
   effective_contact_type: ContactType | null
   status: AssetStatus
   asset_type: Reference
+  asset_type_is_meter: boolean
   product: Reference | null
   product_image_url?: string | null
   location: Reference | null
@@ -131,6 +148,9 @@ export interface AssetWrite {
   location_id: string | null
   serial_number: string | null
   inventory_number: string | null
+  image_url: string | null
+  image_source: ProductImageSource
+  image_reference: string | null
   module_width: number | null
   breaker_characteristic?: BreakerCharacteristic | null
   rated_current_a?: number | null
@@ -225,6 +245,9 @@ export function createEmptyAsset(): AssetWrite {
     location_id: null,
     serial_number: null,
     inventory_number: null,
+    image_url: null,
+    image_source: 'url',
+    image_reference: null,
     module_width: null,
     breaker_characteristic: null,
     rated_current_a: null,
@@ -246,6 +269,9 @@ export function editableAsset(asset: Asset): AssetWrite {
     location_id: asset.location_id,
     serial_number: asset.serial_number,
     inventory_number: asset.inventory_number,
+    image_url: asset.image_url,
+    image_source: asset.image_source,
+    image_reference: asset.image_reference,
     module_width: asset.module_width,
     breaker_characteristic: asset.breaker_characteristic,
     rated_current_a: asset.rated_current_a,

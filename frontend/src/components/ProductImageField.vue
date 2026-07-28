@@ -12,11 +12,15 @@ const props = withDefaults(defineProps<{
   source?: ProductImageSource
   reference?: string | null
   searchTerms?: string
+  title?: string
+  uploadKind?: 'product' | 'asset'
 }>(), {
   modelValue: null,
   source: 'url',
   reference: null,
-  searchTerms: ''
+  searchTerms: '',
+  title: 'Produktbild',
+  uploadKind: 'product'
 })
 const notifications = useNotificationStore()
 const emit = defineEmits<{
@@ -128,7 +132,9 @@ async function upload(files: File | File[] | null) {
   busy.value = true
   error.value = null
   try {
-    const result = await assetApi.uploadProductImage(file)
+    const result = props.uploadKind === 'asset'
+      ? await assetApi.uploadAssetImage(file)
+      : await assetApi.uploadProductImage(file)
     applyImage(result.image_url, result.image_source, result.image_reference)
     tab.value = 'upload'
   } catch (reason) {
@@ -245,7 +251,7 @@ async function importOnline(item: ProductImageSearchItem) {
 <template>
   <div>
     <div class="d-flex flex-wrap align-center ga-2 mb-2">
-      <div class="text-subtitle-1 font-weight-medium">Produktbild</div>
+      <div class="text-subtitle-1 font-weight-medium">{{ props.title }}</div>
       <v-chip v-if="hasImage" size="small" color="primary" variant="tonal">{{ sourceLabel }}</v-chip>
       <v-spacer />
       <v-btn v-if="hasImage" size="small" variant="text" prepend-icon="mdi-delete-outline" color="error" @click="removeImage">
@@ -264,13 +270,13 @@ async function importOnline(item: ProductImageSearchItem) {
       <v-window-item value="upload">
         <v-file-input
           label="Bild auswählen oder hier ablegen"
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="image/jpeg,image/png,image/webp"
           prepend-icon="mdi-image-plus"
           :loading="busy"
           show-size
           @update:model-value="upload"
         />
-        <div class="text-caption text-medium-emphasis">JPEG, PNG, WebP oder GIF, maximal 10 MB. Das Bild wird lokal gespeichert.</div>
+        <div class="text-caption text-medium-emphasis">JPEG, PNG oder WebP, maximal 10 MB. Das Bild wird lokal gespeichert.</div>
       </v-window-item>
       <v-window-item value="immich">
         <v-btn color="primary" variant="tonal" prepend-icon="mdi-image-search" :loading="busy" @click="openImmich">

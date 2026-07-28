@@ -28,6 +28,11 @@ class ProductImageSource(StrEnum):
     ONLINE = "online"
 
 
+class SwitchPortLayout(StrEnum):
+    ODD_EVEN = "odd_even"
+    SEQUENTIAL_HALVES = "sequential_halves"
+
+
 class BreakerCharacteristic(StrEnum):
     B = "B"
     C = "C"
@@ -76,10 +81,32 @@ class ReferenceRead(BaseModel):
     name: str
 
 
+
+
+def _normalize_image_url(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    normalized = value.strip()
+    if normalized.startswith("/") and not normalized.startswith("//"):
+        return normalized
+    return str(TypeAdapter(AnyHttpUrl).validate_python(normalized))
+
+
+def _normalize_image_reference(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    return value.strip()
+
+
 class AssetTypeWrite(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str | None = None
     icon: str | None = Field(default=None, max_length=100)
+    image_url: str | None = Field(default=None, max_length=1000)
+    image_source: ProductImageSource = ProductImageSource.URL
+    image_reference: str | None = Field(default=None, max_length=1000)
+    is_meter: bool = False
+    switch_port_layout: SwitchPortLayout = SwitchPortLayout.ODD_EVEN
     module_width: int | None = Field(default=None, ge=1, le=100)
     breaker_characteristic: BreakerCharacteristic | None = None
     rated_current_a: float | None = Field(default=None, gt=0, le=10000)
@@ -93,12 +120,20 @@ class AssetTypeWrite(BaseModel):
     def normalize_name(cls, value: str) -> str:
         return _required_text(value, "Asset type name")
 
+    _normalize_image_url = field_validator("image_url")(_normalize_image_url)
+    _normalize_image_reference = field_validator("image_reference")(_normalize_image_reference)
+
 
 class AssetTypeRead(RecordRead):
     name: str
     code_prefix: str
     description: str | None
     icon: str | None
+    image_url: str | None = None
+    image_source: ProductImageSource = ProductImageSource.URL
+    image_reference: str | None = None
+    is_meter: bool = False
+    switch_port_layout: SwitchPortLayout = SwitchPortLayout.ODD_EVEN
     module_width: int | None
     breaker_characteristic: BreakerCharacteristic | None
     rated_current_a: float | None
@@ -243,6 +278,9 @@ class AssetWrite(BaseModel):
     location_id: UUID | None = None
     serial_number: str | None = Field(default=None, max_length=200)
     inventory_number: str | None = Field(default=None, max_length=200)
+    image_url: str | None = Field(default=None, max_length=1000)
+    image_source: ProductImageSource = ProductImageSource.URL
+    image_reference: str | None = Field(default=None, max_length=1000)
     module_width: int | None = Field(default=None, ge=1, le=100)
     breaker_characteristic: BreakerCharacteristic | None = None
     rated_current_a: float | None = Field(default=None, gt=0, le=10000)
@@ -257,6 +295,9 @@ class AssetWrite(BaseModel):
     @classmethod
     def normalize_name(cls, value: str) -> str:
         return _required_text(value, "Asset name")
+
+    _normalize_asset_image_url = field_validator("image_url")(_normalize_image_url)
+    _normalize_asset_image_reference = field_validator("image_reference")(_normalize_image_reference)
 
     @field_validator("serial_number", "inventory_number")
     @classmethod
@@ -282,6 +323,11 @@ class AssetRead(RecordRead):
     location_id: UUID | None
     serial_number: str | None
     inventory_number: str | None
+    image_url: str | None = None
+    image_source: ProductImageSource = ProductImageSource.URL
+    image_reference: str | None = None
+    asset_type_image_url: str | None = None
+    effective_image_url: str | None = None
     module_width: int | None
     effective_module_width: int | None
     breaker_characteristic: BreakerCharacteristic | None
@@ -298,6 +344,7 @@ class AssetRead(RecordRead):
     effective_contact_type: ContactType | None
     status: AssetStatus
     asset_type: ReferenceRead
+    asset_type_is_meter: bool = False
     product: ReferenceRead | None
     product_image_url: str | None = None
     location: ReferenceRead | None

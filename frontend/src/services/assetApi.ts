@@ -153,6 +153,11 @@ export const assetApi = {
     data.append('image', file)
     return uploadRequest<ProductImageUpload>('/products/images/upload', data, signal)
   },
+  uploadAssetImage: (file: File, signal?: AbortSignal) => {
+    const data = new FormData()
+    data.append('image', file)
+    return uploadRequest<ProductImageUpload>('/assets/images/upload', data, signal)
+  },
   searchProductImages: (query: string, signal?: AbortSignal) => request<ProductImageSearch>(
     `/products/images/search${queryString({ query })}`, { signal }
   ),

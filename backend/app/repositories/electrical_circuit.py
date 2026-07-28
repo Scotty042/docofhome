@@ -74,6 +74,7 @@ class ElectricalCircuitRepository:
         include_deleted: bool,
         distribution_id: UUID | None,
         protective_device_id: UUID | None,
+        protective_device_asset_id: UUID | None = None,
     ) -> PageResult[ElectricalCircuitProjection]:
         if sort_by not in self.sort_fields:
             allowed = ", ".join(sorted(self.sort_fields))
@@ -92,6 +93,12 @@ class ElectricalCircuitRepository:
                 item
                 for item in candidates
                 if item.record.protective_device_id == protective_device_id
+            ]
+        if protective_device_asset_id is not None:
+            candidates = [
+                item
+                for item in candidates
+                if item.record.protective_device_asset_id == protective_device_asset_id
             ]
         normalized_search = search.strip().casefold() if search else ""
         if normalized_search:
@@ -192,6 +199,13 @@ class ElectricalCircuitRepository:
         )
         return self.session.exec(statement).first() is not None
 
+    def has_active_for_asset(self, asset_id: UUID) -> bool:
+        statement = select(ElectricalCircuit.id).where(
+            ElectricalCircuit.protective_device_asset_id == asset_id,
+            col(ElectricalCircuit.deleted_at).is_(None),
+        )
+        return self.session.exec(statement).first() is not None
+
     def number_exists(
         self,
         *,
@@ -239,6 +253,12 @@ class ElectricalCircuitRepository:
                 device_asset = assets.get(device_component.asset_id)
                 if device_asset is None:
                     raise ValueError("Stored circuit protective device has no asset")
+                device_name = device_asset.name
+                device_code = device_asset.jarvis_code
+            elif circuit.protective_device_asset_id is not None:
+                device_asset = assets.get(circuit.protective_device_asset_id)
+                if device_asset is None:
+                    raise ValueError("Stored electrical circuit has an invalid DIN protective asset")
                 device_name = device_asset.name
                 device_code = device_asset.jarvis_code
             projections[circuit.id] = ElectricalCircuitProjection(

@@ -42,11 +42,14 @@ def list_connection_endpoints(
     page_size: PageSize = 25,
     search: str | None = None,
 ) -> Page[ElectricalEndpointRead]:
-    return ElectricalTopologyService(session).endpoint_page(
-        page=page,
-        page_size=page_size,
-        search=search,
-    )
+    try:
+        return ElectricalTopologyService(session).endpoint_page(
+            page=page,
+            page_size=page_size,
+            search=search,
+        )
+    except ElectricalValidationError as exc:
+        raise _translate_error(exc) from exc
 
 
 @router.get("/connections", response_model=list[ElectricalConnectionRead])

@@ -4,6 +4,10 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
+from app.electrical_phase_rail import (
+    phase_rail_device_phases,
+    rail_fully_covers_device,
+)
 from app.models.asset_engine import Asset, AssetType, Relationship
 from app.models.electrical import (
     ElectricalAssetPlacement,
@@ -11,8 +15,10 @@ from app.models.electrical import (
     ElectricalComponent,
     ElectricalDistribution,
     ElectricalDistributionSection,
+    ElectricalMeterPlacement,
     ElectricalProtectiveDevice,
 )
+from app.models.electrical_topology import ElectricalConnection
 from app.repositories.asset_engine import LocationRepository
 from app.repositories.electrical import (
     AssetRoleProjection,
@@ -42,6 +48,13 @@ from app.schemas.electrical import (
 )
 from app.schemas.electrical_topology import ElectricalPhase
 from app.services.din_width import effective_asset_module_width
+from app.services.electrical_placement import (
+    ElectricalPlacementIssue,
+    covering_phase_rails,
+    resolve_device_area,
+    validate_protective_device_placement,
+)
+from app.services.phase_rail_connections import PhaseRailConnectionService
 
 
 class ElectricalNotFoundError(Exception):
@@ -332,6 +345,24 @@ class ElectricalDistributionService(ElectricalServiceBase):
             raise ElectricalConflictError(
                 "Entferne zuerst die platzierten DIN-Hutschienengeräte aus der Verteilung"
             )
+        if self.session.exec(
+            select(ElectricalMeterPlacement).where(
+                ElectricalMeterPlacement.distribution_id == distribution_id,
+                col(ElectricalMeterPlacement.deleted_at).is_(None),
+            )
+        ).first() is not None:
+            raise ElectricalConflictError(
+                "Entferne zuerst die aktiven Zählerplatzierungen aus der Verteilung"
+            )
+        if self.session.exec(
+            select(ElectricalDistributionSection).where(
+                ElectricalDistributionSection.distribution_id == distribution_id,
+                col(ElectricalDistributionSection.deleted_at).is_(None),
+            )
+        ).first() is not None:
+            raise ElectricalConflictError(
+                "Entferne zuerst die Felder und Bereiche der Verteilung"
+            )
         now = datetime.now(UTC)
         projection.component.deleted_at = now
         projection.component.updated_at = now
@@ -393,10 +424,16 @@ class ElectricalDistributionService(ElectricalServiceBase):
                     col(ElectricalDistributionSection.deleted_at).is_(None),
                 )
             ).first() is not None
-            if has_devices or has_assets or has_components or has_sections:
+            has_meters = self.session.exec(
+                select(ElectricalMeterPlacement).where(
+                    ElectricalMeterPlacement.distribution_id == distribution_id,
+                    col(ElectricalMeterPlacement.deleted_at).is_(None),
+                )
+            ).first() is not None
+            if has_devices or has_assets or has_components or has_sections or has_meters:
                 raise ElectricalConflictError(
                     "Vor dem Wechsel zur oder von der Verteilerdose müssen Schutzgeräte, "
-                    "Platzierungen, Schrankkomponenten und Felder entfernt werden."
+                    "Platzierungen, Schrankkomponenten, Zähler und Felder entfernt werden."
                 )
             return
         if new_mode == "sections":
@@ -429,6 +466,28 @@ class ElectricalDistributionService(ElectricalServiceBase):
                     "DIN-Geräte und Schrankkomponenten neu zugeordnet werden."
                 )
         else:
+            active_section = self.session.exec(
+                select(ElectricalDistributionSection).where(
+                    ElectricalDistributionSection.distribution_id == distribution_id,
+                    col(ElectricalDistributionSection.deleted_at).is_(None),
+                )
+            ).first()
+            if active_section is not None:
+                raise ElectricalConflictError(
+                    "Vor dem Wechsel zur einfachen Reihenaufteilung müssen alle "
+                    "Felder und Bereiche archiviert werden."
+                )
+            section_meter = self.session.exec(
+                select(ElectricalMeterPlacement).where(
+                    ElectricalMeterPlacement.distribution_id == distribution_id,
+                    col(ElectricalMeterPlacement.deleted_at).is_(None),
+                )
+            ).first()
+            if section_meter is not None:
+                raise ElectricalConflictError(
+                    "Vor dem Wechsel zur einfachen Reihenaufteilung müssen alle "
+                    "Zählerplatzierungen entfernt werden."
+                )
             section_asset = self.session.exec(
                 select(ElectricalAssetPlacement).where(
                     ElectricalAssetPlacement.distribution_id == distribution_id,
@@ -660,6 +719,11 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
             current_device_id=None,
             module_width=module_width,
         )
+        self._validate_effective_group_links(
+            payload,
+            device_id=None,
+            module_width=module_width,
+        )
         component = ElectricalComponent(
             asset_id=payload.asset_id,
             role=ElectricalRole.PROTECTIVE_DEVICE.value,
@@ -676,6 +740,11 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         try:
             self.components.add(component)
             self.repository.add(device)
+            PhaseRailConnectionService(self.session).sync_distribution(
+                payload.distribution_id, verify=False
+            )
+            self._commit()
+            PhaseRailConnectionService(self.session).sync_distribution(payload.distribution_id)
             self._commit()
         except Exception:
             self._rollback()
@@ -690,19 +759,34 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         projection = self.repository.get(device_id)
         if projection is None:
             raise ElectricalNotFoundError
+        previous_distribution_id = projection.record.distribution_id
         if payload.asset_id != projection.component.asset_id:
             raise ElectricalConflictError("Electrical role asset identity is immutable")
         asset = self._validate_asset(
             projection.component.asset_id,
             current_component_id=device_id,
         )
+        has_active_circuits = self.circuits.has_active_for_device(device_id)
         if (
             payload.distribution_id != projection.record.distribution_id
-            and self.circuits.has_active_for_device(device_id)
+            and has_active_circuits
         ):
             raise ElectricalConflictError(
                 "Protective device with active circuits cannot change distribution"
             )
+        if (
+            has_active_circuits
+            and payload.device_type.value not in {"fuse", "mcb", "rcbo"}
+        ):
+            raise ElectricalConflictError(
+                "Das Schutzgerät ist aktiven Stromkreisen zugeordnet und muss eine "
+                "Sicherung, ein LS oder ein FI/LS bleiben."
+            )
+        self._validate_rcd_role_change(
+            device_id,
+            current_type=projection.record.device_type,
+            requested_type=payload.device_type.value,
+        )
         distribution = self._validate_distribution(payload.distribution_id)
         self._validate_location(asset, distribution)
         self._validate_group_links(
@@ -723,6 +807,11 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
             current_device_id=device_id,
             module_width=module_width,
         )
+        self._validate_effective_group_links(
+            payload,
+            device_id=device_id,
+            module_width=module_width,
+        )
         values = payload.model_dump(
             mode="python", exclude={"asset_id", "device_type"}
         )
@@ -730,6 +819,17 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         projection.record.sqlmodel_update(values)
         projection.record.device_type = payload.device_type.value
         projection.component.updated_at = datetime.now(UTC)
+        PhaseRailConnectionService(self.session).sync_distribution(
+            previous_distribution_id, verify=False
+        )
+        if payload.distribution_id != previous_distribution_id:
+            PhaseRailConnectionService(self.session).sync_distribution(
+                payload.distribution_id, verify=False
+            )
+        self._commit()
+        PhaseRailConnectionService(self.session).sync_distribution(previous_distribution_id)
+        if payload.distribution_id != previous_distribution_id:
+            PhaseRailConnectionService(self.session).sync_distribution(payload.distribution_id)
         self._commit()
         return self.get_read(device_id)
 
@@ -746,19 +846,65 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
             )
         ).first() is not None:
             raise ElectricalConflictError(
-                "Der FI/RCD ist noch einer Sammel- oder N-Schiene zugeordnet."
+                "Der FI/RCD ist noch einer Phasen-/Kammschiene oder N-Schiene zugeordnet."
             )
         if self.session.exec(
-            select(ElectricalProtectiveDevice).where(
-                ElectricalProtectiveDevice.assigned_rcd_id == device_id
+            select(ElectricalProtectiveDevice)
+            .join(
+                ElectricalComponent,
+                ElectricalComponent.id == ElectricalProtectiveDevice.id,
+            )
+            .where(
+                ElectricalProtectiveDevice.assigned_rcd_id == device_id,
+                col(ElectricalComponent.deleted_at).is_(None),
             )
         ).first() is not None:
             raise ElectricalConflictError(
                 "Der FI/RCD ist noch anderen Schutzgeräten zugeordnet."
             )
+        active_connections = self.session.exec(
+            select(ElectricalConnection).where(
+                col(ElectricalConnection.deleted_at).is_(None),
+                (
+                    (ElectricalConnection.source_kind == "protective_device")
+                    & (ElectricalConnection.source_id == device_id)
+                )
+                | (
+                    (ElectricalConnection.target_kind == "protective_device")
+                    & (ElectricalConnection.target_id == device_id)
+                ),
+            )
+        ).all()
+        manual_connections = []
+        for connection in active_connections:
+            automatic_phase_rail = False
+            if (
+                connection.target_kind == "protective_device"
+                and connection.target_id == device_id
+                and connection.source_kind == "cabinet_component"
+                and connection.connection_type == "busbar"
+            ):
+                rail = self.session.get(
+                    ElectricalCabinetComponent, connection.source_id
+                )
+                automatic_phase_rail = (
+                    rail is not None
+                    and rail.deleted_at is None
+                    and rail.component_type == "phase_rail"
+                )
+            if not automatic_phase_rail:
+                manual_connections.append(connection)
+        if manual_connections:
+            raise ElectricalConflictError(
+                "Das Schutzgerät ist noch manuell verkabelt. Entferne zuerst seine "
+                "Zu- und Abgangsverbindungen."
+            )
         now = datetime.now(UTC)
         projection.component.deleted_at = now
         projection.component.updated_at = now
+        PhaseRailConnectionService(self.session).sync_distribution(
+            projection.record.distribution_id
+        )
         self._commit()
 
     def _validate_distribution(self, distribution_id: UUID) -> DistributionProjection:
@@ -772,6 +918,38 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         if asset.location_id != distribution.asset.record.location_id:
             raise ElectricalConflictError(
                 "Protective device and distribution must use the same location"
+            )
+
+    def _validate_rcd_role_change(
+        self,
+        device_id: UUID,
+        *,
+        current_type: str,
+        requested_type: str,
+    ) -> None:
+        if current_type != "rcd" or requested_type == "rcd":
+            return
+        linked_component = self.session.exec(
+            select(ElectricalCabinetComponent).where(
+                ElectricalCabinetComponent.linked_rcd_device_id == device_id,
+                col(ElectricalCabinetComponent.deleted_at).is_(None),
+            )
+        ).first()
+        assigned_device = self.session.exec(
+            select(ElectricalProtectiveDevice)
+            .join(
+                ElectricalComponent,
+                ElectricalComponent.id == ElectricalProtectiveDevice.id,
+            )
+            .where(
+                ElectricalProtectiveDevice.assigned_rcd_id == device_id,
+                col(ElectricalComponent.deleted_at).is_(None),
+            )
+        ).first()
+        if linked_component is not None or assigned_device is not None:
+            raise ElectricalConflictError(
+                "Der FI/RCD wird noch von Schienen oder Schutzgeräten referenziert "
+                "und kann deshalb nicht in einen anderen Gerätetyp umgewandelt werden."
             )
 
     def _validate_group_links(
@@ -812,34 +990,57 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                 "Die N-Schiene ist einem anderen FI/RCD zugeordnet."
             )
 
+    def _validate_effective_group_links(
+        self,
+        payload: ProtectiveDeviceWrite,
+        *,
+        device_id: UUID | None,
+        module_width: int | None,
+    ) -> None:
+        if (
+            payload.row_number is None
+            or payload.start_position is None
+            or module_width is None
+        ):
+            return
+        rails = covering_phase_rails(
+            self.session,
+            payload.distribution_id,
+            area_id=payload.area_id,
+            row_number=payload.row_number,
+            start_position=payload.start_position,
+            module_width=module_width,
+            device_id=device_id,
+        )
+        phase_rail_rcd_id = rails[0].linked_rcd_device_id if rails else None
+        neutral_rail = (
+            self.session.get(ElectricalCabinetComponent, payload.neutral_rail_id)
+            if payload.neutral_rail_id is not None
+            else None
+        )
+        neutral_rail_rcd_id = (
+            neutral_rail.linked_rcd_device_id if neutral_rail is not None else None
+        )
+        distinct = {
+            linked_id
+            for linked_id in (
+                payload.assigned_rcd_id,
+                phase_rail_rcd_id,
+                neutral_rail_rcd_id,
+            )
+            if linked_id is not None
+        }
+        if len(distinct) > 1:
+            raise ElectricalValidationError(
+                "Schutzgerät, Phasen-/Kammschiene und N-Schiene verweisen auf "
+                "unterschiedliche FI/RCD. Korrigiere die Gruppenzuordnung."
+            )
+
     def _device_name(self, device_id: UUID | None) -> str | None:
         if device_id is None:
             return None
         projection = self.repository.get(device_id)
         return projection.asset.record.name if projection is not None else None
-
-    @staticmethod
-    def _busbar_phase_pattern(component: ElectricalCabinetComponent) -> list[ElectricalPhase]:
-        enabled = [
-            phase
-            for phase, selected in (
-                (ElectricalPhase.L1, component.phase_l1),
-                (ElectricalPhase.L2, component.phase_l2),
-                (ElectricalPhase.L3, component.phase_l3),
-            )
-            if selected
-        ]
-        if not enabled:
-            return []
-        standard = [ElectricalPhase.L1, ElectricalPhase.L2, ElectricalPhase.L3]
-        start = (
-            ElectricalPhase(component.start_phase)
-            if component.start_phase in {item.value for item in standard}
-            else enabled[0]
-        )
-        start_index = standard.index(start)
-        rotated = standard[start_index:] + standard[:start_index]
-        return [phase for phase in rotated if phase in enabled]
 
     def _group_read_data(
         self, projection: ProtectiveDeviceProjection
@@ -854,49 +1055,80 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                 )
             ).all()
         )
-        busbars: list[ElectricalCabinetComponent] = []
-        if record.row_number is not None and record.start_position is not None:
+        phase_rails: list[ElectricalCabinetComponent] = []
+        effective_module_width = record.module_width or effective_asset_module_width(
+            self.session, projection.asset.record
+        )
+        if (
+            record.row_number is not None
+            and record.start_position is not None
+            and effective_module_width is not None
+        ):
             for component in components:
                 if (
-                    component.component_type not in {"busbar", "phase_rail"}
+                    component.component_type != "phase_rail"
                     or component.area_id != record.area_id
                     or component.row_number != record.row_number
                 ):
                     continue
-                end = component.start_position + component.module_width - 1
-                if component.start_position <= record.start_position <= end:
-                    busbars.append(component)
-        busbars.sort(
+                if rail_fully_covers_device(
+                    rail_start=component.start_position,
+                    rail_width=component.module_width,
+                    device_start=record.start_position,
+                    device_width=effective_module_width,
+                ):
+                    phase_rails.append(component)
+        phase_rails.sort(
             key=lambda item: (
                 item.module_width,
                 item.start_position,
                 item.name.casefold(),
+                str(item.id),
             )
         )
-        busbar = busbars[0] if busbars else None
-        if len(busbars) > 1:
-            warnings.append("Mehrere Kamm-/Phasenschienen überdecken die Position dieses Geräts.")
-
-        effective_rcd_id = record.assigned_rcd_id or (
-            busbar.linked_rcd_device_id if busbar else None
-        )
-        if (
-            record.assigned_rcd_id is not None
-            and busbar is not None
-            and busbar.linked_rcd_device_id is not None
-            and record.assigned_rcd_id != busbar.linked_rcd_device_id
-        ):
-            warnings.append("Manuelle FI-Zuordnung weicht von der Kamm-/Phasenschiene ab.")
+        phase_rail = phase_rails[0] if phase_rails else None
+        if len(phase_rails) > 1:
+            warnings.append(
+                "Mehrere Phasen-/Kammschienen überdecken dieses Schutzgerät vollständig. "
+                "Nur die kleinste passende Schiene wird als wirksam verwendet."
+            )
 
         explicit_neutral_rail = (
             self.session.get(ElectricalCabinetComponent, record.neutral_rail_id)
             if record.neutral_rail_id is not None
             else None
         )
+        rcd_sources = [
+            ("manuelle FI-Zuordnung", record.assigned_rcd_id),
+            (
+                "Phasen-/Kammschiene",
+                phase_rail.linked_rcd_device_id if phase_rail else None,
+            ),
+            (
+                "N-Schiene",
+                explicit_neutral_rail.linked_rcd_device_id
+                if explicit_neutral_rail is not None
+                else None,
+            ),
+        ]
+        distinct_rcd_ids = {device_id for _, device_id in rcd_sources if device_id is not None}
+        if len(distinct_rcd_ids) > 1:
+            details = ", ".join(
+                f"{source}: {self._device_name(device_id) or device_id}"
+                for source, device_id in rcd_sources
+                if device_id is not None
+            )
+            warnings.append(f"Widersprüchliche FI-/RCD-Zuordnungen ({details}).")
+        effective_rcd_id = next(
+            (device_id for _, device_id in rcd_sources if device_id is not None),
+            None,
+        )
+
         neutral_rail = explicit_neutral_rail
         if neutral_rail is None and effective_rcd_id is not None:
             matches = [
-                item for item in components
+                item
+                for item in components
                 if item.component_type == "neutral_rail"
                 and item.linked_rcd_device_id == effective_rcd_id
             ]
@@ -905,6 +1137,7 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
                     item.area_id is None,
                     item.row_number,
                     item.name.casefold(),
+                    str(item.id),
                 )
             )
             neutral_rail = matches[0] if matches else None
@@ -919,36 +1152,39 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         if (
             effective_rcd_id is not None
             and neutral_rail is None
-            and record.device_type in {"fuse", "mcb", "rcbo"}
+            and record.device_type in {"fuse", "mcb"}
             and (record.poles or 1) <= 2
         ):
             warnings.append("Für die FI-Gruppe ist noch keine N-Schiene dokumentiert.")
 
-        phases: list[ElectricalPhase] = []
-        if busbar is not None and record.start_position is not None:
-            pattern = self._busbar_phase_pattern(busbar)
-            if pattern:
-                offset = record.start_position - busbar.start_position
-                count = min(3, record.poles or 1)
-                phases = [pattern[(offset + index) % len(pattern)] for index in range(count)]
-                if (
-                    record.module_width is not None
-                    and record.start_position + record.module_width - 1
-                    > busbar.start_position + busbar.module_width - 1
-                ):
-                    warnings.append("Das Gerät ragt über das Ende der Kamm-/Phasenschiene hinaus.")
+        phases: tuple[ElectricalPhase, ...] = ()
+        if phase_rail is not None:
+            phases = phase_rail_device_phases(
+                rail_start=phase_rail.start_position,
+                rail_width=phase_rail.module_width,
+                phase_l1=phase_rail.phase_l1,
+                phase_l2=phase_rail.phase_l2,
+                phase_l3=phase_rail.phase_l3,
+                start_phase=phase_rail.start_phase,
+                device_start=record.start_position,
+                device_width=effective_module_width,
+                device_type=record.device_type,
+                poles=record.poles,
+            )
 
         return {
             "assigned_rcd_id": record.assigned_rcd_id,
             "assigned_rcd_name": self._device_name(record.assigned_rcd_id),
             "neutral_rail_id": record.neutral_rail_id,
-            "neutral_rail_name": explicit_neutral_rail.name if explicit_neutral_rail else None,
+            "neutral_rail_name": (
+                explicit_neutral_rail.name if explicit_neutral_rail else None
+            ),
             "effective_rcd_id": effective_rcd_id,
             "effective_rcd_name": self._device_name(effective_rcd_id),
             "effective_neutral_rail_id": neutral_rail.id if neutral_rail else None,
             "effective_neutral_rail_name": neutral_rail.name if neutral_rail else None,
-            "busbar_component_id": busbar.id if busbar else None,
-            "busbar_component_name": busbar.name if busbar else None,
+            "busbar_component_id": phase_rail.id if phase_rail else None,
+            "busbar_component_name": phase_rail.name if phase_rail else None,
             "calculated_phases": [phase.value for phase in phases],
             "group_warnings": warnings,
         }
@@ -988,33 +1224,55 @@ class ElectricalProtectiveDeviceService(ElectricalServiceBase):
         current_device_id: UUID | None,
         module_width: int | None,
     ) -> None:
-        if payload.row_number is None:
-            return
-        if payload.start_position is None or module_width is None:
-            raise ElectricalValidationError("Protective-device position is incomplete")
-        if distribution.record.rows is not None and payload.row_number > distribution.record.rows:
-            raise ElectricalConflictError("Row exceeds the distribution capacity")
-        end_position = payload.start_position + module_width - 1
-        if (
-            distribution.record.modules_per_row is not None
-            and end_position > distribution.record.modules_per_row
-        ):
-            raise ElectricalConflictError("Module position exceeds the distribution capacity")
-        for other in self.repository.for_distribution(
-            distribution.component.id,
-            include_deleted=False,
-        ):
-            if other.component.id == current_device_id:
-                continue
+        try:
+            if payload.row_number is None:
+                resolve_device_area(
+                    self.session,
+                    distribution.record,
+                    payload.area_id,
+                    positioned=False,
+                )
+                return
+            if payload.start_position is None or module_width is None:
+                raise ElectricalPlacementIssue(
+                    "Die Schutzgeräteposition ist unvollständig.", conflict=False
+                )
+            validate_protective_device_placement(
+                self.session,
+                distribution.record,
+                area_id=payload.area_id,
+                row_number=payload.row_number,
+                start_position=payload.start_position,
+                module_width=module_width,
+                exclude_device_id=current_device_id,
+            )
+            rails = covering_phase_rails(
+                self.session,
+                payload.distribution_id,
+                area_id=payload.area_id,
+                row_number=payload.row_number,
+                start_position=payload.start_position,
+                module_width=module_width,
+                device_id=current_device_id,
+            )
             if (
-                other.record.row_number != payload.row_number
-                or other.record.start_position is None
-                or other.record.module_width is None
+                rails
+                and payload.device_type.value in {"rcd", "rcbo"}
+                and (payload.poles or 1) == 4
+                and (
+                    payload.start_position != 1
+                    or rails[0].start_position != 1
+                    or module_width < 4
+                )
             ):
-                continue
-            other_end = other.record.start_position + other.record.module_width - 1
-            if payload.start_position <= other_end and end_position >= other.record.start_position:
-                raise ElectricalConflictError("Protective-device module positions must not overlap")
+                raise ElectricalPlacementIssue(
+                    "Ein vierpoliger FI/RCD oder FI/LS auf einer L1/L2/L3-Kammschiene muss "
+                    "bei TE 1 beginnen und mindestens 4 TE belegen. Die ersten drei "
+                    "Kontakte führen L1, L2 und L3; der vierte Pol bleibt für N frei."
+                )
+        except ElectricalPlacementIssue as exc:
+            error_type = ElectricalConflictError if exc.conflict else ElectricalValidationError
+            raise error_type(exc.message) from exc
 
     def _to_read(self, projection: ProtectiveDeviceProjection) -> ProtectiveDeviceRead:
         asset = projection.asset.record

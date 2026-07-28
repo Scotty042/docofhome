@@ -15,6 +15,9 @@ from app.schemas.network import (
     NetworkDeviceWrite,
     NetworkInterfaceRead,
     NetworkInterfaceWrite,
+    NetworkIpActionRead,
+    NetworkIpOverviewRead,
+    NetworkIpStatus,
     NetworkRole,
     NetworkSegmentRead,
     NetworkSegmentWrite,
@@ -167,6 +170,27 @@ def update_interface(
 def delete_interface(record_id: UUID, session: SessionDependency) -> Response:
     _call(lambda: NetworkService(session).delete_interface(record_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+
+
+@router.get("/ip-addresses", response_model=list[NetworkIpOverviewRead])
+def ip_addresses(
+    session: SessionDependency,
+    device_id: UUID | None = None,
+    status_filter: Annotated[NetworkIpStatus | None, Query(alias="status")] = None,
+) -> list[NetworkIpOverviewRead]:
+    return _call(lambda: NetworkService(session).list_ip_overview(device_id=device_id, status=status_filter))
+
+
+@router.post("/ip-addresses/{observed_id}/accept", response_model=NetworkIpActionRead)
+def accept_ip_address(observed_id: UUID, session: SessionDependency) -> NetworkIpActionRead:
+    return _call(lambda: NetworkService(session).accept_observed_address(observed_id))
+
+
+@router.post("/ip-addresses/{observed_id}/ignore", response_model=NetworkIpActionRead)
+def ignore_ip_address(observed_id: UUID, session: SessionDependency) -> NetworkIpActionRead:
+    return _call(lambda: NetworkService(session).ignore_observed_address(observed_id))
 
 
 @router.get("/addresses", response_model=list[NetworkAddressRead])

@@ -247,3 +247,76 @@ def test_legacy_enum_values_fall_back_without_crashing(network_session: Session)
     assert service._assignment_type("legacy-assignment") == NetworkAssignmentType.UNKNOWN
     assert service._connection_type("legacy-connection") == NetworkConnectionType.PHYSICAL
     assert service._connection_status("legacy-status") == NetworkConnectionStatus.INACTIVE
+
+
+def test_release_1_7_hostname_and_interface_speed_validation() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="Unterstriche"):
+        NetworkDeviceWrite(asset_id=__import__('uuid').uuid4(), hostname="fritz.repeater_600-1")
+    assert NetworkDeviceWrite(
+        asset_id=__import__('uuid').uuid4(), hostname="fritz.repeater-600-1"
+    ).hostname == "fritz.repeater-600-1"
+
+    for speed in (100, 1000, 2500):
+        assert NetworkInterfaceWrite(
+            network_device_id=__import__('uuid').uuid4(), name="LAN", speed_mbps=speed
+        ).speed_mbps == speed
+    with pytest.raises(ValidationError):
+        NetworkInterfaceWrite(
+            network_device_id=__import__('uuid').uuid4(), name="LAN", speed_mbps=866
+        )
+
+
+def test_release_1_7_ip_reconciliation_keeps_documented_address(network_session: Session) -> None:
+    from app.models.integration_setting import IntegrationSetting
+    from app.schemas.network import NetworkIpStatus
+    from app.schemas.release import FritzBoxDeviceRead
+
+    service = NetworkService(network_session)
+    record = asset(network_session, "Repeater", "NET-1703")
+    device = service.create_device(
+        NetworkDeviceWrite(asset_id=record.id, role=NetworkRole.ACCESS_POINT)
+    )
+    interface = service.create_interface(
+        NetworkInterfaceWrite(
+            network_device_id=device.id,
+            name="LAN",
+            mac_address="AA:BB:CC:DD:EE:FF",
+        )
+    )
+    documented = service.create_address(
+        NetworkAddressWrite(
+            interface_id=interface.id,
+            address="192.168.178.3",
+            assignment_type=NetworkAssignmentType.STATIC,
+            is_primary=True,
+        )
+    )
+    network_session.add(IntegrationSetting(kind="fritzbox", enabled=True))
+    network_session.commit()
+
+    service.sync_observed_addresses([
+        FritzBoxDeviceRead(
+            name="fritz.repeater_600-1",
+            mac_address="aa-bb-cc-dd-ee-ff",
+            ipv4="192.168.178.1",
+            ipv6=None,
+            active=True,
+            interface_type="Ethernet",
+            connection_rate_mbps=1000,
+            connected_via="LAN",
+            last_seen=None,
+            dhcp_reservation=True,
+        )
+    ])
+    row = service.list_ip_overview(device_id=device.id)[0]
+    assert row.status == NetworkIpStatus.MISMATCH
+    assert row.documented_address == "192.168.178.3"
+    assert row.observed_address == "192.168.178.1"
+    assert service.repository.get_address(documented.id).address == "192.168.178.3"
+
+    service.accept_observed_address(row.observed_address_id)
+    refreshed = service.list_ip_overview(device_id=device.id)[0]
+    assert refreshed.status == NetworkIpStatus.MATCH
+    assert refreshed.documented_address == "192.168.178.1"

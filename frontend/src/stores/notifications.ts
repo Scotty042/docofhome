@@ -36,8 +36,13 @@ export const useNotificationStore = defineStore('notifications', () => {
     })
   }
 
+  function dismiss(id: number) {
+    queue.value = queue.value.filter((item) => item.id !== id)
+  }
+
   function dismissCurrent() {
-    queue.value.shift()
+    const item = current.value
+    if (item) dismiss(item.id)
   }
 
   function clear() {
@@ -48,6 +53,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     queue,
     current,
     push,
+    dismiss,
     dismissCurrent,
     clear,
     success: (message: string, timeout?: number) => push('success', message, timeout),

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ProductImageField from '../components/ProductImageField.vue'
 import { assetApi } from '../services/assetApi'
 import { locationApi } from '../services/locationApi'
 import { flattenLocationTree } from '../services/locationOptions'
@@ -371,6 +372,22 @@ async function save() {
               </v-card>
             </v-col>
           </v-row>
+        </v-card-text>
+      </v-card>
+
+      <v-card title="Bild" prepend-icon="mdi-image-outline" class="mb-5">
+        <v-card-text>
+          <ProductImageField
+            v-model="form.image_url"
+            v-model:source="form.image_source"
+            v-model:reference="form.image_reference"
+            title="Individuelles Asset-Bild"
+            upload-kind="asset"
+            :search-terms="form.name"
+          />
+          <v-alert v-if="!form.image_url && (selectedAssetType?.image_url || selectedProduct?.image_url)" type="info" variant="tonal" density="compact" class="mt-3">
+            Ohne individuelles Bild wird {{ selectedAssetType?.image_url ? 'das Bild des Asset-Typs' : 'das Produktbild' }} verwendet.
+          </v-alert>
         </v-card-text>
       </v-card>
 

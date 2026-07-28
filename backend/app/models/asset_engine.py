@@ -22,6 +22,14 @@ class AssetType(AssetEngineRecord, table=True):
             name="ck_asset_types_module_width",
         ),
         CheckConstraint(
+            "image_source IN ('url', 'upload', 'immich', 'online')",
+            name="ck_asset_types_image_source",
+        ),
+        CheckConstraint(
+            "switch_port_layout IN ('odd_even', 'sequential_halves')",
+            name="ck_asset_types_switch_port_layout",
+        ),
+        CheckConstraint(
             "breaker_characteristic IS NULL OR "
             "breaker_characteristic IN ('B', 'C', 'D', 'K', 'Z')",
             name="ck_asset_types_breaker_characteristic",
@@ -53,6 +61,11 @@ class AssetType(AssetEngineRecord, table=True):
     code_prefix: str = Field(index=True, max_length=20, unique=True)
     description: str | None = None
     icon: str | None = Field(default=None, max_length=100)
+    image_url: str | None = Field(default=None, max_length=1000)
+    image_source: str = Field(default="url", max_length=20)
+    image_reference: str | None = Field(default=None, max_length=1000)
+    is_meter: bool = Field(default=False, index=True)
+    switch_port_layout: str = Field(default="odd_even", max_length=30)
     module_width: int | None = Field(default=None, ge=1, le=100)
     breaker_characteristic: str | None = Field(default=None, max_length=2)
     rated_current_a: float | None = Field(default=None, gt=0, le=10000)
@@ -155,6 +168,10 @@ class Asset(AssetEngineRecord, table=True):
             "contact_type IN ('normally_open', 'normally_closed', 'changeover')",
             name="ck_assets_contact_type",
         ),
+        CheckConstraint(
+            "image_source IN ('url', 'upload', 'immich', 'online')",
+            name="ck_assets_image_source",
+        ),
         Index(
             "uq_assets_inventory_number_global",
             "inventory_number",
@@ -171,6 +188,9 @@ class Asset(AssetEngineRecord, table=True):
     location_id: UUID | None = Field(default=None, foreign_key="locations.id", index=True)
     serial_number: str | None = Field(default=None, index=True, max_length=200)
     inventory_number: str | None = Field(default=None, index=True, max_length=200)
+    image_url: str | None = Field(default=None, max_length=1000)
+    image_source: str = Field(default="url", max_length=20)
+    image_reference: str | None = Field(default=None, max_length=1000)
     module_width: int | None = Field(default=None, ge=1, le=100)
     breaker_characteristic: str | None = Field(default=None, max_length=2)
     rated_current_a: float | None = Field(default=None, gt=0, le=10000)

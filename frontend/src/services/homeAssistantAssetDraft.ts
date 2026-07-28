@@ -41,6 +41,9 @@ export function buildHomeAssistantAssetDraft(
     location_id: suggestedLocationId(source.area_name, locations),
     serial_number: device?.serial_number ?? null,
     inventory_number: null,
+    image_url: null,
+    image_source: 'url',
+    image_reference: null,
     module_width: null,
     status: 'active',
     label_ids: []

@@ -1,13 +1,17 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, Index, String, text
+from sqlalchemy import CheckConstraint, Column, Index, String, text
 from sqlmodel import Field, SQLModel
 
 
 class ElectricalCircuit(SQLModel, table=True):
     __tablename__ = "electrical_circuits"
     __table_args__ = (
+        CheckConstraint(
+            "protective_device_id IS NULL OR protective_device_asset_id IS NULL",
+            name="ck_electrical_circuits_single_protective_reference",
+        ),
         Index(
             "uq_electrical_circuits_active_number",
             "distribution_id",
@@ -25,6 +29,11 @@ class ElectricalCircuit(SQLModel, table=True):
     protective_device_id: UUID | None = Field(
         default=None,
         foreign_key="electrical_protective_devices.id",
+        index=True,
+    )
+    protective_device_asset_id: UUID | None = Field(
+        default=None,
+        foreign_key="assets.id",
         index=True,
     )
     name: str = Field(max_length=150, index=True)

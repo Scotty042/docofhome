@@ -131,7 +131,12 @@ def prepare_topology(client: TestClient) -> dict[str, dict[str, Any]]:
         },
     )
 
+    next_position = 1
+
     def device(asset_record: dict[str, Any], device_type: str) -> dict[str, Any]:
+        nonlocal next_position
+        position = next_position
+        next_position += 1
         return create(
             client,
             "electrical/protective-devices",
@@ -140,9 +145,9 @@ def prepare_topology(client: TestClient) -> dict[str, dict[str, Any]]:
                 "distribution_id": distribution["id"],
                 "area_id": None,
                 "device_type": device_type,
-                "row_number": None,
-                "start_position": None,
-                "module_width": None,
+                "row_number": 1,
+                "start_position": position,
+                "module_width": 1,
                 "rated_current_a": None,
                 "residual_current_ma": 30 if device_type == "rcd" else None,
                 "characteristic": None,
@@ -253,6 +258,23 @@ def test_supply_topology_paths_phases_cable_and_rcd_counts(
     assert rcd["downstream_asset_count"] == 1
     assert mcb_one["incoming_phases"] == ["L2", "N"]
     assert load["source_names"] == ["Grid connection", "PV inverter"]
+
+    # The outgoing circuit wiring inherits the phase from the upstream
+    # protective-device -> circuit connection. A contradictory edit is normalized.
+    corrected_circuit_output = client.put(
+        f"/api/v1/electrical/connections/{created[6]['id']}",
+        json=connection_payload(
+            endpoint["circuit"],
+            endpoint["load"],
+            phases=["L1", "N", "PE"],
+            connection_type="cable",
+        ),
+    )
+    assert corrected_circuit_output.status_code == 200, corrected_circuit_output.text
+    assert corrected_circuit_output.json()["phases"] == ["L2", "N", "PE"]
+    assert corrected_circuit_output.json()["effective_phases"] == ["L2", "N", "PE"]
+    assert corrected_circuit_output.json()["phase_locked"] is True
+    assert corrected_circuit_output.json()["locked_line_phases"] == ["L2"]
 
     duplicate_supply = client.post(
         "/api/v1/electrical/connections",
@@ -475,7 +497,7 @@ def test_cabinet_component_accepts_multiple_feeds_and_preserves_phases(
 
 
 
-def test_busbar_phase_is_forced_when_wiring_a_protective_device(
+def test_phase_rail_phase_is_forced_when_wiring_a_protective_device(
     topology_client: TestClient,
 ) -> None:
     client = topology_client
@@ -545,7 +567,7 @@ def test_busbar_phase_is_forced_when_wiring_a_protective_device(
             "notes": None,
         },
     )
-    create(
+    phase_rail = create(
         client,
         f"electrical/distributions/{distribution['id']}/cabinet-components",
         {
@@ -582,7 +604,38 @@ def test_busbar_phase_is_forced_when_wiring_a_protective_device(
         for item in endpoints
         if item["kind"] == "asset" and item["id"] == dryer_asset["id"]
     )
+    rail_endpoint = next(
+        item
+        for item in endpoints
+        if item["kind"] == "cabinet_component" and item["id"] == phase_rail["id"]
+    )
+    grid_endpoint = next(item for item in endpoints if item["kind"] == "grid_connection")
     assert breaker_endpoint["effective_phases"] == ["L3"]
+
+    rail_supply = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            grid_endpoint,
+            rail_endpoint,
+            phases=["L1", "L2", "L3"],
+            connection_type="busbar",
+        ),
+    )
+    assert rail_supply.status_code == 201, rail_supply.text
+
+    direct_response = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            rail_endpoint,
+            breaker_endpoint,
+            phases=["L1"],
+            connection_type="busbar",
+        ),
+    )
+    assert direct_response.status_code == 201, direct_response.text
+    direct_stored = direct_response.json()
+    assert direct_stored["phases"] == ["L3"]
+    assert direct_stored["effective_phases"] == ["L3"]
 
     response = client.post(
         "/api/v1/electrical/connections",
@@ -598,3 +651,205 @@ def test_busbar_phase_is_forced_when_wiring_a_protective_device(
     assert stored["phases"] == ["L3", "N", "PE"]
     assert stored["effective_phases"] == ["L3", "N", "PE"]
     assert stored["phase_warnings"] == []
+
+
+def test_n_and_pe_rails_are_selectable_and_keep_auxiliary_conductors_separate(
+    topology_client: TestClient,
+) -> None:
+    client = topology_client
+    endpoints = prepare_topology(client)
+    distribution_id = endpoints["distribution"]["id"]
+
+    neutral_rail = create(
+        client,
+        f"electrical/distributions/{distribution_id}/cabinet-components",
+        {
+            "name": "N-Schiene FI 1",
+            "component_type": "neutral_rail",
+            "area_id": None,
+            "row_number": 2,
+            "start_position": 1,
+            "module_width": 1,
+            "phases": ["N"],
+            "rated_current_a": 63,
+            "max_cross_section_mm2": 16,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": endpoints["rcd"]["id"],
+            "linked_rcd_asset_id": None,
+            "start_phase": None,
+            "mounting_side": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    pe_rail = create(
+        client,
+        f"electrical/distributions/{distribution_id}/cabinet-components",
+        {
+            "name": "PE-Schiene",
+            "component_type": "protective_earth_rail",
+            "area_id": None,
+            "row_number": 2,
+            "start_position": 2,
+            "module_width": 1,
+            "phases": ["PE"],
+            "rated_current_a": None,
+            "max_cross_section_mm2": 16,
+            "outgoing_connections": 12,
+            "linked_rcd_device_id": None,
+            "linked_rcd_asset_id": None,
+            "start_phase": None,
+            "mounting_side": None,
+            "description": None,
+            "notes": None,
+        },
+    )
+    endpoint_response = client.get(
+        "/api/v1/electrical/connection-endpoints",
+        params={"page_size": 100},
+    )
+    assert endpoint_response.status_code == 200, endpoint_response.text
+    listed = endpoint_response.json()["items"]
+    neutral_endpoint = next(
+        item for item in listed
+        if item["kind"] == "cabinet_component" and item["id"] == neutral_rail["id"]
+    )
+    pe_endpoint = next(
+        item for item in listed
+        if item["kind"] == "cabinet_component" and item["id"] == pe_rail["id"]
+    )
+    assert neutral_endpoint["effective_phases"] == ["N"]
+    assert pe_endpoint["effective_phases"] == ["PE"]
+
+    neutral_feed = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            endpoints["rcd"], neutral_endpoint, phases=["L1", "N"]
+        ),
+    )
+    assert neutral_feed.status_code == 201, neutral_feed.text
+    assert neutral_feed.json()["phases"] == ["N"]
+    assert neutral_feed.json()["effective_phases"] == ["N"]
+    assert neutral_feed.json()["phase_locked"] is False
+
+    neutral_output = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            neutral_endpoint, endpoints["circuit"], phases=["L2", "N"]
+        ),
+    )
+    assert neutral_output.status_code == 201, neutral_output.text
+    assert neutral_output.json()["phases"] == ["N"]
+    assert neutral_output.json()["effective_phases"] == ["N"]
+
+    pe_feed = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            endpoints["grid"], pe_endpoint, phases=["L3", "PE"]
+        ),
+    )
+    assert pe_feed.status_code == 201, pe_feed.text
+    assert pe_feed.json()["phases"] == ["PE"]
+
+    pe_output = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            pe_endpoint, endpoints["circuit"], phases=["L1", "PE"]
+        ),
+    )
+    assert pe_output.status_code == 201, pe_output.text
+    assert pe_output.json()["effective_phases"] == ["PE"]
+
+    invalid_cross_connection = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(neutral_endpoint, pe_endpoint, phases=["N", "PE"]),
+    )
+    assert invalid_cross_connection.status_code == 422
+    assert "nicht direkt miteinander" in invalid_cross_connection.text
+
+
+def test_separate_neutral_feed_does_not_inherit_parallel_line_phases(
+    topology_client: TestClient,
+) -> None:
+    client = topology_client
+    endpoints = prepare_topology(client)
+    endpoint_response = client.get(
+        "/api/v1/electrical/connection-endpoints",
+        params={"page_size": 100},
+    )
+    assert endpoint_response.status_code == 200, endpoint_response.text
+    grid = next(
+        item for item in endpoint_response.json()["items"]
+        if item["kind"] == "grid_connection"
+    )
+
+    phase_block_feed = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            grid,
+            endpoints["phase_block"],
+            phases=["L1", "L2", "L3"],
+            connection_type="wire",
+        ),
+    )
+    assert phase_block_feed.status_code == 201, phase_block_feed.text
+
+    line_feed = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            endpoints["phase_block"],
+            endpoints["rcd"],
+            phases=["L1", "L2", "L3"],
+            connection_type="wire",
+        ),
+    )
+    assert line_feed.status_code == 201, line_feed.text
+    assert line_feed.json()["effective_phases"] == ["L1", "L2", "L3"]
+
+    neutral_feed = client.post(
+        "/api/v1/electrical/connections",
+        json=connection_payload(
+            grid,
+            endpoints["rcd"],
+            phases=["N"],
+            connection_type="wire",
+        ),
+    )
+    assert neutral_feed.status_code == 201, neutral_feed.text
+    neutral = neutral_feed.json()
+    assert neutral["phases"] == ["N"]
+    assert neutral["effective_phases"] == ["N"]
+    assert neutral["phase_warnings"] == []
+    assert neutral["phase_locked"] is False
+    assert neutral["locked_line_phases"] == []
+    assert neutral["phase_source"] == "manual"
+    assert neutral["source_connection_id"] is None
+
+    topology = client.get("/api/v1/electrical/topology")
+    assert topology.status_code == 200, topology.text
+    body = topology.json()
+    stored_neutral = next(
+        connection for connection in body["connections"]
+        if connection["id"] == neutral["id"]
+    )
+    assert stored_neutral["effective_phases"] == ["N"]
+    assert stored_neutral["phase_warnings"] == []
+    rcd_node = next(
+        node for node in body["nodes"]
+        if node["endpoint"]["key"] == endpoints["rcd"]["key"]
+    )
+    assert rcd_node["incoming_phases"] == ["L1", "L2", "L3", "N"]
+
+    updated = client.put(
+        f"/api/v1/electrical/connections/{neutral['id']}",
+        json=connection_payload(
+            grid,
+            endpoints["rcd"],
+            phases=["N"],
+            connection_type="wire",
+        ),
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["phases"] == ["N"]
+    assert updated.json()["effective_phases"] == ["N"]
+    assert updated.json()["phase_warnings"] == []

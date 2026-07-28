@@ -38,6 +38,8 @@ from app.services.release import (
     WorkloadService,
 )
 
+from app.services.network import NetworkService
+
 router = APIRouter()
 SessionDependency = Annotated[Session, Depends(get_session)]
 
@@ -298,10 +300,12 @@ def fritzbox_devices(session: SessionDependency) -> list[FritzBoxDeviceRead]:
     ):
         raise HTTPException(status_code=409, detail="FRITZ!Box ist nicht vollständig konfiguriert")
     try:
-        return FritzBoxConnector(
+        devices = FritzBoxConnector(
             base_url=setting.base_url,
             account=setting.account,
             secret=setting.secret,
         ).devices()
+        NetworkService(session).sync_observed_addresses(devices)
+        return devices
     except FritzBoxConnectorError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

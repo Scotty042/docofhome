@@ -172,6 +172,24 @@ def test_smart_meter_measurement_point_links_connection_and_home_assistant_entit
         },
     )
 
+    wrong_phase = release_client.post(
+        f"/api/v1/electrical/smart-meters/{smart_meter['id']}/measurement-points",
+        json={
+            "connection_id": connection["id"],
+            "channel_name": "CT falsche Phase",
+            "name": "Ungültige Messphase",
+            "phase": "L2",
+            "direction": "source_to_target",
+            "inverted": False,
+            "transformer_nominal_current_a": 120,
+            "transformer_ratio": "120 A / 40 mA",
+            "notes": None,
+            "entities": [],
+        },
+    )
+    assert wrong_phase.status_code == 422
+    assert "liegt auf der ausgewählten Verbindung nicht an" in wrong_phase.text
+
     point = create(
         release_client,
         f"electrical/smart-meters/{smart_meter['id']}/measurement-points",
@@ -179,7 +197,7 @@ def test_smart_meter_measurement_point_links_connection_and_home_assistant_entit
             "connection_id": connection["id"],
             "channel_name": "CT1",
             "name": "Hausanschluss L1",
-            "phase": "L1",
+            "phase": None,
             "direction": "source_to_target",
             "inverted": False,
             "transformer_nominal_current_a": 120,
@@ -193,6 +211,7 @@ def test_smart_meter_measurement_point_links_connection_and_home_assistant_entit
     )
     assert point["connection_source_name"] == "Netzbetreiberzähler"
     assert point["connection_target_name"] == "Hauptschalter"
+    assert point["phase"] == "L1"
     assert {item["role"] for item in point["entities"]} == {"power", "current"}
 
     duplicate = release_client.post(

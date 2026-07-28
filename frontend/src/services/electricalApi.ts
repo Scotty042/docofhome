@@ -13,6 +13,7 @@ import type {
   ElectricalCircuit,
   ElectricalCircuitAsset,
   ElectricalCircuitListQuery,
+  ElectricalProtectiveDeviceOption,
   ElectricalCircuitWrite,
   ElectricalConnection,
   ElectricalConnectionWrite,
@@ -167,6 +168,18 @@ export const electricalApi = {
     `/distributions/${distributionId}/cabinet-components/${componentId}`,
     { method: 'PUT', body: JSON.stringify(payload) }
   ),
+  synchronizePhaseRailContacts: (
+    distributionId: string,
+    componentId: string,
+    protectiveDeviceIds: string[],
+    assetIds: string[]
+  ) => request<ElectricalCabinetComponent>(
+    `/distributions/${distributionId}/cabinet-components/${componentId}/synchronize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ protective_device_ids: protectiveDeviceIds, asset_ids: assetIds })
+    }
+  ),
   removeCabinetComponent: (distributionId: string, componentId: string) => request<void>(
     `/distributions/${distributionId}/cabinet-components/${componentId}`,
     { method: 'DELETE' }
@@ -235,6 +248,9 @@ export const electricalApi = {
   ),
   listCircuits: (query: ElectricalCircuitListQuery = {}) => request<Page<ElectricalCircuit>>(
     `/circuits${queryString(query as Record<string, QueryValue>)}`
+  ),
+  protectiveDeviceOptions: (distributionId: string, circuitId?: string) => request<ElectricalProtectiveDeviceOption[]>(
+    `/circuits/protective-device-options${queryString({ distribution_id: distributionId, circuit_id: circuitId })}`
   ),
   getCircuit: (id: string, includeDeleted = false) => request<ElectricalCircuit>(
     `/circuits/${id}${queryString({ include_deleted: includeDeleted || undefined })}`

@@ -64,7 +64,7 @@ def main() -> int:
                 "backend/app/distribution_layout.py",
                 "def place_meter",
                 "def place_asset_meter",
-                "Direkt platzierbare Assets müssen vom Typ „Zähler“ sein",
+                "asset_type.is_meter",
             ),
         ),
         (

@@ -1,6 +1,6 @@
 # DocOfHome – Roadmap
 
-Stand: 25. Juli 2026
+Stand: 27. Juli 2026
 
 ## Abgeschlossen bis 1.0.0
 
@@ -198,3 +198,13 @@ eine spätere redaktionelle Erweiterung der statischen Inhalte.
 - CT-/Stromwandler-Messpunkte an bestehenden Verkabelungen;
 - Home-Assistant-Zuordnung je Smart-Meter-Messkanal;
 - erweiterte Elektrobegriffe im Handbuch.
+
+## Konsolidiert mit 1.6.3 – Elektro-Integrität
+
+- gemeinsame Phasenberechnung für Phasenschienen, Schutzgeräte, Stromkreise,
+  Topologie und Messpunkte;
+- automatisch verwaltete physische Kammschienen-Verbindungen;
+- klare Abgrenzung zur allgemeinen manuellen Sammelschiene;
+- konsistente FI-/N-/PE-Gruppen und Lebenszyklusprüfungen;
+- Smart-Meter-Messphasen gegen wirksame Leiter validiert;
+- Migration `0043` zur Bestandsreparatur und Datenbankabsicherung.

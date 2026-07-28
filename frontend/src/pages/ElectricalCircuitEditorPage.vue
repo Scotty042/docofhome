@@ -7,7 +7,7 @@ import {
   createEmptyElectricalCircuit,
   editableElectricalCircuit
 } from '../types/electrical'
-import type { DistributionDetail, ElectricalCircuitWrite } from '../types/electrical'
+import type { DistributionDetail, ElectricalCircuitWrite, ElectricalProtectiveDeviceOption } from '../types/electrical'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,14 +17,35 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const distribution = ref<DistributionDetail | null>(null)
+const protectiveDeviceOptions = ref<ElectricalProtectiveDeviceOption[]>([])
 const form = reactive<ElectricalCircuitWrite>(
   createEmptyElectricalCircuit(String(route.query.distribution ?? ''))
 )
 
-const protectiveDevices = computed(() => distribution.value?.protective_devices.map((device) => ({
-  title: `${device.asset.name} · ${device.asset.jarvis_code}`,
-  value: device.id
-})) ?? [])
+const protectiveDeviceSelection = computed<string | null>({
+  get() {
+    if (form.protective_device_asset_id) return `asset:${form.protective_device_asset_id}`
+    if (form.protective_device_id) return `legacy_device:${form.protective_device_id}`
+    return null
+  },
+  set(value) {
+    form.protective_device_id = null
+    form.protective_device_asset_id = null
+    if (!value) return
+    const [referenceType, id] = value.split(':', 2)
+    if (!id) return
+    if (referenceType === 'asset') form.protective_device_asset_id = id
+    else if (referenceType === 'legacy_device') form.protective_device_id = id
+  }
+})
+
+const protectiveDevices = computed(() => protectiveDeviceOptions.value.map((device) => ({
+  title: device.occupied
+    ? `${device.label} · belegt durch ${device.occupied_by_circuit_name}`
+    : device.label,
+  value: `${device.reference_type}:${device.id}`,
+  disabled: device.occupied
+})))
 
 async function load() {
   loading.value = true
@@ -35,6 +56,9 @@ async function load() {
     }
     if (!form.distribution_id) throw new Error('Keine Verteilung ausgewählt.')
     distribution.value = await electricalApi.getDistribution(form.distribution_id)
+    protectiveDeviceOptions.value = await electricalApi.protectiveDeviceOptions(
+      form.distribution_id, editing.value ? circuitId.value : undefined
+    )
     if (distribution.value.deleted_at) throw new Error('Archivierte Verteilungen sind nur lesbar.')
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Stromkreis konnte nicht geladen werden.'
@@ -44,8 +68,8 @@ async function load() {
 }
 
 async function submit() {
-  if (!form.name.trim() || !form.distribution_id) {
-    error.value = 'Bitte eine Bezeichnung eingeben.'
+  if (!form.name.trim() || !form.distribution_id || !protectiveDeviceSelection.value) {
+    error.value = 'Bitte Bezeichnung und konkrete Sicherung auswählen.'
     return
   }
   saving.value = true
@@ -102,7 +126,7 @@ watch(circuitId, () => void load(), { immediate: true })
         title="Wofür ist der Stromkreis gedacht?"
       >
         Erfasse hier einen benannten Versorgungszweig der Verteilung, beispielsweise Steckdosen,
-        Beleuchtung oder Wärmepumpe. Das Schutzgerät ist optional; die konkret versorgten Assets
+        Beleuchtung oder Wärmepumpe. Das tatsächlich schützende Endgerät ist verpflichtend; die konkret versorgten Assets
         werden anschließend auf der Detailseite zugeordnet.
       </v-alert>
       <v-card title="Dokumentation" prepend-icon="mdi-form-textbox">
@@ -128,12 +152,13 @@ watch(circuitId, () => void load(), { immediate: true })
             </v-col>
             <v-col cols="12">
               <v-select
-                v-model="form.protective_device_id"
+                v-model="protectiveDeviceSelection"
                 :items="protectiveDevices"
-                label="Schutzgerät"
+                label="Sicherung / Schutzgerät"
                 prepend-inner-icon="mdi-shield-outline"
-                clearable
-                hint="Optional; es werden nur aktive Schutzgeräte dieser Verteilung angeboten"
+                :rules="[(value: string) => Boolean(value) || 'Sicherung / Schutzgerät ist erforderlich']"
+                required
+                hint="Nur aktive, platzierte und noch nicht belegte Sicherungen, LS und FI/LS dieser Verteilung"
                 persistent-hint
               />
             </v-col>
@@ -152,7 +177,7 @@ watch(circuitId, () => void load(), { immediate: true })
           >
             Abbrechen
           </v-btn>
-          <v-btn color="primary" :loading="saving" prepend-icon="mdi-content-save" @click="submit">
+          <v-btn color="primary" :loading="saving" :disabled="!protectiveDeviceSelection" prepend-icon="mdi-content-save" @click="submit">
             Speichern
           </v-btn>
         </v-card-actions>

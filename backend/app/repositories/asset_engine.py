@@ -344,8 +344,26 @@ class AssetRepository(SoftDeleteRepository[Asset]):
             .values(next_value=col(AssetCodeCounter.next_value) + 1)
             .returning(col(AssetCodeCounter.next_value))
         )
-        next_value = self.session.execute(statement).scalar_one()
-        return f"{prefix}-{next_value - 1:03d}"
+        next_value = self.session.execute(statement).scalar_one_or_none()
+        if next_value is not None:
+            return f"{prefix}-{next_value - 1:03d}"
+
+        # Older seeded asset types could exist without a matching counter row.
+        # Reconstruct the next value from persisted codes instead of failing with
+        # NoResultFound and surfacing an HTTP 500 during asset creation.
+        marker = f"{prefix}-"
+        highest = 0
+        codes = self.session.exec(select(Asset.jarvis_code)).all()
+        for code in codes:
+            if not code.startswith(marker):
+                continue
+            suffix = code[len(marker):]
+            if suffix.isdigit():
+                highest = max(highest, int(suffix))
+        number = highest + 1
+        self.session.add(AssetCodeCounter(prefix=prefix, next_value=number + 1))
+        self.session.flush()
+        return f"{prefix}-{number:03d}"
 
     def all(self, *, include_deleted: bool = False) -> list[Asset]:
         statement = select(Asset)

@@ -76,7 +76,7 @@ class NetworkInterface(NetworkRecord, table=True):
             name="ck_network_interfaces_poe_mode",
         ),
         CheckConstraint(
-            "speed_mbps IS NULL OR speed_mbps > 0",
+            "speed_mbps IS NULL OR speed_mbps IN (100, 1000, 2500)",
             name="ck_network_interfaces_speed",
         ),
         CheckConstraint(
@@ -186,3 +186,35 @@ class NetworkConnection(NetworkRecord, table=True):
     cable_type: str | None = Field(default=None, max_length=100)
     cable_label: str | None = Field(default=None, index=True, max_length=100)
     description: str | None = Field(default=None, sa_type=Text)
+
+
+class NetworkObservedAddress(NetworkRecord, table=True):
+    __tablename__ = "network_observed_addresses"
+    __table_args__ = (
+        CheckConstraint(
+            "assignment_type IN ('static', 'dhcp', 'reservation', 'link_local', 'unknown')",
+            name="ck_network_observed_addresses_assignment_type",
+        ),
+        Index("ix_network_observed_source_mac", "source", "mac_address"),
+        Index("ix_network_observed_address", "address"),
+    )
+
+    interface_id: UUID | None = Field(default=None, foreign_key="network_interfaces.id", index=True)
+    mac_address: str | None = Field(default=None, index=True, max_length=17)
+    address: str = Field(index=True, max_length=64)
+    hostname: str | None = Field(default=None, index=True, max_length=253)
+    assignment_type: str = Field(default="unknown", index=True, max_length=20)
+    source: str = Field(default="fritzbox", index=True, max_length=40)
+    active: bool = Field(default=True, index=True)
+    ignored: bool = Field(default=False, index=True)
+    last_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+
+
+class NetworkAddressChange(NetworkRecord, table=True):
+    __tablename__ = "network_address_changes"
+
+    observed_address_id: UUID = Field(foreign_key="network_observed_addresses.id", index=True)
+    documented_address_id: UUID | None = Field(default=None, foreign_key="network_addresses.id", index=True)
+    action: str = Field(max_length=30)
+    old_address: str | None = Field(default=None, max_length=64)
+    new_address: str | None = Field(default=None, max_length=64)

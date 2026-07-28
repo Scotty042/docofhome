@@ -42,7 +42,7 @@ const connectionTypeItems: Array<{ title: string; value: ElectricalConnectionTyp
   { title: 'Noch nicht genauer dokumentiert', value: 'unknown' },
   { title: 'Kabel', value: 'cable' },
   { title: 'Einzelader / Draht', value: 'wire' },
-  { title: 'Sammelschiene / Phasenschiene', value: 'busbar' },
+  { title: 'Schienenverbindung (Sammel-/Phasenschiene)', value: 'busbar' },
   { title: 'Interne Geräteverbindung', value: 'internal' }
 ]
 const phaseItems: Array<{ title: string; value: ElectricalPhase }> = [
@@ -74,37 +74,153 @@ const showCableDetails = computed(() => (
   form.value.connection_type === 'cable' || form.value.connection_type === 'wire'
 ))
 const linePhases: ElectricalPhase[] = ['L1', 'L2', 'L3']
+const selectedLinePhases = computed<ElectricalPhase[]>(() => (
+  form.value.phases.filter((phase) => linePhases.includes(phase))
+))
+const auxiliaryConductorOnly = computed(() => (
+  form.value.phases.length > 0 && selectedLinePhases.value.length === 0
+))
 const selectedConnectionEndpoints = computed(() => [
   endpointByKey(sourceKey.value),
   endpointByKey(targetKey.value)
 ].filter((endpoint): endpoint is ElectricalEndpoint => Boolean(endpoint)))
-const protectivePhaseRequirements = computed(() => selectedConnectionEndpoints.value
-  .filter((endpoint) => endpoint.kind === 'protective_device')
+function restrictedEndpointConductors(endpoint: ElectricalEndpoint): ElectricalPhase[] | null {
+  if (endpoint.kind !== 'cabinet_component') return null
+  if (endpoint.device_type === 'neutral_rail') return ['N']
+  if (endpoint.device_type === 'protective_earth_rail') return ['PE']
+  return null
+}
+const restrictedConnectionConductors = computed<ElectricalPhase[] | null>(() => {
+  const restrictions = selectedConnectionEndpoints.value
+    .map(restrictedEndpointConductors)
+    .filter((value): value is ElectricalPhase[] => value !== null)
+  const [firstRestriction, ...remainingRestrictions] = restrictions
+  if (!firstRestriction) return null
+  return remainingRestrictions.reduce(
+    (allowed, restriction) => allowed.filter((phase) => restriction.includes(phase)),
+    [...firstRestriction]
+  )
+})
+const endpointPhaseRequirements = computed(() => selectedConnectionEndpoints.value
+  .filter(() => restrictedConnectionConductors.value === null)
+  .filter((endpoint) => ['protective_device', 'asset', 'circuit'].includes(endpoint.kind))
   .map((endpoint) => (endpoint.effective_phases ?? []).filter(
     (phase): phase is ElectricalPhase => linePhases.includes(phase)
   ))
   .filter((phases) => phases.length > 0))
-const forcedLinePhases = computed<ElectricalPhase[]>(() => (
-  protectivePhaseRequirements.value[0] ?? []
-))
-const forcedPhaseConflict = computed(() => {
-  if (protectivePhaseRequirements.value.length < 2) return false
-  const expected = forcedLinePhases.value.join('|')
-  return protectivePhaseRequirements.value.some((phases) => phases.join('|') !== expected)
+function isPhaseRailEndpoint(endpoint: ElectricalEndpoint | undefined): boolean {
+  if (!endpoint || endpoint.kind !== 'cabinet_component') return false
+  return endpoint.device_type === 'phase_rail' || endpoint.type_name === 'Phasenschiene'
+}
+
+const directPhaseRailConnection = computed(() => {
+  const source = endpointByKey(sourceKey.value)
+  const target = endpointByKey(targetKey.value)
+  if (!source || !target) return false
+  return isPhaseRailEndpoint(source) && ['protective_device', 'asset'].includes(target.kind)
 })
-const connectionPhaseItems = computed(() => phaseItems.map((item) => ({
-  ...item,
-  props: {
-    disabled: forcedLinePhases.value.length > 0 && linePhases.includes(item.value)
+const editingConnectionMatchesSelection = computed(() => (
+  editingConnection.value !== null
+  && editingConnection.value.source.key === sourceKey.value
+  && editingConnection.value.target.key === targetKey.value
+))
+const editedLockedLinePhases = computed<ElectricalPhase[]>(() => {
+  if (!editingConnection.value || !editingConnectionMatchesSelection.value) return []
+  return (editingConnection.value.locked_line_phases ?? []).filter(
+    (phase): phase is ElectricalPhase => linePhases.includes(phase)
+  )
+})
+const editedEffectiveLinePhases = computed<ElectricalPhase[]>(() => {
+  if (!editingConnection.value || !editingConnectionMatchesSelection.value) return []
+  return editingConnection.value.effective_phases.filter(
+    (phase): phase is ElectricalPhase => linePhases.includes(phase)
+  )
+})
+const editingPhaseLockActive = computed(() => (
+  Boolean(editingConnection.value?.phase_locked)
+  && editingConnectionMatchesSelection.value
+))
+const linePhaseBindingRequested = computed(() => (
+  directPhaseRailConnection.value || selectedLinePhases.value.length > 0
+))
+const forcedLinePhases = computed<ElectricalPhase[]>(() => {
+  if (!linePhaseBindingRequested.value) return []
+  if (editedLockedLinePhases.value.length) return editedLockedLinePhases.value
+  if (endpointPhaseRequirements.value[0]?.length) {
+    return endpointPhaseRequirements.value[0]
   }
-})))
+  if (directPhaseRailConnection.value && editedEffectiveLinePhases.value.length) {
+    return editedEffectiveLinePhases.value
+  }
+  return []
+})
+const phaseLockActive = computed(() => (
+  linePhaseBindingRequested.value
+  && (
+    editingPhaseLockActive.value
+    || directPhaseRailConnection.value
+    || endpointPhaseRequirements.value.length > 0
+  )
+))
+const contradictoryEndpointPhases = computed(() => {
+  if (!linePhaseBindingRequested.value || endpointPhaseRequirements.value.length < 2) return false
+  const expected = endpointPhaseRequirements.value[0]?.join('|') ?? ''
+  return endpointPhaseRequirements.value.some((phases) => phases.join('|') !== expected)
+})
+const forcedPhaseUnavailable = computed(() => (
+  phaseLockActive.value && forcedLinePhases.value.length === 0
+))
+const forcedPhaseConflict = computed(() => (
+  contradictoryEndpointPhases.value
+  || forcedPhaseUnavailable.value
+  || restrictedConnectionConductors.value?.length === 0
+))
+const additionalConductorItems = phaseItems.filter((item) => item.value === 'N' || item.value === 'PE')
+const additionalConductors = computed<ElectricalPhase[]>(() => (
+  form.value.phases.filter((phase) => phase === 'N' || phase === 'PE')
+))
+const selectablePhaseItems = computed(() => {
+  if (restrictedConnectionConductors.value === null) return phaseItems
+  return phaseItems.filter((item) => restrictedConnectionConductors.value?.includes(item.value))
+})
 const forcedPhaseHint = computed(() => {
-  if (forcedPhaseConflict.value) {
-    return 'Die ausgewählten Schutzgeräte besitzen widersprüchliche wirksame Phasen.'
+  if (restrictedConnectionConductors.value?.length === 0) {
+    return 'Eine N-Schiene und eine PE-Schiene können nicht direkt miteinander verbunden werden.'
+  }
+  if (restrictedConnectionConductors.value?.length) {
+    return `Die ausgewählte Schiene erlaubt ausschließlich ${restrictedConnectionConductors.value.join(', ')}.`
+  }
+  if (auxiliaryConductorOnly.value) {
+    return 'Diese Verbindung führt ausschließlich N und/oder PE. Außenleiter anderer Einspeisungen werden nicht auf diesen Leiterweg übertragen.'
+  }
+  if (contradictoryEndpointPhases.value) {
+    return 'Die ausgewählten Schutzgeräte oder Stromkreise besitzen widersprüchliche wirksame Phasen.'
+  }
+  if (forcedPhaseUnavailable.value) {
+    return 'Die wirksame Phase der ausgewählten Phasenschiene konnte nicht ermittelt werden. Speichern ist gesperrt.'
   }
   if (!forcedLinePhases.value.length) return null
-  return `Durch Sammel-/Phasenschiene fest vorgegeben: ${forcedLinePhases.value.join(', ')}`
+  if (editingConnection.value?.phase_source === 'wire') {
+    return `Aus Drahtverbindung übernommen: ${forcedLinePhases.value.join(', ')}`
+  }
+  if (editingConnection.value?.phase_source === 'busbar' || directPhaseRailConnection.value) {
+    return `Durch reale Phasen-/Kammschiene fest vorgegeben: ${forcedLinePhases.value.join(', ')}`
+  }
+  return `Aus physischer Einspeisung übernommen: ${forcedLinePhases.value.join(', ')}`
 })
+
+function isAutomaticPhaseRailConnection(connection: ElectricalConnection): boolean {
+  return connection.phase_locked
+    && connection.source.kind === 'cabinet_component'
+    && connection.source.device_type === 'phase_rail'
+    && ['protective_device', 'asset'].includes(connection.target.kind)
+}
+
+const automaticEditingConnection = computed(() => (
+  editingConnection.value !== null
+  && editingConnectionMatchesSelection.value
+  && isAutomaticPhaseRailConnection(editingConnection.value)
+))
 
 function optionalText(value: string | null): string | null {
   return value?.trim() || null
@@ -115,17 +231,37 @@ function endpointByKey(key: string): ElectricalEndpoint | undefined {
 }
 
 function enforceCalculatedLinePhases(): void {
-  if (!forcedLinePhases.value.length) return
+  if (restrictedConnectionConductors.value !== null) {
+    form.value.phases = [...restrictedConnectionConductors.value]
+    return
+  }
+  if (!linePhaseBindingRequested.value || !forcedLinePhases.value.length) return
   const preserved = form.value.phases.filter((phase) => !linePhases.includes(phase))
   form.value.phases = [...forcedLinePhases.value, ...preserved]
 }
 
 function updateConnectionPhases(value: ElectricalPhase[]): void {
+  if (restrictedConnectionConductors.value !== null) {
+    form.value.phases = [...restrictedConnectionConductors.value]
+    return
+  }
+  const requestedLinePhases = value.filter((phase) => linePhases.includes(phase))
+  if (!requestedLinePhases.length && !directPhaseRailConnection.value) {
+    // N and PE can be documented as independent physical paths even when the same
+    // target receives L1/L2/L3 through another incoming connection.
+    form.value.phases = value
+    return
+  }
   if (!forcedLinePhases.value.length) {
     form.value.phases = value
     return
   }
-  const preserved = value.filter((phase) => !linePhases.includes(phase))
+  const preserved = value.filter((phase) => phase === 'N' || phase === 'PE')
+  form.value.phases = [...forcedLinePhases.value, ...preserved]
+}
+
+function updateAdditionalConductors(value: ElectricalPhase[]): void {
+  const preserved = value.filter((phase) => phase === 'N' || phase === 'PE')
   form.value.phases = [...forcedLinePhases.value, ...preserved]
 }
 
@@ -142,7 +278,7 @@ function endpointRoute(endpoint: ElectricalEndpoint): string | null {
 }
 
 function displayPhases(connection: ElectricalConnection): ElectricalPhase[] {
-  return connection.effective_phases.length ? connection.effective_phases : connection.phases
+  return connection.effective_phases
 }
 
 function phaseColor(phase: ElectricalPhase): string {
@@ -237,7 +373,7 @@ function openEdit(connection: ElectricalConnection) {
     target_id: connection.target.id,
     connection_type: connection.connection_type,
     label: connection.label,
-    phases: [...connection.phases],
+    phases: [...(connection.effective_phases.length ? connection.effective_phases : connection.phases)],
     cable_type: connection.cable_type,
     cores: connection.cores,
     cross_section_mm2: connection.cross_section_mm2,
@@ -256,6 +392,11 @@ async function saveConnection() {
     dialogError.value = 'Bitte Quelle und versorgtes Ziel auswählen.'
     return
   }
+  if (forcedPhaseConflict.value) {
+    dialogError.value = forcedPhaseHint.value ?? 'Die wirksame Phase konnte nicht eindeutig ermittelt werden.'
+    return
+  }
+  enforceCalculatedLinePhases()
   saving.value = true
   dialogError.value = null
   try {
@@ -453,8 +594,8 @@ onMounted(() => void initialize())
                 <td class="text-right text-no-wrap">
                   <v-btn v-if="endpointRoute(row.node.endpoint)" icon="mdi-open-in-new" variant="text" size="small" :to="endpointRoute(row.node.endpoint) ?? ''" title="Datensatz öffnen" aria-label="Datensatz öffnen" />
                   <template v-for="connection in row.incomingConnections" :key="connection.id">
-                    <v-btn icon="mdi-pencil" variant="text" size="small" :title="`Verbindung von ${connection.source.name} bearbeiten`" :aria-label="`Verbindung von ${connection.source.name} bearbeiten`" @click="openEdit(connection)" />
-                    <v-btn icon="mdi-link-variant-off" variant="text" color="warning" size="small" :title="`Verbindung von ${connection.source.name} entfernen`" :aria-label="`Verbindung von ${connection.source.name} entfernen`" @click="removeConnection(connection)" />
+                    <v-btn :icon="isAutomaticPhaseRailConnection(connection) ? 'mdi-eye-outline' : 'mdi-pencil'" variant="text" size="small" :title="isAutomaticPhaseRailConnection(connection) ? 'Automatische Verbindung anzeigen' : `Verbindung von ${connection.source.name} bearbeiten`" :aria-label="isAutomaticPhaseRailConnection(connection) ? 'Automatische Verbindung anzeigen' : `Verbindung von ${connection.source.name} bearbeiten`" @click="openEdit(connection)" />
+                    <v-btn v-if="!isAutomaticPhaseRailConnection(connection)" icon="mdi-link-variant-off" variant="text" color="warning" size="small" :title="`Verbindung von ${connection.source.name} entfernen`" :aria-label="`Verbindung von ${connection.source.name} entfernen`" @click="removeConnection(connection)" />
                   </template>
                 </td>
               </tr>
@@ -504,8 +645,8 @@ onMounted(() => void initialize())
               <v-btn v-if="endpointRoute(row.node.endpoint)" variant="text" prepend-icon="mdi-open-in-new" :to="endpointRoute(row.node.endpoint) ?? ''">Öffnen</v-btn>
               <v-spacer />
               <template v-for="connection in row.incomingConnections" :key="connection.id">
-                <v-btn icon="mdi-pencil" variant="text" :title="`Verbindung von ${connection.source.name} bearbeiten`" @click="openEdit(connection)" />
-                <v-btn icon="mdi-link-variant-off" variant="text" color="warning" :title="`Verbindung von ${connection.source.name} entfernen`" @click="removeConnection(connection)" />
+                <v-btn :icon="isAutomaticPhaseRailConnection(connection) ? 'mdi-eye-outline' : 'mdi-pencil'" variant="text" :title="isAutomaticPhaseRailConnection(connection) ? 'Automatische Verbindung anzeigen' : `Verbindung von ${connection.source.name} bearbeiten`" @click="openEdit(connection)" />
+                <v-btn v-if="!isAutomaticPhaseRailConnection(connection)" icon="mdi-link-variant-off" variant="text" color="warning" :title="`Verbindung von ${connection.source.name} entfernen`" @click="removeConnection(connection)" />
               </template>
             </v-card-actions>
           </v-card>
@@ -523,13 +664,13 @@ onMounted(() => void initialize())
           </v-alert>
           <v-row>
             <v-col cols="12" md="6">
-              <v-autocomplete v-model="sourceKey" label="Quelle" :items="sourceItems" item-title="title" item-value="value" prepend-inner-icon="mdi-export" clearable />
+              <v-autocomplete v-model="sourceKey" label="Quelle" :items="sourceItems" item-title="title" item-value="value" prepend-inner-icon="mdi-export" clearable :disabled="automaticEditingConnection" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-autocomplete v-model="targetKey" label="Versorgtes Ziel" :items="targetItems" item-title="title" item-value="value" prepend-inner-icon="mdi-import" clearable />
+              <v-autocomplete v-model="targetKey" label="Versorgtes Ziel" :items="targetItems" item-title="title" item-value="value" prepend-inner-icon="mdi-import" clearable :disabled="automaticEditingConnection" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-select v-model="form.connection_type" label="Verbindungsart" :items="connectionTypeItems" item-title="title" item-value="value" />
+              <v-select v-model="form.connection_type" label="Verbindungsart" :items="connectionTypeItems" item-title="title" item-value="value" :disabled="automaticEditingConnection" />
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field v-model="form.label" label="Bezeichnung (optional)" placeholder="z. B. Zuleitung HV" maxlength="150" />
@@ -542,20 +683,71 @@ onMounted(() => void initialize())
                 density="compact"
                 class="mb-3"
               >
-                {{ forcedPhaseHint }} Die Außenleiterphase kann in dieser Verbindung nicht manuell geändert werden.
+                {{ forcedPhaseHint }}
+                <span v-if="restrictedConnectionConductors === null && phaseLockActive">
+                  Die Außenleiterphase kann in dieser Verbindung nicht manuell geändert werden.
+                </span>
               </v-alert>
+              <template v-if="phaseLockActive">
+                <div class="forced-phase-field mb-3">
+                  <div class="text-caption text-medium-emphasis mb-2">Fest vorgegebene Außenleiterphase</div>
+                  <div v-if="forcedLinePhases.length" class="d-flex flex-wrap ga-2">
+                    <v-chip
+                      v-for="phase in forcedLinePhases"
+                      :key="phase"
+                      color="primary"
+                      variant="flat"
+                      prepend-icon="mdi-lock"
+                    >
+                      {{ phase }}
+                    </v-chip>
+                  </div>
+                  <v-alert v-else type="error" variant="tonal" density="compact">
+                    Die wirksame Außenleiterphase konnte nicht ermittelt werden. Die Verbindung kann nicht gespeichert werden.
+                  </v-alert>
+                  <div v-if="forcedLinePhases.length" class="text-caption text-medium-emphasis mt-2">
+                    Berechnet aus Startphase und TE-Position der Phasenschiene. Nicht manuell änderbar.
+                  </div>
+                </div>
+                <v-alert
+                  v-if="directPhaseRailConnection"
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                >
+                  Diese Verbindung wird automatisch durch die Phasen-/Kammschiene verwaltet.
+                  N und PE gehören nicht zu dieser Schienenverbindung und werden separat dokumentiert.
+                </v-alert>
+                <v-select
+                  v-else
+                  :model-value="additionalConductors"
+                  label="Zusätzliche Leiter"
+                  :items="additionalConductorItems"
+                  item-title="title"
+                  item-value="value"
+                  multiple
+                  chips
+                  closable-chips
+                  hint="Nur Neutralleiter N und Schutzleiter PE können zusätzlich gewählt werden."
+                  persistent-hint
+                  :disabled="!forcedLinePhases.length"
+                  @update:model-value="updateAdditionalConductors"
+                />
+              </template>
               <v-select
+                v-else
                 :model-value="form.phases"
                 label="Leiter / Phasen"
-                :items="connectionPhaseItems"
+                :items="selectablePhaseItems"
                 item-title="title"
                 item-value="value"
                 multiple
                 chips
                 closable-chips
                 :error="forcedPhaseConflict"
-                :hint="forcedLinePhases.length
-                  ? 'L1/L2/L3 werden aus Position und Startphase der Schiene berechnet. N und PE bleiben auswählbar.'
+                :disabled="restrictedConnectionConductors !== null"
+                :hint="restrictedConnectionConductors !== null
+                  ? 'Der Leiter wird durch die ausgewählte N- oder PE-Schiene festgelegt.'
                   : 'Jeder Leiter bleibt von Quelle bis Ziel identisch: L1 wird mit L1, L2 mit L2 verbunden. Bei Schrankkomponenten sind die Leiter Pflicht.'"
                 persistent-hint
                 @update:model-value="updateConnectionPhases"
@@ -584,8 +776,17 @@ onMounted(() => void initialize())
         </v-alert>
         <v-card-actions>
           <v-spacer />
-          <v-btn @click="dialogOpen = false">Abbrechen</v-btn>
-          <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" :disabled="forcedPhaseConflict" @click="saveConnection">Speichern</v-btn>
+          <v-btn @click="dialogOpen = false">{{ automaticEditingConnection ? 'Schließen' : 'Abbrechen' }}</v-btn>
+          <v-btn
+            v-if="!automaticEditingConnection"
+            color="primary"
+            prepend-icon="mdi-content-save"
+            :loading="saving"
+            :disabled="forcedPhaseConflict"
+            @click="saveConnection"
+          >
+            Speichern
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -594,6 +795,7 @@ onMounted(() => void initialize())
 
 <style scoped>
 .topology-page { max-width: 1600px; }
+.forced-phase-field { padding: 14px 16px; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 6px; background: rgba(var(--v-theme-primary), 0.06); }
 h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); }
 .focus-row { background: rgba(var(--v-theme-primary), 0.12); }
 .focus-card { border: 2px solid rgb(var(--v-theme-primary)); }

@@ -24,6 +24,12 @@ class ElectricalConnectionType(StrEnum):
     INTERNAL = "internal"
 
 
+class ElectricalPhaseSource(StrEnum):
+    MANUAL = "manual"
+    WIRE = "wire"
+    BUSBAR = "busbar"
+
+
 class ElectricalPhase(StrEnum):
     L1 = "L1"
     L2 = "L2"
@@ -97,6 +103,10 @@ class ElectricalConnectionRead(BaseModel):
     label: str | None
     phases: list[ElectricalPhase]
     effective_phases: list[ElectricalPhase]
+    phase_locked: bool = False
+    phase_source: ElectricalPhaseSource = ElectricalPhaseSource.MANUAL
+    source_connection_id: UUID | None = None
+    locked_line_phases: list[ElectricalPhase] = Field(default_factory=list)
     phase_warnings: list[str] = Field(default_factory=list)
     cable_type: str | None
     cores: int | None

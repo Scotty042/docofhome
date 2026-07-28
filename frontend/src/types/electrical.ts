@@ -165,6 +165,7 @@ export interface ElectricalAssetPlacement {
   asset_name: string
   asset_code: string
   asset_type_name?: string
+  is_rcd?: boolean
   product_name: string | null
   location_path: string | null
   row_number: number
@@ -202,7 +203,9 @@ export interface ElectricalCabinetComponent {
   rated_current_a: number | null
   max_cross_section_mm2: number | null
   outgoing_connections: number | null
+  automatic_connection_count: number
   linked_rcd_device_id: string | null
+  linked_rcd_asset_id: string | null
   linked_rcd_name: string | null
   start_phase: ElectricalPhase | null
   mounting_side: ElectricalRailMountingSide | null
@@ -225,6 +228,9 @@ export interface ElectricalCabinetComponentWrite {
   max_cross_section_mm2: number | null
   outgoing_connections: number | null
   linked_rcd_device_id: string | null
+  linked_rcd_asset_id: string | null
+  visible_protective_device_ids?: string[]
+  visible_asset_ids?: string[]
   start_phase: ElectricalPhase | null
   mounting_side: ElectricalRailMountingSide | null
   description: string | null
@@ -298,8 +304,14 @@ export interface ElectricalCircuit {
   distribution_id: string
   distribution_name: string
   protective_device_id: string | null
+  protective_device_asset_id: string | null
   protective_device_name: string | null
   protective_device_code: string | null
+  protective_device_type: string | null
+  protective_device_rating: string | null
+  protective_device_position: string | null
+  protective_device_phases: ElectricalPhase[]
+  protective_device_assignment_missing: boolean
   name: string
   circuit_number: string | null
   description: string | null
@@ -312,10 +324,25 @@ export interface ElectricalCircuit {
 export interface ElectricalCircuitWrite {
   distribution_id: string
   protective_device_id: string | null
+  protective_device_asset_id: string | null
   name: string
   circuit_number: string | null
   description: string | null
   notes: string | null
+}
+
+export interface ElectricalProtectiveDeviceOption {
+  id: string
+  reference_type: 'legacy_device' | 'asset'
+  label: string
+  device_type: ProtectiveDeviceType
+  rated_current_a: number | null
+  characteristic: string | null
+  position: string
+  phases: ElectricalPhase[]
+  occupied: boolean
+  occupied_by_circuit_id: string | null
+  occupied_by_circuit_name: string | null
 }
 
 export interface ElectricalCircuitAsset {
@@ -335,6 +362,7 @@ export interface ElectricalCircuitAsset {
 export type ElectricalEndpointKind = 'grid_connection' | 'asset' | 'distribution' | 'protective_device' | 'cabinet_component' | 'circuit'
 export type ElectricalConnectionType = 'unknown' | 'cable' | 'wire' | 'busbar' | 'internal'
 export type ElectricalPhase = 'L1' | 'L2' | 'L3' | 'N' | 'PE'
+export type ElectricalPhaseSource = 'manual' | 'wire' | 'busbar'
 
 export interface ElectricalEndpoint {
   key: string
@@ -373,6 +401,10 @@ export interface ElectricalConnection {
   label: string | null
   phases: ElectricalPhase[]
   effective_phases: ElectricalPhase[]
+  phase_locked: boolean
+  phase_source: ElectricalPhaseSource
+  source_connection_id: string | null
+  locked_line_phases: ElectricalPhase[]
   phase_warnings: string[]
   cable_type: string | null
   cores: number | null
@@ -504,6 +536,7 @@ export interface ElectricalCircuitListQuery {
   include_deleted?: boolean
   distribution_id?: string
   protective_device_id?: string
+  protective_device_asset_id?: string
 }
 
 export interface AvailableAssetQuery {
@@ -601,6 +634,7 @@ export function createEmptyElectricalCircuit(distributionId = ''): ElectricalCir
   return {
     distribution_id: distributionId,
     protective_device_id: null,
+    protective_device_asset_id: null,
     name: '',
     circuit_number: null,
     description: null,
@@ -612,6 +646,7 @@ export function editableElectricalCircuit(circuit: ElectricalCircuit): Electrica
   return {
     distribution_id: circuit.distribution_id,
     protective_device_id: circuit.protective_device_id,
+    protective_device_asset_id: circuit.protective_device_asset_id,
     name: circuit.name,
     circuit_number: circuit.circuit_number,
     description: circuit.description,

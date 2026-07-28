@@ -28,8 +28,8 @@ from app.schemas.about import (
     ReleaseNoteRead,
 )
 
-_RELEASE_FILE = re.compile(r"^RELEASE_NOTES_(\d+\.\d+\.\d+)\.md$")
-_CHANGELOG_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+)\s+[–-]\s+(\d{4}-\d{2}-\d{2})\s*$")
+_RELEASE_FILE = re.compile(r"^RELEASE_NOTES_(\d+\.\d+\.\d+(?:\.\d+)?)\.md$")
+_CHANGELOG_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+(?:\.\d+)?)\s+[–-]\s+(\d{4}-\d{2}-\d{2})\s*$")
 _RATE_WINDOW = timedelta(minutes=10)
 _RATE_LIMIT = 5
 _MAX_FEEDBACK_ZIP_BYTES = 256 * 1024
@@ -187,12 +187,14 @@ class AboutService:
         return {}
 
     @staticmethod
-    def _version_key(value: str) -> tuple[int, int, int]:
+    def _version_key(value: str) -> tuple[int, int, int, int]:
         try:
-            major, minor, patch = value.split(".", 2)
-            return int(major), int(minor), int(patch)
+            parts = [int(item) for item in value.split(".")]
+            if len(parts) not in {3, 4}:
+                raise ValueError
+            return tuple((parts + [0])[:4])  # type: ignore[return-value]
         except (ValueError, TypeError):
-            return 0, 0, 0
+            return 0, 0, 0, 0
 
     @classmethod
     def _feedback_zip(

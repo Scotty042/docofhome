@@ -11,7 +11,7 @@ import {
   toggleSelectedEntity
 } from '../services/homeAssistantSelection'
 import { useSettingsStore } from '../stores/settings'
-import type { Asset, AssetType, AssetWrite } from '../types/assets'
+import { createEmptyAsset, type Asset, type AssetType, type AssetWrite } from '../types/assets'
 import type { Location } from '../types/locations'
 import type {
   HomeAssistantAssetLink,
@@ -59,10 +59,7 @@ const createAssetSaving = ref(false)
 const createAssetLoading = ref(false)
 const createAssetTypes = ref<AssetType[]>([])
 const createAssetLocations = ref<Location[]>([])
-const createAssetForm = ref<AssetWrite>({
-  name: '', description: null, asset_type_id: '', product_id: null, location_id: null,
-  serial_number: null, inventory_number: null, module_width: null, status: 'active', label_ids: []
-})
+const createAssetForm = ref<AssetWrite>(createEmptyAsset())
 const selectionDialog = ref(false)
 const selectionLoading = ref(false)
 const selectionSaving = ref(false)

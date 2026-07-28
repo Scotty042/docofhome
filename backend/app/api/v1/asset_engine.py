@@ -50,6 +50,7 @@ from app.services.asset_engine import (
 from app.services.product_images import (
     ProductImageError,
     ProductImageSearchDisabledError,
+    AssetImageService,
     ProductImageService,
     ProductImageUnavailableError,
     ProductImageValidationError,
@@ -411,6 +412,30 @@ def delete_label(record_id: UUID, session: SessionDependency) -> Response:
 
 
 assets = APIRouter(prefix="/assets", tags=["assets"])
+
+
+@assets.post(
+    "/images/upload",
+    response_model=ProductImageUploadRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_asset_image(
+    session: SessionDependency,
+    image: UploadFile = File(...),
+) -> ProductImageUploadRead:
+    try:
+        return await AssetImageService(session).upload(image)
+    except ProductImageValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@assets.get("/images/{reference}", response_class=FileResponse)
+def asset_image(reference: str, session: SessionDependency) -> FileResponse:
+    try:
+        path = AssetImageService(session).resolve(reference)
+    except ProductImageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @assets.get("", response_model=Page[AssetRead])

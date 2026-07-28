@@ -11,6 +11,7 @@ from app.schemas.electrical_circuit import (
     ElectricalCircuitAssetWrite,
     ElectricalCircuitRead,
     ElectricalCircuitWrite,
+    ElectricalProtectiveDeviceOptionRead,
 )
 from app.services.electrical import (
     ElectricalConflictError,
@@ -47,6 +48,7 @@ def list_circuits(
     include_deleted: bool = False,
     distribution_id: UUID | None = None,
     protective_device_id: UUID | None = None,
+    protective_device_asset_id: UUID | None = None,
 ) -> Page[ElectricalCircuitRead]:
     try:
         return ElectricalCircuitService(session).list_read(
@@ -58,8 +60,27 @@ def list_circuits(
             include_deleted=include_deleted,
             distribution_id=distribution_id,
             protective_device_id=protective_device_id,
+            protective_device_asset_id=protective_device_asset_id,
         )
     except ElectricalSortError as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.get(
+    "/protective-device-options",
+    response_model=list[ElectricalProtectiveDeviceOptionRead],
+)
+def protective_device_options(
+    distribution_id: UUID,
+    session: SessionDependency,
+    circuit_id: UUID | None = None,
+) -> list[ElectricalProtectiveDeviceOptionRead]:
+    try:
+        return ElectricalCircuitService(session).protective_device_options(
+            distribution_id,
+            circuit_id=circuit_id,
+        )
+    except (ElectricalNotFoundError, ElectricalValidationError) as exc:
         raise _translate_error(exc) from exc
 
 
@@ -167,6 +188,6 @@ def update_circuit(
 def delete_circuit(circuit_id: UUID, session: SessionDependency) -> Response:
     try:
         ElectricalCircuitService(session).delete(circuit_id)
-    except ElectricalNotFoundError as exc:
+    except (ElectricalNotFoundError, ElectricalConflictError) as exc:
         raise _translate_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

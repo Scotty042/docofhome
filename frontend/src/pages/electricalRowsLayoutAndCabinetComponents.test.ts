@@ -20,6 +20,14 @@ describe('simple electrical rows and passive cabinet components', () => {
     expect(topology).toContain("cabinet_component: 'Schrankkomponente'")
     expect(topology).toContain("cabinet_component: 'mdi-call-split'")
   })
+
+  it('materializes N and PE areas as editable wiring endpoints', () => {
+    expect(layout).toContain('cabinetComponentAreaOptions')
+    expect(layout).toContain("area.area_type === 'neutral_rail'")
+    expect(layout).toContain("area.area_type === 'protective_earth_rail'")
+    expect(layout).toContain('Diesen Bereich als verkabelbare Schiene anlegen')
+    expect(layout).toContain('Noch nicht als elektrischer Endpunkt angelegt.')
+  })
   it('shows private FI groups, neutral rails and busbar phase patterns', () => {
     expect(layout).toContain('Zugehöriger FI/RCD')
     expect(layout).toContain('Startphase')

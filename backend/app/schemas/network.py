@@ -77,12 +77,20 @@ def _hostname(value: str | None) -> str | None:
     normalized = _optional_text(value)
     if normalized is None:
         return None
+    if "_" in normalized:
+        raise ValueError(
+            "Unterstriche sind in Hostnamen nicht erlaubt. "
+            "Verwenden Sie stattdessen einen Bindestrich."
+        )
     if len(normalized) > 253 or not re.fullmatch(
         r"(?=.{1,253}\.?$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*"
         r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.??",
         normalized,
     ):
-        raise ValueError("Invalid hostname")
+        raise ValueError(
+            "Der Hostname darf nur Buchstaben, Ziffern, Punkte und Bindestriche "
+            "enthalten; jedes Segment muss mit Buchstabe oder Ziffer beginnen und enden."
+        )
     return normalized.rstrip(".").lower()
 
 
@@ -128,6 +136,7 @@ class NetworkDeviceRead(BaseModel):
     asset_name: str
     asset_code: str
     asset_type: str
+    switch_port_layout: str = "odd_even"
     product_name: str | None
     location_name: str | None
     role: NetworkRole
@@ -224,7 +233,15 @@ class NetworkInterfaceWrite(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     interface_type: NetworkInterfaceType = NetworkInterfaceType.ETHERNET
     mac_address: str | None = Field(default=None, max_length=32)
-    speed_mbps: int | None = Field(default=None, ge=1, le=1_000_000)
+    speed_mbps: int | None = Field(default=None)
+
+    @field_validator("speed_mbps")
+    @classmethod
+    def validate_speed(cls, value: int | None) -> int | None:
+        if value is not None and value not in {100, 1000, 2500}:
+            raise ValueError("Geschwindigkeit muss 100, 1000 oder 2500 Mbit/s sein")
+        return value
+
     poe_mode: NetworkPoeMode = NetworkPoeMode.NONE
     enabled: bool = True
     is_primary: bool = False
@@ -391,3 +408,37 @@ class NetworkTopologyRead(BaseModel):
 
     nodes: list[NetworkTopologyNodeRead]
     edges: list[NetworkTopologyEdgeRead]
+
+
+class NetworkIpStatus(StrEnum):
+    MATCH = "match"
+    MISMATCH = "mismatch"
+    NOT_DETECTED = "not_detected"
+    OBSERVED_ONLY = "observed_only"
+    CONFLICT = "conflict"
+    NO_INTEGRATION = "no_integration"
+
+
+class NetworkIpOverviewRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    status: NetworkIpStatus
+    device_id: UUID | None
+    device_name: str
+    interface_id: UUID | None
+    interface_name: str | None
+    documented_address_id: UUID | None
+    documented_address: str | None
+    mac_address: str | None
+    assignment_type: NetworkAssignmentType
+    observed_address_id: UUID | None
+    observed_address: str | None
+    source: str | None
+    last_seen_at: datetime | None
+    ignored: bool = False
+
+
+class NetworkIpActionRead(BaseModel):
+    documented_address_id: UUID | None
+    status: str

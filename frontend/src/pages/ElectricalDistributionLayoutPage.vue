@@ -180,6 +180,7 @@ const cabinetComponentForm = ref<ElectricalCabinetComponentWrite>({
   max_cross_section_mm2: null,
   outgoing_connections: null,
   linked_rcd_device_id: null,
+  linked_rcd_asset_id: null,
   start_phase: 'L1',
   mounting_side: null,
   description: null,
@@ -192,8 +193,8 @@ const allCabinetComponentTypeOptions: Array<{
   icon: string
 }> = [
   { title: 'Phasenverteilerblock', value: 'phase_distribution_block', icon: 'mdi-call-split' },
-  { title: 'Sammelschiene', value: 'busbar', icon: 'mdi-view-stream-outline' },
-  { title: 'Phasenschiene', value: 'phase_rail', icon: 'mdi-transit-connection-horizontal' },
+  { title: 'Sammelschiene (allgemeiner Verteiler)', value: 'busbar', icon: 'mdi-view-stream-outline' },
+  { title: 'Phasenschiene / Kammschiene (Sicherungsreihe)', value: 'phase_rail', icon: 'mdi-transit-connection-horizontal' },
   { title: 'N-Schiene', value: 'neutral_rail', icon: 'mdi-minus-box-outline' },
   { title: 'PE-Schiene', value: 'protective_earth_rail', icon: 'mdi-earth' },
   { title: 'Reihenklemme', value: 'terminal_block', icon: 'mdi-connection' },
@@ -201,12 +202,6 @@ const allCabinetComponentTypeOptions: Array<{
   { title: 'Potentialverteiler', value: 'potential_distribution', icon: 'mdi-source-branch' },
   { title: 'Sonstige passive Komponente', value: 'other', icon: 'mdi-view-grid-plus-outline' }
 ]
-const cabinetComponentTypeOptions = computed(() => (junctionBoxLayout.value
-  ? allCabinetComponentTypeOptions.filter((item) => [
-      'terminal_block', 'connection_block', 'potential_distribution', 'other'
-    ].includes(item.value))
-  : allCabinetComponentTypeOptions
-))
 const cabinetComponentTypeMeta = Object.fromEntries(
   allCabinetComponentTypeOptions.map((item) => [item.value, item])
 ) as Record<ElectricalCabinetComponentType, {
@@ -221,20 +216,72 @@ const phaseOptions: Array<{ title: string; value: ElectricalPhase }> = [
   { title: 'N', value: 'N' },
   { title: 'PE', value: 'PE' }
 ]
+const cabinetComponentPhaseOptions = computed(() => {
+  if (cabinetComponentForm.value.component_type === 'phase_rail') {
+    return phaseOptions.filter((item) => ['L1', 'L2', 'L3'].includes(item.value))
+  }
+  if (cabinetComponentForm.value.component_type === 'neutral_rail') {
+    return phaseOptions.filter((item) => item.value === 'N')
+  }
+  if (cabinetComponentForm.value.component_type === 'protective_earth_rail') {
+    return phaseOptions.filter((item) => item.value === 'PE')
+  }
+  return phaseOptions
+})
+const fixedCabinetComponentConductors = computed(() => [
+  'neutral_rail',
+  'protective_earth_rail'
+].includes(cabinetComponentForm.value.component_type))
 
 const viewMode = ref<'compact' | 'expanded'>('compact')
 const detailDrawer = ref(false)
+const detailError = ref<string | null>(null)
 const detailDevice = ref<ProtectiveDevice | null>(null)
 const detailComponent = ref<ElectricalCabinetComponent | null>(null)
 const detailAsset = ref<ElectricalAssetPlacement | null>(null)
 
-const rcdOptions = computed(() => (distribution.value?.protective_devices ?? [])
+const legacyRcdOptions = computed(() => (distribution.value?.protective_devices ?? [])
   .filter((device) => device.device_type === 'rcd')
   .map((device) => ({
     id: device.id,
     title: `${device.asset.name} · ${device.asset.jarvis_code}`
   }))
   .sort((left, right) => left.title.localeCompare(right.title, 'de')))
+
+const rcdOptions = computed(() => [
+  ...legacyRcdOptions.value.map((device) => ({
+    value: `device:${device.id}`,
+    title: device.title,
+    source: 'Bestands-Schutzgerät'
+  })),
+  ...assetPlacements.value
+    .filter((placement) => placement.is_rcd === true)
+    .map((placement) => ({
+      value: `asset:${placement.asset_id}`,
+      title: `${placement.asset_name} · ${placement.asset_code}`,
+      source: placement.asset_type_name || 'DIN-Gerät'
+    }))
+].sort((left, right) => left.title.localeCompare(right.title, 'de')))
+
+const linkedRcdSelection = computed<string | null>({
+  get: () => {
+    if (cabinetComponentForm.value.linked_rcd_asset_id) {
+      return `asset:${cabinetComponentForm.value.linked_rcd_asset_id}`
+    }
+    if (cabinetComponentForm.value.linked_rcd_device_id) {
+      return `device:${cabinetComponentForm.value.linked_rcd_device_id}`
+    }
+    return null
+  },
+  set: (value) => {
+    cabinetComponentForm.value.linked_rcd_device_id = value?.startsWith('device:')
+      ? value.slice('device:'.length)
+      : null
+    cabinetComponentForm.value.linked_rcd_asset_id = value?.startsWith('asset:')
+      ? value.slice('asset:'.length)
+      : null
+  }
+})
 
 const neutralRailOptions = computed(() => cabinetComponents.value
   .filter((component) => component.component_type === 'neutral_rail')
@@ -286,6 +333,33 @@ const deviceOptions = computed(() => (distribution.value?.protective_devices ?? 
 const deviceAreaOptions = computed(() => sections.value.flatMap((section) => section.areas
   .filter((area) => area.area_type === 'device_rows')
   .map((area) => ({ id: area.id, title: `${section.name} · ${area.name}` }))))
+const cabinetComponentAreaOptions = computed(() => sections.value.flatMap((section) => section.areas
+  .filter((area) => [
+    'device_rows', 'neutral_rail', 'protective_earth_rail'
+  ].includes(area.area_type))
+  .map((area) => ({
+    id: area.id,
+    areaType: area.area_type,
+    title: `${section.name} · ${area.name} · ${areaTypeMeta[area.area_type].title}`
+  }))))
+const selectedCabinetComponentAreaType = computed(() => cabinetComponentAreaOptions.value
+  .find((area) => area.id === cabinetComponentForm.value.area_id)?.areaType ?? null)
+const cabinetComponentTypeOptions = computed(() => {
+  if (junctionBoxLayout.value) {
+    return allCabinetComponentTypeOptions.filter((item) => [
+      'terminal_block', 'connection_block', 'potential_distribution', 'other'
+    ].includes(item.value))
+  }
+  if (selectedCabinetComponentAreaType.value === 'neutral_rail') {
+    return allCabinetComponentTypeOptions.filter((item) => item.value === 'neutral_rail')
+  }
+  if (selectedCabinetComponentAreaType.value === 'protective_earth_rail') {
+    return allCabinetComponentTypeOptions.filter(
+      (item) => item.value === 'protective_earth_rail'
+    )
+  }
+  return allCabinetComponentTypeOptions
+})
 const placedAssetIds = computed(() => new Set(assetPlacements.value.map((placement) => placement.asset_id)))
 const protectiveAssetIds = computed(() => new Set((distribution.value?.protective_devices ?? []).map((device) => device.asset_id)))
 const nonElectricalMeterAssetIds = computed(() => new Set(
@@ -370,14 +444,6 @@ const layoutWarnings = computed(() => {
   for (const device of distribution.value?.protective_devices ?? []) {
     device.group_warnings.forEach((message) => messages.add(`${device.asset.name}: ${message}`))
   }
-  for (const component of cabinetComponents.value) {
-    if (['busbar', 'phase_rail'].includes(component.component_type) && !component.linked_rcd_device_id) {
-      messages.add(`${component.name}: noch keinem FI/RCD zugeordnet.`)
-    }
-    if (component.component_type === 'neutral_rail' && !component.linked_rcd_device_id) {
-      messages.add(`${component.name}: noch keinem FI/RCD zugeordnet.`)
-    }
-  }
   return [...messages]
 })
 
@@ -414,13 +480,7 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
   const assetCandidates = assets.value
     .filter((asset) => (
       asset.status === 'active'
-      && (() => {
-        const typeName = asset.asset_type.name.trim().toLocaleLowerCase('de')
-        return typeName.includes('stromzähler')
-          || typeName.includes('stromzaehler')
-          || typeName.includes('smart meter')
-          || typeName.includes('smartmeter')
-      })()
+      && asset.asset_type_is_meter
       && !linkedAssetIds.has(asset.id)
     ))
     .map((asset) => ({
@@ -677,6 +737,7 @@ function formatMeterValue(value: number | null, unit: string) {
 }
 
 function openDeviceDetails(device: ProtectiveDevice) {
+  detailError.value = null
   detailDevice.value = device
   detailComponent.value = null
   detailAsset.value = null
@@ -684,6 +745,7 @@ function openDeviceDetails(device: ProtectiveDevice) {
 }
 
 function openComponentDetails(component: ElectricalCabinetComponent) {
+  detailError.value = null
   detailDevice.value = null
   detailComponent.value = component
   detailAsset.value = null
@@ -691,6 +753,7 @@ function openComponentDetails(component: ElectricalCabinetComponent) {
 }
 
 function openAssetDetails(placement: ElectricalAssetPlacement) {
+  detailError.value = null
   detailDevice.value = null
   detailComponent.value = null
   detailAsset.value = placement
@@ -706,7 +769,7 @@ function componentGridStyle(component: ElectricalCabinetComponent) {
   return {
     gridColumn: `${component.start_position} / span ${component.module_width}`,
     gridRow: isBusbar ? '3' : '2',
-    alignSelf: isBusbar ? 'stretch' : 'stretch'
+    alignSelf: 'stretch'
   }
 }
 
@@ -769,6 +832,10 @@ async function saveAssetPlacement() {
 async function unplaceAsset(placement: ElectricalAssetPlacement) {
   try {
     await electricalApi.unplaceAsset(distributionId.value, placement.asset_id)
+    if (detailAsset.value?.asset_id === placement.asset_id) {
+      detailAsset.value = null
+      detailDrawer.value = false
+    }
     success.value = 'DIN-Hutschienengerät wurde aus dem Plan entfernt.'
     await load()
   } catch (reason) {
@@ -808,6 +875,11 @@ function openCabinetComponent(
   row?: number,
   start?: number
 ) {
+  const areaRailType: ElectricalCabinetComponentType | null = area?.area_type === 'neutral_rail'
+    ? 'neutral_rail'
+    : area?.area_type === 'protective_earth_rail'
+      ? 'protective_earth_rail'
+      : null
   cabinetComponentError.value = null
   editingCabinetComponentId.value = component?.id ?? null
   cabinetComponentForm.value = component
@@ -823,26 +895,39 @@ function openCabinetComponent(
         max_cross_section_mm2: component.max_cross_section_mm2,
         outgoing_connections: component.outgoing_connections,
         linked_rcd_device_id: component.linked_rcd_device_id,
+        linked_rcd_asset_id: component.linked_rcd_asset_id,
         start_phase: component.start_phase,
         mounting_side: component.mounting_side,
         description: component.description,
         notes: component.notes
       }
     : {
-        name: junctionBoxLayout.value ? 'Verbindungsklemme' : 'Phasenverteilerblock L1/L2/L3',
-        component_type: junctionBoxLayout.value ? 'terminal_block' : 'phase_distribution_block',
+        name: areaRailType
+          ? area?.name ?? (areaRailType === 'neutral_rail' ? 'N-Schiene' : 'PE-Schiene')
+          : junctionBoxLayout.value
+            ? 'Verbindungsklemme'
+            : 'Phasenverteilerblock L1/L2/L3',
+        component_type: areaRailType
+          ?? (junctionBoxLayout.value ? 'terminal_block' : 'phase_distribution_block'),
         area_id: structuredLayout.value
           ? area?.id ?? deviceAreaOptions.value[0]?.id ?? null
           : null,
         row_number: row ?? 1,
         start_position: start ?? (junctionBoxLayout.value ? cabinetComponents.value.length + 1 : 1),
-        module_width: junctionBoxLayout.value ? 1 : 4,
-        phases: junctionBoxLayout.value ? [] : ['L1', 'L2', 'L3'],
+        module_width: areaRailType || junctionBoxLayout.value ? 1 : 4,
+        phases: areaRailType === 'neutral_rail'
+          ? ['N']
+          : areaRailType === 'protective_earth_rail'
+            ? ['PE']
+            : junctionBoxLayout.value
+              ? []
+              : ['L1', 'L2', 'L3'],
         rated_current_a: null,
         max_cross_section_mm2: null,
         outgoing_connections: null,
         linked_rcd_device_id: null,
-        start_phase: junctionBoxLayout.value ? null : 'L1',
+        linked_rcd_asset_id: null,
+        start_phase: areaRailType || junctionBoxLayout.value ? null : 'L1',
         mounting_side: null,
         description: null,
         notes: null
@@ -851,7 +936,6 @@ function openCabinetComponent(
 }
 
 function applyCabinetComponentPhaseSuggestion() {
-  if (editingCabinetComponentId.value) return
   if (cabinetComponentForm.value.component_type === 'neutral_rail') {
     cabinetComponentForm.value.phases = ['N']
     cabinetComponentForm.value.start_phase = null
@@ -861,22 +945,57 @@ function applyCabinetComponentPhaseSuggestion() {
     cabinetComponentForm.value.start_phase = null
     cabinetComponentForm.value.mounting_side = null
     cabinetComponentForm.value.linked_rcd_device_id = null
+    cabinetComponentForm.value.linked_rcd_asset_id = null
+  } else if (cabinetComponentForm.value.component_type === 'phase_rail') {
+    cabinetComponentForm.value.phases = ['L1', 'L2', 'L3']
+    cabinetComponentForm.value.start_phase = 'L1'
+    cabinetComponentForm.value.mounting_side = 'below'
   } else if (
     cabinetComponentForm.value.component_type === 'phase_distribution_block'
     || cabinetComponentForm.value.component_type === 'busbar'
-    || cabinetComponentForm.value.component_type === 'phase_rail'
   ) {
     cabinetComponentForm.value.phases = ['L1', 'L2', 'L3']
-    cabinetComponentForm.value.start_phase = ['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type) ? 'L1' : null
-    cabinetComponentForm.value.mounting_side = ['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type) ? 'below' : null
-    if (!['busbar', 'phase_rail'].includes(cabinetComponentForm.value.component_type)) {
-      cabinetComponentForm.value.linked_rcd_device_id = null
-    }
+    cabinetComponentForm.value.start_phase = null
+    cabinetComponentForm.value.mounting_side = null
+    cabinetComponentForm.value.linked_rcd_device_id = null
+    cabinetComponentForm.value.linked_rcd_asset_id = null
   } else {
     cabinetComponentForm.value.start_phase = null
     cabinetComponentForm.value.mounting_side = null
     cabinetComponentForm.value.linked_rcd_device_id = null
+    cabinetComponentForm.value.linked_rcd_asset_id = null
   }
+}
+
+watch(selectedCabinetComponentAreaType, (areaType) => {
+  if (areaType === 'neutral_rail' && cabinetComponentForm.value.component_type !== 'neutral_rail') {
+    cabinetComponentForm.value.component_type = 'neutral_rail'
+    applyCabinetComponentPhaseSuggestion()
+  }
+  if (
+    areaType === 'protective_earth_rail'
+    && cabinetComponentForm.value.component_type !== 'protective_earth_rail'
+  ) {
+    cabinetComponentForm.value.component_type = 'protective_earth_rail'
+    applyCabinetComponentPhaseSuggestion()
+  }
+})
+
+function visibleProtectiveDeviceIds(): string[] {
+  if (cabinetComponentForm.value.component_type !== 'phase_rail') return []
+  // Send every protective device currently rendered for this distribution.
+  // The backend remains authoritative and validates lifecycle, area, row and
+  // complete TE coverage. Avoid frontend-only lifecycle/placement filters here:
+  // legacy API responses can omit optional fields even though the device is
+  // visibly present in the cabinet view.
+  return [...new Set(
+    (distribution.value?.protective_devices ?? []).map((device) => device.id)
+  )]
+}
+
+function visibleDinAssetIds(): string[] {
+  if (cabinetComponentForm.value.component_type !== 'phase_rail') return []
+  return [...new Set(assetPlacements.value.map((placement) => placement.asset_id))]
 }
 
 async function saveCabinetComponent() {
@@ -901,23 +1020,46 @@ async function saveCabinetComponent() {
         ? (editingCabinetComponentId.value ? cabinetComponentForm.value.start_position : cabinetComponents.value.length + 1)
         : cabinetComponentForm.value.start_position,
       module_width: junctionBoxLayout.value ? 1 : cabinetComponentForm.value.module_width,
+      visible_protective_device_ids: visibleProtectiveDeviceIds(),
+      visible_asset_ids: visibleDinAssetIds(),
       description: optionalText(cabinetComponentForm.value.description),
       notes: optionalText(cabinetComponentForm.value.notes)
     }
-    if (editingCabinetComponentId.value) {
-      await electricalApi.updateCabinetComponent(
+    const wasEditingCabinetComponent = Boolean(editingCabinetComponentId.value)
+    let savedComponent = editingCabinetComponentId.value
+      ? await electricalApi.updateCabinetComponent(
+          distributionId.value,
+          editingCabinetComponentId.value,
+          payload
+        )
+      : await electricalApi.createCabinetComponent(distributionId.value, payload)
+    if (!wasEditingCabinetComponent && savedComponent.component_type === 'phase_rail') {
+      // The rail already exists even if the explicit contact synchronization
+      // below reports a validation error. Keep the dialog in edit mode so a retry
+      // cannot create a duplicate rail.
+      editingCabinetComponentId.value = savedComponent.id
+    }
+    if (savedComponent.component_type === 'phase_rail') {
+      // Use a dedicated post-save endpoint. At this point both rail and devices
+      // are durably persisted, so the result cannot depend on same-transaction
+      // ORM visibility. The endpoint fails with concrete diagnostics instead of
+      // returning a misleading successful count of zero.
+      savedComponent = await electricalApi.synchronizePhaseRailContacts(
         distributionId.value,
-        editingCabinetComponentId.value,
-        payload
+        savedComponent.id,
+        visibleProtectiveDeviceIds(),
+        visibleDinAssetIds()
       )
-    } else {
-      await electricalApi.createCabinetComponent(distributionId.value, payload)
     }
     cabinetComponentError.value = null
     cabinetComponentDialog.value = false
-    success.value = editingCabinetComponentId.value
-      ? 'Schrankkomponente wurde aktualisiert.'
-      : 'Schrankkomponente wurde angelegt.'
+    if (savedComponent.component_type === 'phase_rail') {
+      success.value = `Phasen-/Kammschiene wurde gespeichert und automatisch mit ${savedComponent.automatic_connection_count} DIN-Gerät(en) verbunden.`
+    } else {
+      success.value = wasEditingCabinetComponent
+        ? 'Schrankkomponente wurde aktualisiert.'
+        : 'Schrankkomponente wurde angelegt.'
+    }
     await load()
   } catch (reason) {
     cabinetComponentError.value = reason instanceof Error
@@ -929,16 +1071,31 @@ async function saveCabinetComponent() {
 }
 
 async function archiveCabinetComponent(component: ElectricalCabinetComponent) {
-  if (!window.confirm(`Schrankkomponente „${component.name}“ archivieren?`)) return
+  const prompt = component.component_type === 'phase_rail'
+    ? `Phasen-/Kammschiene „${component.name}“ archivieren? Ihre Einspeisung und alle automatisch erzeugten Verbindungen zu DIN-Geräten werden ebenfalls archiviert.`
+    : `Schrankkomponente „${component.name}“ archivieren?`
+  if (!window.confirm(prompt)) return
   try {
     await electricalApi.removeCabinetComponent(distributionId.value, component.id)
+    if (detailComponent.value?.id === component.id) {
+      detailComponent.value = null
+      detailDrawer.value = false
+    }
+    detailError.value = null
     success.value = 'Schrankkomponente wurde archiviert.'
     await load()
   } catch (reason) {
-    error.value = reason instanceof Error
+    const message = reason instanceof Error
       ? reason.message
       : 'Schrankkomponente konnte nicht archiviert werden.'
+    if (detailDrawer.value && detailComponent.value?.id === component.id) detailError.value = message
+    else error.value = message
   }
+}
+
+async function archiveDetailComponent() {
+  detailError.value = null
+  if (detailComponent.value) await archiveCabinetComponent(detailComponent.value)
 }
 
 async function archiveArea(area: DistributionArea) {
@@ -1010,11 +1167,25 @@ async function archiveDevice(device: ProtectiveDevice) {
   if (!window.confirm(`Schutzgerät „${device.asset.name}“ archivieren?`)) return
   try {
     await electricalApi.removeProtectiveDevice(device.id)
+    if (detailDevice.value?.id === device.id) {
+      detailDevice.value = null
+      detailDrawer.value = false
+    }
+    detailError.value = null
     success.value = 'Schutzgerät wurde archiviert und ist jetzt unter Archiv sichtbar.'
     await load()
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : 'Schutzgerät konnte nicht archiviert werden.'
+    const message = reason instanceof Error
+      ? reason.message
+      : 'Schutzgerät konnte nicht archiviert werden.'
+    if (detailDrawer.value && detailDevice.value?.id === device.id) detailError.value = message
+    else error.value = message
   }
+}
+
+async function archiveDetailDevice() {
+  detailError.value = null
+  if (detailDevice.value) await archiveDevice(detailDevice.value)
 }
 
 function devicesForArea(areaId: string): ProtectiveDevice[] {
@@ -1141,15 +1312,21 @@ function placementProblem(
     }
   }
   for (const component of cabinetComponents.value) {
-    if (
-      ['busbar', 'phase_rail'].includes(component.component_type)
-      && (excludeDeviceId !== null || excludeAssetId !== null)
-    ) continue
     if (component.area_id !== areaId || component.row_number !== row) continue
     const otherEnd = component.start_position + component.module_width - 1
-    if (start <= otherEnd && end >= component.start_position) {
-      return `Position ist durch ${component.name} belegt.`
+    if (!(start <= otherEnd && end >= component.start_position)) continue
+    if (component.component_type === 'busbar') continue
+    if (component.component_type === 'phase_rail') {
+      if (excludeDeviceId !== null) {
+        if (component.start_position <= start && end <= otherEnd) continue
+        return 'Die Sicherung würde nur teilweise von der Phasen-/Kammschiene überdeckt.'
+      }
+      if (excludeAssetId !== null) {
+        if (component.start_position <= start && end <= otherEnd) continue
+        return 'Das DIN-Gerät würde nur teilweise von der Phasen-/Kammschiene überdeckt.'
+      }
     }
+    return `Position ist durch ${component.name} belegt.`
   }
   return null
 }
@@ -1297,12 +1474,12 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               ? 'Felder nebeneinander, Bereiche innerhalb des Feldes untereinander.'
               : junctionBoxLayout
                 ? 'Verbindungsklemmen und direkte elektrische Verbindungen ohne TE-Raster.'
-                : 'Einfache Reihen mit Modulpositionen und zugeordneten Schutzgeräten.' }}
+                : 'Einfache Reihen mit Modulpositionen und zugeordneten DIN-Geräten.' }}
           </p>
         </div>
         <div class="d-flex flex-wrap ga-2">
           <v-btn v-if="structuredLayout" prepend-icon="mdi-view-column-outline" color="primary" @click="openSection()">Feld anlegen</v-btn>
-          <v-btn v-if="!junctionBoxLayout" prepend-icon="mdi-shield-plus-outline" variant="tonal" title="Sicherung, LS, FI/RCD, FI/LS oder Überspannungsschutz platzieren" @click="openPlacement()">Sicherungs-/Schutzgerät platzieren</v-btn>
+          <v-btn v-if="!junctionBoxLayout" prepend-icon="mdi-memory" variant="tonal" :disabled="structuredLayout && !deviceAreaOptions.length" title="Sicherung, FI/RCD, FI/LS, Relais oder anderes DIN-Gerät platzieren" @click="openAssetPlacement()">DIN-Gerät platzieren</v-btn>
           <v-btn
             prepend-icon="mdi-call-split"
             variant="tonal"
@@ -1311,7 +1488,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           >
             {{ junctionBoxLayout ? 'Klemme / Verbindung' : 'Schrankkomponente' }}
           </v-btn>
-          <v-btn v-if="!junctionBoxLayout" prepend-icon="mdi-memory" variant="tonal" :disabled="structuredLayout && !deviceAreaOptions.length" @click="openAssetPlacement()">DIN-Asset platzieren</v-btn>
           <v-btn v-if="structuredLayout" prepend-icon="mdi-meter-electric-outline" variant="tonal" :disabled="!meterAreaOptions.length" @click="openMeterPlacement()">Zähler platzieren</v-btn>
           <v-btn prepend-icon="mdi-pencil" variant="text" :to="`/electrical/distributions/${distributionId}/edit`">Verteilung</v-btn>
         </div>
@@ -1330,7 +1506,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         class="mb-5"
         title="Noch keine Schrankaufteilung angelegt"
       >
-        Für diese Verteilung sind noch keine Reihen, Modulplätze oder Schutzgeräte dokumentiert.
+        Für diese Verteilung sind noch keine Reihen, Modulplätze oder DIN-Geräte dokumentiert.
         Konfiguriere eine einfache Reihenaufteilung oder wechsle zur Feld-/Bereichsaufteilung.
         <template #append>
           <v-btn
@@ -1385,7 +1561,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             variant="tonal"
             density="compact"
             class="mt-3"
-            title="Hinweise zur FI- und Neutralleiter-Zuordnung"
+            title="Hinweise zu Elektro-Zuordnungen"
           >
             <ul class="pl-5 mb-0">
               <li v-for="message in layoutWarnings" :key="message">{{ message }}</li>
@@ -1591,7 +1767,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     {{ component.name }}
                   </v-card-title>
                   <div
-                    v-if="['busbar', 'phase_rail'].includes(component.component_type)"
+                    v-if="component.component_type === 'phase_rail'"
                     class="busbar-inline-visual"
                     :title="`Phasenfolge: ${busbarPhasePattern(component).join(' – ')}`"
                   >
@@ -1697,18 +1873,11 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           </section>
 
           <div class="d-flex flex-wrap ga-2">
-            <v-btn
-              color="primary"
-              prepend-icon="mdi-shield-plus-outline"
-              :to="`/electrical/protective-devices/new?distribution=${distributionId}`"
-            >
-              Schutzgerät hinzufügen
+            <v-btn color="primary" prepend-icon="mdi-memory" @click="openAssetPlacement()">
+              DIN-Gerät platzieren
             </v-btn>
             <v-btn variant="tonal" prepend-icon="mdi-call-split" @click="openCabinetComponent()">
               Verteilerblock / Schiene
-            </v-btn>
-            <v-btn variant="tonal" prepend-icon="mdi-memory" @click="openAssetPlacement()">
-              DIN-Asset platzieren
             </v-btn>
             <v-btn
               variant="tonal"
@@ -1729,7 +1898,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         class="mb-4"
         title="Drag-and-drop aktiv"
       >
-        Ziehe ein Schutzgerät oder DIN-Asset auf die gewünschte Teilungseinheit. Bereits platzierte
+        Ziehe ein DIN-Gerät auf die gewünschte Teilungseinheit. Bereits platzierte
         Geräte lassen sich ebenso verschieben. Ohne DIN-Breite ist keine Platzierung möglich.
       </v-alert>
 
@@ -1755,9 +1924,19 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 <v-icon :icon="areaTypeMeta[area.area_type].icon" size="small" />
                 <span class="text-wrap">{{ area.name }}</span>
                 <v-spacer />
-                <v-btn v-if="area.area_type === 'device_rows'" icon="mdi-call-split" size="x-small" variant="text" aria-label="Schrankkomponente platzieren" title="Verteilerblock oder Schiene platzieren" @click="openCabinetComponent(undefined, area)" />
-                <v-btn v-if="area.area_type === 'device_rows'" icon="mdi-memory" size="x-small" variant="text" aria-label="DIN-Asset platzieren" title="DIN-Asset platzieren" @click="openAssetPlacement(area)" />
-                <v-btn v-if="area.area_type === 'device_rows'" icon="mdi-shield-plus-outline" size="x-small" variant="text" aria-label="Schutzgerät platzieren" title="Schutzgerät platzieren" @click="openPlacement(undefined, area)" />
+                <v-btn
+                  v-if="area.area_type === 'device_rows' || (
+                    ['neutral_rail', 'protective_earth_rail'].includes(area.area_type)
+                    && cabinetComponentsForArea(area.id).length === 0
+                  )"
+                  icon="mdi-call-split"
+                  size="x-small"
+                  variant="text"
+                  :aria-label="area.area_type === 'device_rows' ? 'Schrankkomponente platzieren' : 'Elektrische Schiene anlegen'"
+                  :title="area.area_type === 'device_rows' ? 'Verteilerblock oder Schiene platzieren' : 'Diesen Bereich als verkabelbare Schiene anlegen'"
+                  @click="openCabinetComponent(undefined, area)"
+                />
+                <v-btn v-if="area.area_type === 'device_rows'" icon="mdi-memory" size="x-small" variant="text" aria-label="DIN-Gerät platzieren" title="Sicherung, FI/RCD, Relais oder anderes DIN-Gerät platzieren" @click="openAssetPlacement(area)" />
                 <v-btn v-if="area.area_type === 'meter'" icon="mdi-meter-electric-outline" size="x-small" variant="text" aria-label="Zähler platzieren" title="Zähler platzieren" @click="openMeterPlacement(undefined, area)" />
                 <v-btn icon="mdi-pencil" size="x-small" variant="text" aria-label="Bereich bearbeiten" title="Bereich bearbeiten" @click="openArea(section.id, area)" />
                 <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" aria-label="Bereich archivieren" title="Bereich archivieren" @click="archiveArea(area)" />
@@ -1871,7 +2050,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         >
                           <v-card-title class="module-device-title text-caption font-weight-bold">{{ component.name }}</v-card-title>
                           <div
-                            v-if="['busbar', 'phase_rail'].includes(component.component_type)"
+                            v-if="component.component_type === 'phase_rail'"
                             class="busbar-inline-visual"
                             :title="`Phasenfolge: ${busbarPhasePattern(component).join(' – ')}`"
                           >
@@ -2022,10 +2201,46 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   </div>
                   <div v-else class="area-placeholder"><span class="text-medium-emphasis">Keine Zähler platziert.</span></div>
                 </template>
+                <template v-else-if="['neutral_rail', 'protective_earth_rail'].includes(area.area_type)">
+                  <div v-if="cabinetComponentsForArea(area.id).length" class="d-flex flex-column ga-2">
+                    <v-card
+                      v-for="component in cabinetComponentsForArea(area.id)"
+                      :key="component.id"
+                      variant="outlined"
+                    >
+                      <v-card-text class="d-flex align-center ga-3">
+                        <v-icon :icon="cabinetComponentTypeMeta[component.component_type].icon" color="primary" size="32" />
+                        <div class="flex-grow-1">
+                          <strong>{{ component.name }}</strong>
+                          <div class="text-caption text-medium-emphasis">
+                            {{ cabinetComponentTypeMeta[component.component_type].title }} · Leiter {{ component.phases.join(', ') }}
+                            <span v-if="component.linked_rcd_name"> · FI/RCD {{ component.linked_rcd_name }}</span>
+                          </div>
+                          <ElectricalWiringSummary
+                            :topology="topology"
+                            endpoint-kind="cabinet_component"
+                            :endpoint-id="component.id"
+                            compact
+                          />
+                        </div>
+                        <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Schiene bearbeiten" @click="openCabinetComponent(component, area)" />
+                        <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" title="Schiene archivieren" @click="archiveCabinetComponent(component)" />
+                      </v-card-text>
+                    </v-card>
+                  </div>
+                  <div v-else class="area-placeholder">
+                    <v-icon :icon="areaTypeMeta[area.area_type].icon" size="36" color="secondary" />
+                    <strong>{{ area.area_type === 'neutral_rail' ? 'N' : 'PE' }}</strong>
+                    <span class="text-caption text-medium-emphasis text-center">
+                      Noch nicht als elektrischer Endpunkt angelegt.
+                    </span>
+                    <v-btn size="small" variant="tonal" prepend-icon="mdi-call-split" @click="openCabinetComponent(undefined, area)">
+                      Schiene anlegen
+                    </v-btn>
+                  </div>
+                </template>
                 <div v-else class="area-placeholder">
                   <v-icon :icon="areaTypeMeta[area.area_type].icon" size="36" color="secondary" />
-                  <strong v-if="area.area_type === 'neutral_rail'">N</strong>
-                  <strong v-if="area.area_type === 'protective_earth_rail'">PE</strong>
                 </div>
               </v-card-text>
             </v-card>
@@ -2100,6 +2315,9 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <v-spacer />
           <v-btn icon="mdi-close" variant="text" size="small" @click="detailDrawer = false" />
         </div>
+        <v-alert v-if="detailError" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="detailError = null">
+          {{ detailError }}
+        </v-alert>
         <template v-if="detailDevice">
           <v-icon icon="mdi-shield-outline" color="primary" size="36" class="mb-2" />
           <h3>{{ detailDevice.asset.name }}</h3>
@@ -2109,7 +2327,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <v-list-item title="Phase" :subtitle="devicePhaseText(detailDevice)" />
             <v-list-item title="FI/RCD" :subtitle="detailDevice.effective_rcd_name || 'Nicht zugeordnet'" />
             <v-list-item title="Neutralleiter" :subtitle="detailDevice.effective_neutral_rail_name || 'Nicht zugeordnet'" />
-            <v-list-item title="Sammelschiene" :subtitle="detailDevice.busbar_component_name || 'Keine'" />
+            <v-list-item title="Phasen-/Kammschiene" :subtitle="detailDevice.busbar_component_name || 'Keine'" />
           </v-list>
           <v-alert v-if="detailDevice.group_warnings.length" type="warning" variant="tonal" density="compact" class="my-3">
             <div v-for="message in detailDevice.group_warnings" :key="message">{{ message }}</div>
@@ -2118,6 +2336,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <v-btn color="primary" prepend-icon="mdi-pencil" :to="`/assets/${detailDevice.asset.id}/edit`">Asset bearbeiten</v-btn>
             <v-btn variant="tonal" prepend-icon="mdi-map-marker-path" @click="openPlacement(detailDevice)">Position / Gruppe</v-btn>
             <v-btn variant="tonal" prepend-icon="mdi-tune" :to="`/electrical/protective-devices/${detailDevice.id}/edit`">Technische Daten</v-btn>
+            <v-btn color="warning" variant="tonal" prepend-icon="mdi-archive-arrow-down-outline" @click="archiveDetailDevice">Archivieren</v-btn>
           </div>
         </template>
         <template v-else-if="detailComponent">
@@ -2127,11 +2346,15 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <v-list density="compact">
             <v-list-item title="Position" :subtitle="`Reihe ${detailComponent.row_number}, TE ${detailComponent.start_position}–${detailComponent.start_position + detailComponent.module_width - 1}`" />
             <v-list-item title="Leiter" :subtitle="detailComponent.phases.join(', ') || 'Keine'" />
-            <v-list-item v-if="['busbar', 'phase_rail'].includes(detailComponent.component_type)" title="Phasenfolge" :subtitle="busbarPhasePattern(detailComponent).join(' – ')" />
+            <v-list-item v-if="detailComponent.component_type === 'phase_rail'" title="Phasenfolge" :subtitle="busbarPhasePattern(detailComponent).join(' – ')" />
+            <v-list-item v-if="detailComponent.component_type === 'phase_rail'" title="Automatische Kontakte" :subtitle="`${detailComponent.automatic_connection_count} DIN-Gerät(e)`" />
             <v-list-item title="FI/RCD" :subtitle="detailComponent.linked_rcd_name || 'Nicht zugeordnet'" />
             <v-list-item v-if="detailComponent.outgoing_connections" title="Abgänge" :subtitle="String(detailComponent.outgoing_connections)" />
           </v-list>
-          <v-btn class="mt-4" color="primary" prepend-icon="mdi-pencil" @click="openCabinetComponent(detailComponent)">Bearbeiten</v-btn>
+          <div class="d-flex flex-wrap ga-2 mt-4">
+            <v-btn color="primary" prepend-icon="mdi-pencil" @click="openCabinetComponent(detailComponent)">Bearbeiten</v-btn>
+            <v-btn color="warning" variant="tonal" prepend-icon="mdi-archive-arrow-down-outline" @click="archiveDetailComponent">Archivieren</v-btn>
+          </div>
         </template>
         <template v-else-if="detailAsset">
           <v-icon icon="mdi-memory" color="primary" size="36" class="mb-2" />
@@ -2145,6 +2368,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <div class="d-flex flex-wrap ga-2 mt-4">
             <v-btn color="primary" prepend-icon="mdi-pencil" :to="`/assets/${detailAsset.asset_id}/edit`">Asset bearbeiten</v-btn>
             <v-btn variant="tonal" prepend-icon="mdi-map-marker-path" @click="openAssetPlacement(undefined, detailAsset)">Position bearbeiten</v-btn>
+            <v-btn color="warning" variant="tonal" prepend-icon="mdi-link-off" @click="unplaceAsset(detailAsset)">Aus Plan entfernen</v-btn>
           </div>
         </template>
       </div>
@@ -2205,9 +2429,9 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="cabinetComponentDialog" max-width="720">
+    <v-dialog v-model="cabinetComponentDialog" max-width="720" scrollable>
       <v-card :title="editingCabinetComponentId ? 'Schrankkomponente bearbeiten' : 'Schrankkomponente platzieren'" prepend-icon="mdi-call-split">
-        <v-card-text>
+        <v-card-text class="overflow-y-auto">
           <v-text-field v-model="cabinetComponentForm.name" label="Bezeichnung" :rules="[requiredRule]" />
           <v-select
             v-model="cabinetComponentForm.component_type"
@@ -2217,7 +2441,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             item-value="value"
             @update:model-value="applyCabinetComponentPhaseSuggestion"
           />
-          <v-select v-if="structuredLayout" v-model="cabinetComponentForm.area_id" label="Gerätebereich" :items="deviceAreaOptions" item-title="title" item-value="id" />
+          <v-select
+            v-if="structuredLayout"
+            v-model="cabinetComponentForm.area_id"
+            label="Schrankbereich"
+            :items="cabinetComponentAreaOptions"
+            item-title="title"
+            item-value="id"
+          />
           <v-alert v-else-if="junctionBoxLayout" type="info" variant="tonal" density="compact" class="mb-3">
             Die Komponente wird in der Verteilerdose ohne Reihe oder TE-Platz dargestellt.
           </v-alert>
@@ -2225,34 +2456,39 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <v-row v-if="!junctionBoxLayout">
             <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.row_number" label="Reihe" type="number" min="1" /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.start_position" label="Startposition (TE)" type="number" min="1" /></v-col>
-            <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.module_width"  :label="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type) ? 'Überspannte TE' : 'Breite (TE)'" type="number" min="1" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.module_width"  :label="cabinetComponentForm.component_type === 'phase_rail' ? 'Überspannte TE' : cabinetComponentForm.component_type === 'busbar' ? 'Darstellungsbreite (TE)' : 'Breite (TE)'" type="number" min="1" /></v-col>
           </v-row>
           <v-select
             v-model="cabinetComponentForm.phases"
             label="Leiter / Potentiale"
-            :items="phaseOptions"
+            :items="cabinetComponentPhaseOptions"
             item-title="title"
             item-value="value"
             multiple
             chips
             closable-chips
-            hint="Diese Leiter stehen anschließend bei der Verkabelung zur Verfügung."
+            :disabled="fixedCabinetComponentConductors"
+            :hint="cabinetComponentForm.component_type === 'phase_rail'
+              ? 'Nur L1, L2 und L3 sind zulässig. N und PE werden separat dokumentiert.'
+              : 'Diese Leiter stehen anschließend bei der Verkabelung zur Verfügung.'"
             persistent-hint
           />
-          <v-row v-if="['busbar', 'phase_rail', 'neutral_rail'].includes(cabinetComponentForm.component_type)">
-            <v-col cols="12" :sm="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type) ? 6 : 12">
+          <v-row v-if="['phase_rail', 'neutral_rail'].includes(cabinetComponentForm.component_type)">
+            <v-col cols="12" :sm="cabinetComponentForm.component_type === 'phase_rail' ? 6 : 12">
               <v-select
-                v-model="cabinetComponentForm.linked_rcd_device_id"
-                label="Zugehöriger FI/RCD"
+                v-model="linkedRcdSelection"
+                label="Zugehöriger FI/RCD (optional)"
                 :items="rcdOptions"
                 item-title="title"
-                item-value="id"
+                item-value="value"
                 clearable
-                hint="Sicherungen unter der Sammelschiene übernehmen diese FI-Gruppe automatisch."
+                :hint="cabinetComponentForm.component_type === 'phase_rail'
+                  ? 'Optional: Nur auswählen, wenn diese Schiene tatsächlich einer FI/RCD-Gruppe zugeordnet ist. Alle vollständig überdeckten DIN-Geräte werden unabhängig davon automatisch verbunden.'
+                  : 'Optional: Nur auswählen, wenn diese N-Schiene eindeutig zu einer FI-Gruppe gehört.'"
                 persistent-hint
               />
             </v-col>
-            <v-col v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" cols="12" sm="3">
+            <v-col v-if="cabinetComponentForm.component_type === 'phase_rail'" cols="12" sm="3">
               <v-select
                 v-model="cabinetComponentForm.start_phase"
                 label="Startphase"
@@ -2261,7 +2497,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 item-value="value"
               />
             </v-col>
-            <v-col v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" cols="12" sm="3">
+            <v-col v-if="cabinetComponentForm.component_type === 'phase_rail'" cols="12" sm="3">
               <v-select
                 v-model="cabinetComponentForm.mounting_side"
                 label="Montage"
@@ -2271,13 +2507,22 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               />
             </v-col>
           </v-row>
-          <v-alert v-if="['busbar', 'phase_rail'].includes(cabinetComponentForm.component_type)" type="info" variant="tonal" density="compact" class="mb-3">
-            Die Schiene ist eine Anschlusskomponente ohne eigene TE-Belegung. Die Breite
-            beschreibt die überspannten Schutzgeräte; die Phasen werden ab der Startphase
-            wiederholt, zum Beispiel L1 – L2 – L3 – L1.
+          <v-alert v-if="cabinetComponentForm.component_type === 'phase_rail'" type="info" variant="tonal" density="compact" class="mb-3">
+            Die Phasen-/Kammschiene ist eine Anschlusskomponente ohne eigene TE-Belegung.
+            Sie verbindet automatisch jedes vollständig überdeckte DIN-Gerät – beispielsweise
+            Sicherungsautomaten, FI/FI-LS, Stromstoßschalter oder Schütze. Die Kontaktphase
+            folgt ab der Startphase der TE-Reihenfolge, zum Beispiel L1 – L2 – L3 – L1.
+            Bei einem vierpoligen FI werden die ersten drei Kontakte mit L1/L2/L3 verbunden;
+            der vierte Pol bleibt für N frei. Eine FI/RCD-Gruppenzuordnung ist nur nötig,
+            wenn sie die reale Installation zusätzlich beschreibt.
+          </v-alert>
+          <v-alert v-if="cabinetComponentForm.component_type === 'busbar'" type="info" variant="tonal" density="compact" class="mb-3">
+            Eine Sammelschiene ist ein allgemeiner Verteilpunkt. Sie gibt keine Phase anhand
+            der TE-Position einer Sicherung vor. Für direkt nebeneinanderliegende
+            Sicherungsautomaten mit L1–L2–L3-Folge verwende „Phasenschiene / Kammschiene“.
           </v-alert>
           <v-alert v-if="cabinetComponentForm.component_type === 'neutral_rail'" type="info" variant="tonal" density="compact" class="mb-3">
-            Diese N-Schiene wird der ausgewählten FI-Gruppe zugeordnet. Einzelne Klemmen müssen nicht gepflegt werden.
+            Eine N-Schiene kann allgemein oder einer FI-Gruppe zugeordnet dokumentiert werden. Die FI/RCD-Zuordnung ist optional; einzelne Klemmen müssen nicht gepflegt werden.
           </v-alert>
           <v-row>
             <v-col cols="12" sm="4"><v-text-field v-model.number="cabinetComponentForm.rated_current_a" label="Bemessungsstrom (A)" type="number" min="1" clearable /></v-col>
@@ -2289,19 +2534,19 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           <v-alert type="info" variant="tonal" density="compact">
             Verteilerblöcke, Sammelschienen und Klemmen sind interne Schrankobjekte. Nach dem Speichern können sie als Quelle oder Ziel einer elektrischen Verbindung ausgewählt werden.
           </v-alert>
+          <v-alert
+            v-if="cabinetComponentError"
+            type="error"
+            variant="tonal"
+            density="compact"
+            closable
+            class="mt-3"
+            role="alert"
+            @click:close="cabinetComponentError = null"
+          >
+            {{ cabinetComponentError }}
+          </v-alert>
         </v-card-text>
-        <v-alert
-          v-if="cabinetComponentError"
-          type="error"
-          variant="tonal"
-          density="compact"
-          closable
-          class="mx-4 mb-2"
-          role="alert"
-          @click:close="cabinetComponentError = null"
-        >
-          {{ cabinetComponentError }}
-        </v-alert>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="cabinetComponentError = null; cabinetComponentDialog = false">Abbrechen</v-btn>
@@ -2311,7 +2556,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
     </v-dialog>
 
     <v-dialog v-model="assetPlacementDialog" max-width="620">
-      <v-card title="DIN-Hutschienengerät platzieren" prepend-icon="mdi-memory">
+      <v-card title="DIN-Gerät platzieren" prepend-icon="mdi-memory">
         <v-card-text>
           <v-autocomplete
             v-model="assetPlacementAssetId"
@@ -2350,7 +2595,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               <v-select
                 v-model="placementForm.assigned_rcd_id"
                 label="FI/RCD (optional)"
-                :items="rcdOptions"
+                :items="legacyRcdOptions"
                 item-title="title"
                 item-value="id"
                 clearable

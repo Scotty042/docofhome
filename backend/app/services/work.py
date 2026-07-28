@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
@@ -378,9 +379,20 @@ class WorkService:
             due_day = maximum if meter.reading_schedule_last_day else min(
                 meter.reading_schedule_day or maximum, maximum
             )
-            due_at = datetime.combine(
-                date(today.year, today.month, due_day), time(hour=12), tzinfo=zone
-            ).astimezone(UTC)
+            due_date = date(today.year, today.month, due_day)
+            due_at = datetime.combine(due_date, time(hour=12), tzinfo=zone).astimezone(UTC)
+            reminder_days = []
+            try:
+                reminder_days = [
+                    max(0, int(value))
+                    for value in json.loads(meter.reminder_days_json or "[]")
+                ]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                reminder_days = []
+            lead_days = max(reminder_days or [3])
+            if today < due_date - timedelta(days=lead_days) and record is None:
+                active_keys.discard(key)
+                continue
             if record is None:
                 record = WorkItem(
                     item_type=WorkItemType.TASK.value,
