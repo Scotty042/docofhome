@@ -1,16 +1,16 @@
 # DocOfHome – Projektstatus
 
-Stand: 28. Juli 2026
+Stand: 29. Juli 2026
 
-Release: 1.7.3
+Release: 1.7.4.6
 
 Alembic-Head: `0049`
 
-DocOfHome 1.7.3 korrigiert die Bewertung getrennter Leiterwege an einem
-gemeinsamen Ziel. Eine N- oder PE-Einzelleiterverbindung bleibt auf ihrer
-eigenen Verbindung wirksam und übernimmt nicht länger die L1/L2/L3-Versorgung
-aus einem parallelen Pfad. Die Gesamtversorgung des Zielgeräts wird weiterhin
-als Vereinigung aller eingehenden Verbindungen dargestellt.
+DocOfHome 1.7.4.6 stabilisiert die kompakte Schaltschrankdarstellung um einen
+eigenen visuellen Verkabelungsmodus. Die gespeicherte Topologie wird direkt an
+den sichtbaren DIN-Geräten, Schienen und passiven Komponenten dargestellt.
+Detailansichten zeigen zusätzlich vor- und nachgelagerte Verbindungen; die
+bisherige unübersichtliche erweiterte Kartenansicht entfällt.
 
 ## Verbindliche Elektro-Logik
 
@@ -64,6 +64,52 @@ erforderlich. Details stehen in `RELEASE_NOTES_1.6.3.md`.
 
 
 
+
+## Release 1.7.4.6
+
+- Alembic-Head bleibt `0049`;
+- manuelle Einspeisungen zu LS-/MCB-/RCBO-Geräten werden wieder dargestellt;
+- ausschließlich Verbindungen zum einzelnen Stromkreis-Endpunkt bleiben ausgeblendet;
+- automatische Kammschienen-Einzelkontakte bleiben visuell reduziert;
+- Schutzgeräte können dadurch als Teil der Hauptverkabelung sichtbar bleiben.
+
+## Release 1.7.4.4
+
+- Alembic-Head bleibt `0049`;
+- Anschlusspunkte an Geräten und Schienen werden abhängig von der Leitungsrichtung oben oder unten gewählt;
+- Verbindungen zu oberhalb liegenden Sammelschienen steigen direkt nach oben auf;
+- von unten kommende Leitungen enden sauber an der Unterkante von Sicherungen, Schienen und Komponenten;
+- freie orthogonale Leitungsführung innerhalb der Schrankdarstellung bleibt erhalten.
+
+## Release 1.7.4.3
+
+- Alembic-Head bleibt `0049`;
+- freie orthogonale Leitungsführung innerhalb der Schrankdarstellung wiederhergestellt;
+- keine erzwungene Führung über obere Feldränder;
+- alle Hauptverbindungen bleiben vollständig sichtbar;
+- L1, L2, L3, N und PE erhalten auf horizontalen und vertikalen Abschnitten festen Abstand;
+- einzelne Stromkreise und ihre LS-/RCBO-Abgänge bleiben ausgeblendet.
+
+## Release 1.7.4.2
+
+- Alembic-Head bleibt `0049`;
+- Verkabelungsansicht auf Hauptkomponenten und Hauptversorgungswege reduziert;
+- schmale LS-/RCBO-/Ein-TE-Nebenabgänge ausgeblendet;
+- Leitungsführung über Feldränder und definierte Korridore;
+- doppelte Hauptverbindungen visuell gebündelt;
+- externe Ein- und Ausgänge feldnah positioniert.
+
+## Release 1.7.4
+
+- Alembic-Head bleibt `0049`;
+- Umschaltung zwischen kompakter Übersicht und visueller Verkabelung;
+- farbige Leiterlinien für L1, L2, L3, N und PE direkt in der Schrankansicht;
+- Dreieck für Hausanschluss sowie Kreis/Viereck für externe Abgänge;
+- reduzierte Darstellung automatischer Kamm-/Sammelschienenkontakte;
+- vor- und nachgelagerte Verbindungen in den Geräte- und Komponentendetails;
+- kontrastreiche Phasen-Chips mit vollflächiger Farbe und weißer Schrift;
+- vollständige und beschriftete Reihenzähler ohne schwebende Null-Badges;
+- kompakte N-/PE-Schienen ohne eingeblendete Verkabelungsdetails.
 
 ## Release 1.7.3
 

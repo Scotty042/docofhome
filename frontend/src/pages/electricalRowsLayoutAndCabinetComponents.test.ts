@@ -15,7 +15,7 @@ describe('simple electrical rows and passive cabinet components', () => {
 
   it('offers non-asset cabinet components as wiring endpoints', () => {
     expect(layout).toContain('Phasenverteilerblock L1/L2/L3')
-    expect(layout).toContain('endpoint-kind="cabinet_component"')
+    expect(layout).toContain('data-electrical-endpoint-key')
     expect(layout).toContain('Verteilerblöcke, Sammelschienen und Klemmen sind interne Schrankobjekte')
     expect(topology).toContain("cabinet_component: 'Schrankkomponente'")
     expect(topology).toContain("cabinet_component: 'mdi-call-split'")
@@ -34,8 +34,9 @@ describe('simple electrical rows and passive cabinet components', () => {
     expect(layout).toContain('busbarPhasePattern(component)')
     expect(layout).toContain('effective_rcd_name')
     expect(layout).toContain('effective_neutral_rail_name')
-    expect(layout).toContain('Kompakt')
-    expect(layout).toContain('Erweitert')
+    expect(layout).toContain('Übersicht')
+    expect(layout).toContain('Verkabelung')
+    expect(layout).not.toContain('value="expanded"')
     expect(layout).toContain('detailDrawer')
   })
 
@@ -52,14 +53,30 @@ describe('simple electrical rows and passive cabinet components', () => {
 
   it('renders one-TE devices with a reliable vertical compact label', () => {
     expect(layout).toContain(
-      "'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1"
+      "'narrow-module-device': placement.device.module_width === 1"
     )
     expect(layout).toContain(
-      "'narrow-module-device': viewMode === 'compact' && placement.module_width === 1"
+      "'narrow-module-device': placement.module_width === 1"
     )
     expect(layout).toContain('class="module-device-name"')
     expect(layout).toContain('writing-mode: vertical-rl')
     expect(layout).toContain('transform: rotate(180deg)')
+  })
+
+
+  it('shows upstream and downstream electrical connections in the detail drawer', () => {
+    expect(layout).toContain('Vorgelagerte Verbindungen')
+    expect(layout).toContain('Nachgelagerte Verbindungen')
+    expect(layout).toContain('detailIncomingConnections')
+    expect(layout).toContain('detailOutgoingConnections')
+    expect(layout).toContain('connectionEndpointRoute')
+  })
+
+  it('replaces ambiguous zero badges with a complete row element count', () => {
+    expect(layout).toContain('simpleRowElementCount')
+    expect(layout).toContain('areaRowElementCount')
+    expect(layout).toContain('platzierte Elemente in dieser Reihe')
+    expect(layout).not.toContain('<v-chip size="x-small">{{ group.devices.length }}</v-chip>')
   })
 
   it('keeps cabinet component validation errors inside the open dialog', () => {

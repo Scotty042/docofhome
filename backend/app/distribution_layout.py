@@ -215,20 +215,22 @@ class ElectricalLayoutService:
         self._commit()
 
     def list_asset_placements(
-        self, distribution_id: UUID
+        self, distribution_id: UUID | None = None
     ) -> list[ElectricalAssetPlacementRead]:
-        self._distribution(distribution_id)
-        statement = (
-            select(ElectricalAssetPlacement)
-            .where(
-                ElectricalAssetPlacement.distribution_id == distribution_id,
-                col(ElectricalAssetPlacement.deleted_at).is_(None),
+        if distribution_id is not None:
+            self._distribution(distribution_id)
+        statement = select(ElectricalAssetPlacement).where(
+            col(ElectricalAssetPlacement.deleted_at).is_(None)
+        )
+        if distribution_id is not None:
+            statement = statement.where(
+                ElectricalAssetPlacement.distribution_id == distribution_id
             )
-            .order_by(
-                col(ElectricalAssetPlacement.area_id),
-                col(ElectricalAssetPlacement.row_number),
-                col(ElectricalAssetPlacement.start_position),
-            )
+        statement = statement.order_by(
+            col(ElectricalAssetPlacement.distribution_id),
+            col(ElectricalAssetPlacement.area_id),
+            col(ElectricalAssetPlacement.row_number),
+            col(ElectricalAssetPlacement.start_position),
         )
         placements = list(self.session.exec(statement).all())
         if not placements:
@@ -645,19 +647,21 @@ class ElectricalLayoutService:
 
     def list_meter_placements(
         self,
-        distribution_id: UUID,
+        distribution_id: UUID | None = None,
     ) -> list[ElectricalMeterPlacementRead]:
-        self._structured_distribution(distribution_id)
-        statement = (
-            select(ElectricalMeterPlacement)
-            .where(
-                ElectricalMeterPlacement.distribution_id == distribution_id,
-                col(ElectricalMeterPlacement.deleted_at).is_(None),
+        if distribution_id is not None:
+            self._structured_distribution(distribution_id)
+        statement = select(ElectricalMeterPlacement).where(
+            col(ElectricalMeterPlacement.deleted_at).is_(None)
+        )
+        if distribution_id is not None:
+            statement = statement.where(
+                ElectricalMeterPlacement.distribution_id == distribution_id
             )
-            .order_by(
-                col(ElectricalMeterPlacement.area_id),
-                col(ElectricalMeterPlacement.position),
-            )
+        statement = statement.order_by(
+            col(ElectricalMeterPlacement.distribution_id),
+            col(ElectricalMeterPlacement.area_id),
+            col(ElectricalMeterPlacement.position),
         )
         return [self._meter_placement_read(item) for item in self.session.exec(statement).all()]
 

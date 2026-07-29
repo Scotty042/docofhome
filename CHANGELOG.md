@@ -1,7 +1,85 @@
 # Changelog
 
+## 1.7.4.6 – 2026-07-29
+
+### Verkabelungsansicht
+
+- Manuelle Verbindungen zu LS-/MCB-/RCBO-Schutzgeräten werden wieder gezeichnet.
+- Nur Verbindungen mit einem tatsächlichen Stromkreis-Endpunkt werden ausgeblendet.
+- Die automatische Einzelverdrahtung einer Kamm-/Sammelschiene bleibt weiterhin reduziert.
+- Dadurch bleiben Einspeisungen wie Phasenverteilerblock → Sicherung sichtbar, ohne die Grafik um Stromkreisabgänge zu erweitern.
+
+### Technik
+
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
+
+## 1.7.4.4 – 2026-07-29
+
+### Verkabelungsansicht
+
+- Anschlusspunkte werden für interne Geräte und Sammelschienen dynamisch an Ober- oder Unterseite gewählt.
+- Aufsteigende Verbindungen zu oberhalb liegenden Sammel- oder Phasenschienen werden direkt nach oben geführt.
+- Von unten kommende Leitungen können Komponenten und Schienen an der Unterkante erreichen.
+- Die freie orthogonale Leitungsführung innerhalb der Schrankdarstellung bleibt erhalten; Adernabstände bleiben konstant.
+
+### Technik
+
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
 
 
+## 1.7.4.3 – 2026-07-29
+
+### Verkabelungsansicht
+
+- Starre Feldrand- und Obertrassenführung entfernt.
+- Freie orthogonale Leitungsführung innerhalb der Schrankdarstellung wiederhergestellt.
+- Mehradrige Verbindungen erhalten auf allen Segmenten einen festen Leiterabstand.
+- Gemeinsame Geräteanschlüsse werden auf getrennte Ports aufgefächert.
+- Hauptverbindungen bleiben vollständig sichtbar; Stromkreis- und LS-/RCBO-Nebenabgänge bleiben ausgeblendet.
+
+### Technik
+
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
+
+## 1.7.4.2 – 2026-07-29
+
+### Verkabelungsansicht
+
+- Nebenabgänge zu Stromkreisen sowie schmale LS-/RCBO-/Ein-TE-Geräte werden nicht mehr gezeichnet.
+- Hauptleitungen werden an den Feldrändern gebündelt und zwischen Feldern über eine obere Trasse geführt.
+- Doppelte Verbindungen zwischen denselben Hauptkomponenten erscheinen nur noch als ein Leitungsbund.
+- Externe Knoten werden nahe am zugehörigen Feld platziert.
+- Linienbreite und Kontur wurden reduziert.
+
+### Technik
+
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
+
+
+
+
+
+## 1.7.4 – 2026-07-29
+
+### Schaltschrankdarstellung
+
+- Die Umschaltung „Kompakt / Erweitert“ wurde durch „Übersicht / Verkabelung“ ersetzt.
+- Ein neuer SVG-basierter Verkabelungsmodus verbindet sichtbare DIN-Geräte und Schrankkomponenten anhand der gespeicherten Topologie.
+- L1, L2, L3, N und PE werden farblich unterschieden; Hausanschlüsse und externe Abgänge besitzen eigene Symbole.
+- Automatische Einzelkontakte von Kamm-/Sammelschienen werden zugunsten einer Verbindung je Leiter nicht zusätzlich gezeichnet.
+- N-/PE-Schienen zeigen in der kompakten Übersicht keine ausführliche Verkabelungszusammenfassung mehr.
+
+### Details und Lesbarkeit
+
+- Geräte-, Asset- und Komponentendetails listen vor- und nachgelagerte Verbindungen samt Leiter und Verbindungsart auf.
+- Verbundene Endpunkte lassen sich direkt in der Topologie öffnen.
+- Phasen-Chips wurden im Dark Mode kontrastreicher gestaltet.
+- Reihenzähler erfassen alle sichtbaren Elemente, tragen eine verständliche Beschriftung und verschwinden bei leerer Reihe.
+
+### Technik
+
+- Neue Komponente `CabinetWiringOverlay.vue` berechnet die Linien dynamisch aus DOM-Positionen und Topologiedaten.
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
 
 ## 1.7.3 – 2026-07-28
 

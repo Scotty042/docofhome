@@ -381,6 +381,14 @@ def test_half_width_neutral_and_pe_rails_and_meter_placement(
     assert placement.json()["meter_name"] == "Grid meter"
     assert placement.json()["asset_name"] == assets[1]["name"]
     assert placement.json()["location_path"].endswith("Meter room")
+    global_meter_placements = client.get(
+        "/api/v1/electrical/distributions/placements/meters"
+    )
+    assert global_meter_placements.status_code == 200
+    assert any(
+        item["meter_id"] == meter["id"]
+        for item in global_meter_placements.json()
+    )
 
     invalid_area_change = client.put(
         f"/api/v1/electrical/distributions/{distribution['id']}/areas/{meter_area['id']}",
@@ -587,6 +595,14 @@ def test_generic_din_asset_placement_uses_product_module_width(
     )
     assert listed.status_code == 200
     assert listed.json()[0]["asset_id"] == smart_meter["id"]
+    global_asset_placements = client.get(
+        "/api/v1/electrical/distributions/placements/assets"
+    )
+    assert global_asset_placements.status_code == 200
+    assert any(
+        item["asset_id"] == smart_meter["id"]
+        for item in global_asset_placements.json()
+    )
 
 
 def test_rows_layout_drag_placement_and_passive_cabinet_components(

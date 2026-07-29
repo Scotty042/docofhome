@@ -232,8 +232,8 @@ function connectionDetails(connection: ElectricalConnection): string {
   font-weight: 800;
 }
 .phase-supply-chip-l1 { background: #795548 !important; }
-.phase-supply-chip-l2 { background: #78909c !important; color: #102027 !important; }
-.phase-supply-chip-l3 { background: #263238 !important; border-color: #90a4ae; }
+.phase-supply-chip-l2 { background: #111 !important; color: #fff !important; border-color: rgba(255, 255, 255, 0.28); }
+.phase-supply-chip-l3 { background: #616161 !important; color: #fff !important; border-color: #9e9e9e; }
 .phase-supply-chip-n { background: #1565c0 !important; }
 .phase-supply-chip-pe { background: #2e7d32 !important; }
 .phase-supply-path {

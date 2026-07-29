@@ -15,6 +15,7 @@ import {
 } from '../services/electricalTopology'
 import { createEmptyElectricalConnection } from '../types/electrical'
 import type {
+  DistributionTreeNode,
   ElectricalConnection,
   ElectricalConnectionType,
   ElectricalConnectionWrite,
@@ -285,6 +286,10 @@ function phaseColor(phase: ElectricalPhase): string {
   return electricalPhaseColors[phase]
 }
 
+function phaseChipClass(phase: ElectricalPhase): string {
+  return `topology-phase-chip topology-phase-${phase.toLowerCase()}`
+}
+
 function connectionTypeName(connectionType: ElectricalConnectionType): string {
   return connectionTypeItems.find((item) => item.value === connectionType)?.title
     ?? connectionType
@@ -307,16 +312,68 @@ function measurementPointsForConnection(connectionId: string) {
   )
 }
 
+function flattenDistributions(nodes: DistributionTreeNode[]): DistributionTreeNode[] {
+  return nodes.flatMap((node) => [node, ...flattenDistributions(node.children)])
+}
+
+async function loadCabinetComponentFallbackEndpoints(): Promise<ElectricalEndpoint[]> {
+  const tree = await electricalApi.distributionTree()
+  const distributions = flattenDistributions(tree)
+  const componentGroups = await Promise.all(
+    distributions.map(async (distribution) => ({
+      distribution,
+      components: await electricalApi.cabinetComponents(distribution.id)
+    }))
+  )
+  const componentTypeNames: Record<string, string> = {
+    phase_distribution_block: 'Phasenverteilerblock',
+    busbar: 'Sammelschiene',
+    phase_rail: 'Phasenschiene / Kammschiene',
+    neutral_rail: 'N-Schiene',
+    protective_earth_rail: 'PE-Schiene',
+    terminal_block: 'Reihenklemme',
+    connection_block: 'Anschlussblock',
+    potential_distribution: 'Potentialverteiler',
+    other: 'Schrankkomponente'
+  }
+  return componentGroups.flatMap(({ distribution, components }) => components
+    .filter((component) => component.deleted_at === null)
+    .map((component) => ({
+      key: `cabinet_component:${component.id}`,
+      kind: 'cabinet_component' as const,
+      id: component.id,
+      name: component.name,
+      code: null,
+      type_name: `${componentTypeNames[component.component_type] ?? 'Schrankkomponente'} · ${distribution.display_name}`,
+      location_name: distribution.asset.location_path || distribution.display_name,
+      device_type: component.component_type,
+      effective_phases: component.phases,
+      deleted_at: null
+    })))
+}
+
 async function load() {
   loading.value = true
   error.value = null
   try {
-    const [topologyResult, endpointResult] = await Promise.all([
+    const [topologyResult, endpointResult, cabinetFallbacks] = await Promise.all([
       electricalApi.topology(),
-      loadAllConnectionEndpoints()
+      loadAllConnectionEndpoints(),
+      loadCabinetComponentFallbackEndpoints()
     ])
     topology.value = topologyResult
-    endpoints.value = endpointResult
+    const merged = new Map(endpointResult.map((endpoint) => [endpoint.key, endpoint]))
+    for (const endpoint of cabinetFallbacks) {
+      // Der Verteilungskontext wird bewusst übernommen. Dadurch sind gleichnamige
+      // Kammschienen aus Haupt- und Unterverteilungen eindeutig unterscheidbar.
+      merged.set(endpoint.key, endpoint)
+    }
+    endpoints.value = [...merged.values()].sort((left, right) => (
+      endpointTitle(left).localeCompare(endpointTitle(right), 'de', {
+        sensitivity: 'base',
+        numeric: true
+      })
+    ))
   } catch (reason) {
     error.value = reason instanceof Error
       ? reason.message
@@ -562,7 +619,14 @@ onMounted(() => void initialize())
                     <div v-for="connection in row.incomingConnections" :key="connection.id" class="mb-2">
                       <div class="text-caption font-weight-medium">von {{ connection.source.name }}</div>
                       <div class="d-flex flex-wrap ga-1 mb-1">
-                        <v-chip v-for="phase in displayPhases(connection)" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
+                        <v-chip
+                          v-for="phase in displayPhases(connection)"
+                          :key="`${connection.id}-${phase}`"
+                          :color="phaseColor(phase)"
+                          :class="phaseChipClass(phase)"
+                          size="x-small"
+                          variant="flat"
+                        >{{ phase }}</v-chip>
                         <v-chip v-if="!displayPhases(connection).length" size="x-small" variant="tonal">Phase unbekannt</v-chip>
                       </div>
                       <div class="text-caption text-medium-emphasis">{{ connectionDetails(connection) }}</div>
@@ -622,7 +686,14 @@ onMounted(() => void initialize())
               <div v-for="connection in row.incomingConnections" :key="connection.id" class="mb-2">
                 <div class="text-caption font-weight-medium">von {{ connection.source.name }}</div>
                 <div class="d-flex flex-wrap ga-1">
-                  <v-chip v-for="phase in displayPhases(connection)" :key="`${connection.id}-${phase}`" :color="phaseColor(phase)" size="x-small" variant="tonal">{{ phase }}</v-chip>
+                  <v-chip
+                          v-for="phase in displayPhases(connection)"
+                          :key="`${connection.id}-${phase}`"
+                          :color="phaseColor(phase)"
+                          :class="phaseChipClass(phase)"
+                          size="x-small"
+                          variant="flat"
+                        >{{ phase }}</v-chip>
                   <span class="text-caption">{{ connectionDetails(connection) }}</span>
                 </div>
                 <div v-if="measurementPointsForConnection(connection.id).length" class="d-flex flex-wrap ga-1 mt-1">
@@ -695,7 +766,8 @@ onMounted(() => void initialize())
                     <v-chip
                       v-for="phase in forcedLinePhases"
                       :key="phase"
-                      color="primary"
+                      :color="phaseColor(phase)"
+                      :class="phaseChipClass(phase)"
                       variant="flat"
                       prepend-icon="mdi-lock"
                     >
@@ -795,6 +867,12 @@ onMounted(() => void initialize())
 
 <style scoped>
 .topology-page { max-width: 1600px; }
+.topology-phase-chip { color: #fff !important; font-weight: 800; }
+.topology-phase-l1 { background: #795548 !important; }
+.topology-phase-l2 { background: #111 !important; border: 1px solid rgba(255, 255, 255, 0.28); }
+.topology-phase-l3 { background: #616161 !important; }
+.topology-phase-n { background: #1565c0 !important; }
+.topology-phase-pe { background: #2e7d32 !important; }
 .forced-phase-field { padding: 14px 16px; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 6px; background: rgba(var(--v-theme-primary), 0.06); }
 h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); }
 .focus-row { background: rgba(var(--v-theme-primary), 0.12); }

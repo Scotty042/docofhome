@@ -138,6 +138,9 @@ export const electricalApi = {
     `/distributions/${distributionId}/areas/${areaId}`,
     { method: 'DELETE' }
   ),
+  allAssetPlacements: () => request<ElectricalAssetPlacement[]>(
+    '/distributions/placements/assets'
+  ),
   assetPlacements: (distributionId: string) => request<ElectricalAssetPlacement[]>(
     `/distributions/${distributionId}/asset-placements`
   ),
@@ -183,6 +186,9 @@ export const electricalApi = {
   removeCabinetComponent: (distributionId: string, componentId: string) => request<void>(
     `/distributions/${distributionId}/cabinet-components/${componentId}`,
     { method: 'DELETE' }
+  ),
+  allMeterPlacements: () => request<ElectricalMeterPlacement[]>(
+    '/distributions/placements/meters'
   ),
   meterPlacements: (distributionId: string) => request<ElectricalMeterPlacement[]>(
     `/distributions/${distributionId}/meter-placements`
@@ -366,6 +372,34 @@ export async function loadAllAvailableAssets(
   if (items.length !== first.total) {
     throw new Error(
       `Asset-Auswahl unvollständig: ${items.length} von ${first.total} Einträgen geladen.`
+    )
+  }
+  return items
+}
+
+
+export async function loadAllProtectiveDevices(
+  loadPage = electricalApi.listProtectiveDevices
+): Promise<ProtectiveDevice[]> {
+  const first = await loadPage({
+    page: 1,
+    page_size: 100,
+    sort_by: 'asset_name',
+    sort_order: 'asc'
+  })
+  const items = [...first.items]
+  for (let page = 2; page <= first.pages; page += 1) {
+    const next = await loadPage({
+      page,
+      page_size: 100,
+      sort_by: 'asset_name',
+      sort_order: 'asc'
+    })
+    items.push(...next.items)
+  }
+  if (items.length !== first.total) {
+    throw new Error(
+      `Schutzgeräte-Auswahl unvollständig: ${items.length} von ${first.total} Einträgen geladen.`
     )
   }
   return items

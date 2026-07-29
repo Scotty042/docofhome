@@ -1,11 +1,60 @@
 # DocOfHome
 
-DocOfHome 1.7.3 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.4.6 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.4.6
+
+- manuelle Einspeisungen zu LS-/MCB-/RCBO-Schutzgeräten werden in der Verkabelungsansicht wieder dargestellt;
+- ausgeblendet bleibt ausschließlich der nachgelagerte Zweig vom Schutzgerät zum einzelnen Stromkreis;
+- automatische Einzelkontakte einer Kamm-/Sammelschiene bleiben zur Vermeidung unnötiger Mehrfachlinien verborgen;
+- damit ist beispielsweise **Phasenverteilerblock → Sicherung Waschmaschine (L2)** sichtbar, während **Sicherung → Stromkreis Waschmaschine** ausgeblendet bleibt;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
+
+
+## Neu in 1.7.4.4
+
+- Leitungen wählen ihre Anschlusspunkte oben oder unten jetzt dynamisch anhand der tatsächlichen Verlaufsrichtung;
+- Verbindungen zu oberhalb liegenden Sammel- und Phasenschienen steigen direkt nach oben auf, statt zunächst nach unten zu laufen;
+- von unten kommende Leitungen dürfen Geräte und Schienen sauber an der Unterseite erreichen;
+- die schematische Hauptverkabelung bleibt innerhalb der Darstellung frei geroutet und hält die Adern weiterhin mit festem Abstand auseinander;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
+
+## Neu in 1.7.4.3
+
+- die starre Führung über Feldränder und obere Trassen wurde zurückgenommen;
+- Hauptleitungen dürfen wieder innerhalb der Schrankdarstellung verlaufen;
+- alle gültigen Hauptverbindungen werden unabhängig von ihrer Richtung dargestellt;
+- die Adern einer mehradrigen Verbindung besitzen auf horizontalen und vertikalen Abschnitten einen festen Abstand von 8 Pixeln;
+- mehrere Anschlüsse am selben Gerät werden auf getrennte Ports aufgefächert;
+- einzelne Stromkreise sowie ihre LS-/RCBO-Abgänge bleiben ausgeblendet;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
+
+## Neu in 1.7.4.2
+
+- die Verkabelungsansicht ist auf die zentrale Hauptversorgung reduziert;
+- schmale LS-/RCBO- und Ein-TE-Nebenabgänge werden nicht mehr gezeichnet;
+- Leitungen verlaufen über seitliche Feldkorridore und obere Feldränder statt durch Gerätekarten;
+- doppelte Hauptverbindungen werden zu einem visuellen Leitungsbund zusammengefasst;
+- externe Anschlüsse werden nahe am zugehörigen Feld dargestellt;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
+
+## Neu in 1.7.4
+
+- die bisherige Umschaltung **Kompakt / Erweitert** wurde durch **Übersicht / Verkabelung** ersetzt;
+- der neue Verkabelungsmodus zeichnet die gespeicherten Leiter direkt zwischen den sichtbaren DIN-Geräten und Schrankkomponenten;
+- L1, L2, L3, N und PE werden mit klar unterscheidbaren, kontrastreichen Linien dargestellt;
+- Hausanschlüsse erscheinen als Dreieck, externe Abgänge und Unterverteilungen als Kreis beziehungsweise Viereck;
+- automatische Einzelkontakte einer Kamm-/Sammelschiene werden ausgeblendet; ihre Einspeisung wird je Leiter einmal dargestellt;
+- N- und PE-Schienen bleiben in der Übersicht kompakt und zeigen dort keine ausführliche Verkabelungszusammenfassung mehr;
+- die Detailansicht zeigt alle vor- und nachgelagerten Verbindungen mit Leiter, Verbindungsart und direktem Sprung in die Topologie;
+- Phasen-Chips verwenden einen vollflächigen Hintergrund und weiße Schrift für besseren Kontrast im Dark Mode;
+- Reihenzähler berücksichtigen Schutzgeräte, DIN-Assets und Schrankkomponenten gemeinsam; leere Null-Badges werden nicht mehr angezeigt;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
 
 ## Neu in 1.7.3
 
@@ -175,11 +224,11 @@ Es ist keine neue Alembic-Migration erforderlich; Head bleibt `0044`. Beim
 Speichern einer Kammschiene übermittelt die aktuelle Oberfläche die sichtbaren
 Schutzgeräte ausdrücklich an den serverseitig validierten Kontaktabgleich.
 
-## Update auf 1.7.3
+## Update auf 1.7.4
 
 1. Persistenten `data`-Ordner vollständig sichern.
 2. Container stoppen: `docker compose down`.
-3. Version 1.7.3 in einen sauberen Ordner entpacken.
+3. Version 1.7.4 in einen sauberen Ordner entpacken.
 4. Image ohne Cache bauen: `docker compose build --no-cache`.
 5. Container starten: `docker compose up -d`.
 6. Im Log das Upgrade bis Alembic-Head `0049` kontrollieren.
@@ -187,7 +236,7 @@ Schutzgeräte ausdrücklich an den serverseitig validierten Kontaktabgleich.
 8. Die getrennten Verbindungen **Phasenverteilerblock → FI/RCD** und
    **Netzanschluss → FI/RCD (N)** prüfen.
 
-Für 1.7.3 ist keine zusätzliche Migration erforderlich. Migrationen `0046` und
+Für 1.7.4 ist keine zusätzliche Migration erforderlich. Migrationen `0046` und
 `0047` übernehmen die Korrekturen aus 1.6.3.8.
 Migration `0048` ergänzt den Funktionsumfang von 1.7 sowie die Referenz von
 Stromkreisen auf aktuelle DIN-Schutzassets. Migration `0049` materialisiert
@@ -218,6 +267,7 @@ docker compose build --no-cache
 - [Projektstatus](PROJECT_STATUS.md)
 - [Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
+- [Release Notes 1.7.4](RELEASE_NOTES_1.7.4.md)
 - [Release Notes 1.7.3](RELEASE_NOTES_1.7.3.md)
 - [Release Notes 1.7.2](RELEASE_NOTES_1.7.2.md)
 - [Release Notes 1.7.1](RELEASE_NOTES_1.7.1.md)

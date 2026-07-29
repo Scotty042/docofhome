@@ -90,8 +90,9 @@ const location = computed(() => topologyFocusLocation(
         v-for="phase in phases"
         :key="phase"
         :color="electricalPhaseColors[phase]"
+        :class="`wiring-phase-chip phase-${phase.toLowerCase()}`"
         :size="compact ? 'x-small' : 'small'"
-        variant="tonal"
+        variant="flat"
         :title="`Diese Verbindung führt ${phase}.`"
       >
         {{ phase }}
@@ -158,4 +159,10 @@ const location = computed(() => topologyFocusLocation(
 .electrical-wiring-summary { min-width: 0; overflow-wrap: anywhere; }
 .electrical-wiring-summary.is-compact { line-height: 1.25; }
 .electrical-wiring-summary.is-compact :deep(.v-chip) { max-width: 100%; }
+.wiring-phase-chip { color: #fff !important; font-weight: 800; }
+.wiring-phase-chip.phase-l1 { background: #795548 !important; }
+.wiring-phase-chip.phase-l2 { background: #111 !important; border: 1px solid rgba(255, 255, 255, 0.28); }
+.wiring-phase-chip.phase-l3 { background: #616161 !important; }
+.wiring-phase-chip.phase-n { background: #1565c0 !important; }
+.wiring-phase-chip.phase-pe { background: #2e7d32 !important; }
 </style>

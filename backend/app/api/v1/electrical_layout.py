@@ -62,6 +62,40 @@ def _translate_error(exc: Exception) -> HTTPException:
 
 
 @router.get(
+    "/placements/assets",
+    response_model=list[ElectricalAssetPlacementRead],
+)
+def list_all_asset_placements(
+    session: SessionDependency,
+) -> list[ElectricalAssetPlacementRead]:
+    try:
+        return ElectricalLayoutService(session).list_asset_placements()
+    except (
+        ElectricalNotFoundError,
+        ElectricalValidationError,
+        ElectricalConflictError,
+    ) as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.get(
+    "/placements/meters",
+    response_model=list[ElectricalMeterPlacementRead],
+)
+def list_all_meter_placements(
+    session: SessionDependency,
+) -> list[ElectricalMeterPlacementRead]:
+    try:
+        return ElectricalLayoutService(session).list_meter_placements()
+    except (
+        ElectricalNotFoundError,
+        ElectricalValidationError,
+        ElectricalConflictError,
+    ) as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.get(
     "/{distribution_id}/layout",
     response_model=list[DistributionSectionRead],
 )

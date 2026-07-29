@@ -2,11 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import ElectricalWiringSummary from '../components/ElectricalWiringSummary.vue'
+import CabinetWiringOverlay from '../components/CabinetWiringOverlay.vue'
 import PhaseSupplyPathsCard from '../components/PhaseSupplyPathsCard.vue'
 import { assetApi } from '../services/assetApi'
 import { consumptionApi } from '../services/consumptionApi'
-import { electricalApi } from '../services/electricalApi'
+import { electricalApi, loadAllProtectiveDevices } from '../services/electricalApi'
 import { useNotificationStore } from '../stores/notifications'
 import {
   assetCabinetClass,
@@ -21,7 +21,12 @@ import {
   isElectricalConsumptionMeterType,
   isNonElectricalMeterAssetType
 } from '../services/electricalPresentation'
-import { phaseDistributionGroups } from '../services/electricalTopology'
+import {
+  endpointKindIcons,
+  endpointKindLabels,
+  phaseDistributionGroups,
+  topologyFocusLocation
+} from '../services/electricalTopology'
 import type { Asset } from '../types/assets'
 import type { ConsumptionMeter } from '../types/consumption'
 import type {
@@ -36,6 +41,9 @@ import type {
   ElectricalCabinetComponent,
   ElectricalCabinetComponentType,
   ElectricalCabinetComponentWrite,
+  ElectricalConnection,
+  ElectricalEndpoint,
+  ElectricalEndpointKind,
   ElectricalPhase,
   ElectricalMeterPlacement,
   ElectricalTopology,
@@ -95,8 +103,11 @@ function devicesWithoutModulePlacement(devices: ProtectiveDevice[]): ProtectiveD
 const sections = ref<DistributionSection[]>([])
 const topology = ref<ElectricalTopology>({ nodes: [], connections: [], measurement_points: [] })
 const meterPlacements = ref<ElectricalMeterPlacement[]>([])
+const allMeterPlacements = ref<ElectricalMeterPlacement[]>([])
 const assetPlacements = ref<ElectricalAssetPlacement[]>([])
+const allAssetPlacements = ref<ElectricalAssetPlacement[]>([])
 const cabinetComponents = ref<ElectricalCabinetComponent[]>([])
+const allProtectiveDevices = ref<ProtectiveDevice[]>([])
 const cabinetPhaseComponents = computed(() => cabinetComponents.value.filter(
   (component) => component.component_type === 'phase_distribution_block'
 ))
@@ -233,7 +244,7 @@ const fixedCabinetComponentConductors = computed(() => [
   'protective_earth_rail'
 ].includes(cabinetComponentForm.value.component_type))
 
-const viewMode = ref<'compact' | 'expanded'>('compact')
+const viewMode = ref<'overview' | 'wiring'>('overview')
 const detailDrawer = ref(false)
 const detailError = ref<string | null>(null)
 const detailDevice = ref<ProtectiveDevice | null>(null)
@@ -360,8 +371,21 @@ const cabinetComponentTypeOptions = computed(() => {
   }
   return allCabinetComponentTypeOptions
 })
-const placedAssetIds = computed(() => new Set(assetPlacements.value.map((placement) => placement.asset_id)))
-const protectiveAssetIds = computed(() => new Set((distribution.value?.protective_devices ?? []).map((device) => device.asset_id)))
+const currentDistributionLocationId = computed(() => distribution.value?.asset.location_id ?? null)
+function matchesCurrentDistributionLocation(locationId: string | null): boolean {
+  const currentLocationId = currentDistributionLocationId.value
+  return locationId === null || currentLocationId === null || locationId === currentLocationId
+}
+function consumptionMeterMatchesCurrentLocation(meter: ConsumptionMeter): boolean {
+  const linkedAssetLocationId = meter.asset_id
+    ? assets.value.find((asset) => asset.id === meter.asset_id)?.location_id ?? null
+    : null
+  return matchesCurrentDistributionLocation(meter.location_id ?? linkedAssetLocationId)
+}
+const placedAssetIds = computed(() => new Set(
+  allAssetPlacements.value.map((placement) => placement.asset_id)
+))
+const protectiveAssetIds = computed(() => new Set(allProtectiveDevices.value.map((device) => device.asset_id)))
 const nonElectricalMeterAssetIds = computed(() => new Set(
   consumptionMeters.value
     .filter((meter) => !isElectricalConsumptionMeterType(meter.meter_type))
@@ -371,6 +395,7 @@ const nonElectricalMeterAssetIds = computed(() => new Set(
 const dinAssetOptions = computed(() => assets.value
   .filter((asset) => (
     asset.status === 'active' && Boolean(asset.effective_module_width)
+      && matchesCurrentDistributionLocation(asset.location_id)
       && !placedAssetIds.value.has(asset.id) && !protectiveAssetIds.value.has(asset.id)
       && !nonElectricalMeterAssetIds.value.has(asset.id)
       && !isNonElectricalMeterAssetType(asset.asset_type.name)
@@ -467,7 +492,10 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
       .filter((id): id is string => Boolean(id))
   )
   const meterCandidates = consumptionMeters.value
-    .filter((meter) => isElectricalConsumptionMeterType(meter.meter_type))
+    .filter((meter) => (
+      isElectricalConsumptionMeterType(meter.meter_type)
+      && consumptionMeterMatchesCurrentLocation(meter)
+    ))
     .map((meter) => ({
     value: `meter:${meter.id}`,
     sourceKind: 'consumption_meter' as const,
@@ -481,6 +509,7 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
     .filter((asset) => (
       asset.status === 'active'
       && asset.asset_type_is_meter
+      && matchesCurrentDistributionLocation(asset.location_id)
       && !linkedAssetIds.has(asset.id)
     ))
     .map((asset) => ({
@@ -497,13 +526,17 @@ const meterOptions = computed<MeterPlacementCandidate[]>(() => {
   ))
 })
 const unassignedMeterCandidates = computed(() => {
-  const assigned = new Set(meterPlacements.value.map(placementSourceKey))
+  const assigned = new Set(allMeterPlacements.value.map(placementSourceKey))
   return meterOptions.value.filter((candidate) => !assigned.has(candidate.value))
 })
 function placementSourceKey(placement: ElectricalMeterPlacement): string {
   return placement.source_kind === 'asset'
     ? `asset:${placement.asset_id}`
     : `meter:${placement.meter_id}`
+}
+
+function meterPlacementEndpointKey(placement: ElectricalMeterPlacement): string | undefined {
+  return placement.asset_id ? `asset:${placement.asset_id}` : undefined
 }
 
 function metersForArea(areaId: string) {
@@ -544,27 +577,34 @@ async function load() {
       }),
       electricalApi.cabinetComponents(distributionId.value),
       electricalApi.assetPlacements(distributionId.value),
+      electricalApi.allAssetPlacements(),
+      loadAllProtectiveDevices(),
       assetApi.allAssets()
     ])
     topology.value = common[0]
     cabinetComponents.value = common[1]
     assetPlacements.value = common[2]
-    assets.value = common[3]
+    allAssetPlacements.value = common[3]
+    allProtectiveDevices.value = common[4]
+    assets.value = common[5]
 
     if (detail.layout_mode !== 'sections') {
       sections.value = []
       meterPlacements.value = []
+      allMeterPlacements.value = []
       consumptionMeters.value = []
       return
     }
 
-    const [layout, placements, meterData] = await Promise.all([
+    const [layout, placements, globalMeterPlacements, meterData] = await Promise.all([
       electricalApi.getLayout(distributionId.value),
       electricalApi.meterPlacements(distributionId.value),
+      electricalApi.allMeterPlacements(),
       consumptionApi.meters()
     ])
     sections.value = layout
     meterPlacements.value = placements
+    allMeterPlacements.value = globalMeterPlacements
     consumptionMeters.value = meterData
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Schrankaufteilung konnte nicht geladen werden.'
@@ -760,6 +800,72 @@ function openAssetDetails(placement: ElectricalAssetPlacement) {
   detailDrawer.value = true
 }
 
+const detailEndpointKind = computed<ElectricalEndpointKind | null>(() => {
+  if (detailDevice.value) return 'protective_device'
+  if (detailComponent.value) return 'cabinet_component'
+  if (detailAsset.value) return 'asset'
+  return null
+})
+const detailEndpointId = computed<string | null>(() => (
+  detailDevice.value?.id
+  ?? detailComponent.value?.id
+  ?? detailAsset.value?.asset_id
+  ?? null
+))
+const detailEndpointKey = computed(() => (
+  detailEndpointKind.value && detailEndpointId.value
+    ? `${detailEndpointKind.value}:${detailEndpointId.value}`
+    : null
+))
+const detailIncomingConnections = computed(() => {
+  if (!detailEndpointKey.value) return []
+  return topology.value.connections
+    .filter((connection) => (
+      connection.deleted_at === null && connection.target.key === detailEndpointKey.value
+    ))
+    .sort((left, right) => left.source.name.localeCompare(right.source.name, 'de'))
+})
+const detailOutgoingConnections = computed(() => {
+  if (!detailEndpointKey.value) return []
+  return topology.value.connections
+    .filter((connection) => (
+      connection.deleted_at === null && connection.source.key === detailEndpointKey.value
+    ))
+    .sort((left, right) => left.target.name.localeCompare(right.target.name, 'de'))
+})
+
+const connectionTypeLabels: Record<ElectricalConnection['connection_type'], string> = {
+  unknown: 'Verbindungsart nicht dokumentiert',
+  cable: 'Kabel',
+  wire: 'Einzelader / Draht',
+  busbar: 'Sammel-/Phasenschiene',
+  internal: 'Interne Verbindung'
+}
+
+function connectedEndpoint(
+  connection: ElectricalConnection,
+  direction: 'incoming' | 'outgoing'
+): ElectricalEndpoint {
+  return direction === 'incoming' ? connection.source : connection.target
+}
+
+function connectionEndpointRoute(endpoint: ElectricalEndpoint) {
+  return topologyFocusLocation(endpoint.kind, endpoint.id, true)
+}
+
+function connectionPhaseClass(phase: ElectricalPhase): string {
+  return `connection-phase-chip phase-${phase.toLowerCase()}`
+}
+
+function connectionDescription(connection: ElectricalConnection): string {
+  return [
+    connectionTypeLabels[connection.connection_type],
+    connection.label,
+    connection.cable_type,
+    connection.cross_section_mm2 ? `${connection.cross_section_mm2} mm²` : null
+  ].filter(Boolean).join(' · ')
+}
+
 function devicePhaseText(device: ProtectiveDevice): string {
   return device.calculated_phases.length ? device.calculated_phases.join(' / ') : 'Phase nicht ermittelt'
 }
@@ -771,6 +877,35 @@ function componentGridStyle(component: ElectricalCabinetComponent) {
     gridRow: isBusbar ? '3' : '2',
     alignSelf: 'stretch'
   }
+}
+
+
+function simpleRowElementCount(row: number | null): number {
+  if (row === null) return 0
+  const protectiveDevices = distribution.value?.protective_devices.filter(
+    (device) => device.row_number === row && device.area_id === null
+  ).length ?? 0
+  const assetsInRow = assetPlacements.value.filter(
+    (placement) => placement.row_number === row && placement.area_id === null
+  ).length
+  const componentsInRow = cabinetComponents.value.filter(
+    (component) => component.row_number === row && component.area_id === null
+  ).length
+  return protectiveDevices + assetsInRow + componentsInRow
+}
+
+function areaRowElementCount(areaId: string, row: number | null): number {
+  if (row === null) return 0
+  const protectiveDevices = distribution.value?.protective_devices.filter(
+    (device) => device.row_number === row && device.area_id === areaId
+  ).length ?? 0
+  const assetsInRow = assetPlacements.value.filter(
+    (placement) => placement.row_number === row && placement.area_id === areaId
+  ).length
+  const componentsInRow = cabinetComponents.value.filter(
+    (component) => component.row_number === row && component.area_id === areaId
+  ).length
+  return protectiveDevices + assetsInRow + componentsInRow
 }
 
 
@@ -1542,8 +1677,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
               </v-chip>
             </div>
             <v-btn-toggle v-model="viewMode" mandatory density="compact" divided>
-              <v-btn value="compact" prepend-icon="mdi-view-sequential-outline">Kompakt</v-btn>
-              <v-btn value="expanded" prepend-icon="mdi-format-list-bulleted">Erweitert</v-btn>
+              <v-btn value="overview" prepend-icon="mdi-view-sequential-outline">Übersicht</v-btn>
+              <v-btn value="wiring" prepend-icon="mdi-source-branch">Verkabelung</v-btn>
             </v-btn-toggle>
           </div>
           <div class="cabinet-legend mt-3" aria-label="Farblegende der Gerätetypen">
@@ -1555,6 +1690,26 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <span class="legend-item cabinet-type-busbar">Sammel-/Kammschiene</span>
             <span class="legend-item cabinet-type-passive">Passive Komponente</span>
           </div>
+          <div v-if="viewMode === 'wiring'" class="wiring-mode-legend mt-3" aria-label="Farblegende der Leiter">
+            <span class="wiring-legend-item"><i class="wire-sample wire-sample-l1" />L1</span>
+            <span class="wiring-legend-item"><i class="wire-sample wire-sample-l2" />L2</span>
+            <span class="wiring-legend-item"><i class="wire-sample wire-sample-l3" />L3</span>
+            <span class="wiring-legend-item"><i class="wire-sample wire-sample-n" />N</span>
+            <span class="wiring-legend-item"><i class="wire-sample wire-sample-pe" />PE</span>
+            <span class="wiring-legend-item"><i class="external-symbol external-symbol-grid" />Hausanschluss</span>
+            <span class="wiring-legend-item"><i class="external-symbol external-symbol-outgoing" />Abgang aus dem Verteiler</span>
+          </div>
+          <v-alert
+            v-if="viewMode === 'wiring'"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-3"
+          >
+            Die Ansicht zeigt die Hauptverkabelung. Nur die Abgänge von LS-/RCBO-Geräten zu einzelnen
+            Stromkreisen werden ausgeblendet; manuelle Einspeisungen zu den Schutzgeräten bleiben sichtbar. Leitungen dürfen innerhalb der Schrankdarstellung verlaufen; die
+            einzelnen Adern werden mit festem Abstand dargestellt. Kamm-/Sammelschienen erscheinen je Leiter einmal.
+          </v-alert>
           <v-alert
             v-if="layoutWarnings.length"
             type="warning"
@@ -1571,14 +1726,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
       </v-card>
 
       <PhaseSupplyPathsCard
-        v-if="!junctionBoxLayout && cabinetPhaseBlocks.length"
+        v-if="!junctionBoxLayout && viewMode === 'overview' && cabinetPhaseBlocks.length"
         class="mb-5"
         :blocks="cabinetPhaseBlocks"
         compact
         title="Versorgungswege im Zählerschrank"
       />
       <v-alert
-        v-else-if="!junctionBoxLayout && cabinetPhaseComponents.length && !topologyError"
+        v-else-if="!junctionBoxLayout && viewMode === 'overview' && cabinetPhaseComponents.length && !topologyError"
         type="info"
         variant="tonal"
         class="mb-5"
@@ -1632,12 +1787,16 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         </v-card-text>
       </v-card>
 
-      <v-card
+      <div
         v-if="!structuredLayout && simpleLayoutConfigured"
-        class="mb-5"
-        title="Einfache Reihenaufteilung"
-        prepend-icon="mdi-view-sequential-outline"
+        class="cabinet-wiring-canvas mb-5"
+        :class="{ 'wiring-active': viewMode === 'wiring' }"
       >
+        <CabinetWiringOverlay :topology="topology" :active="viewMode === 'wiring'" />
+        <v-card
+          title="Einfache Reihenaufteilung"
+          prepend-icon="mdi-view-sequential-outline"
+        >
         <v-card-text>
           <v-alert
             v-if="distribution.rows === null || distribution.modules_per_row === null"
@@ -1657,7 +1816,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
           >
             <div class="d-flex align-center justify-space-between mb-3">
               <h2>{{ group.row === null ? 'Position unbekannt' : `Reihe ${group.row}` }}</h2>
-              <v-chip size="small" variant="tonal">{{ group.devices.length }} Geräte</v-chip>
+              <v-chip
+                v-if="simpleRowElementCount(group.row) > 0"
+                size="small"
+                variant="tonal"
+                :title="`${simpleRowElementCount(group.row)} platzierte Elemente in dieser Reihe`"
+              >
+                {{ simpleRowElementCount(group.row) }} Elemente
+              </v-chip>
             </div>
 
             <div
@@ -1666,7 +1832,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             >
               <div
                 class="module-board"
-                :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': viewMode === 'compact' }"
+                :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': true }"
                 :style="moduleBoardStyle(distribution.modules_per_row)"
               >
                 <div
@@ -1691,12 +1857,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 <v-card
                   v-for="placement in modulePlacements(group.devices)"
                   :key="placement.device.id"
+                  :data-electrical-endpoint-key="`protective_device:${placement.device.id}`"
+                  :data-electrical-flow-through="placement.device.device_type === 'rcd' ? 'true' : undefined"
                   class="module-device"
                   :class="{
                     'drag-ready': desktopDragEnabled,
                     'drag-source': draggedDeviceId === placement.device.id,
                     'has-group-warning': placement.device.group_warnings.length > 0,
-                    'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1,
+                    'narrow-module-device': placement.device.module_width === 1,
                     [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                   }"
                   variant="tonal"
@@ -1740,13 +1908,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                       N: {{ placement.device.effective_neutral_rail_name }}
                     </div>
                     <v-icon v-if="placement.device.group_warnings.length" icon="mdi-alert-outline" color="warning" size="small" class="mt-1" />
-                    <ElectricalWiringSummary
-                      v-if="viewMode === 'expanded'"
-                      :topology="topology"
-                      endpoint-kind="protective_device"
-                      :endpoint-id="placement.device.id"
-                      compact
-                    />
                   </v-card-text>
                   <v-card-actions class="module-device-actions pa-1">
                     <v-btn icon="mdi-map-marker-path" size="x-small" variant="text" title="Position bearbeiten" @click.stop="openPlacement(placement.device)" />
@@ -1757,6 +1918,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 <v-card
                   v-for="component in simpleCabinetComponentsForRow(group.row)"
                   :key="component.id"
+                  :data-electrical-endpoint-key="`cabinet_component:${component.id}`"
                   class="module-device cabinet-component-card"
                   :class="{ 'busbar-card': ['busbar', 'phase_rail'].includes(component.component_type), [cabinetComponentClass(component.component_type)]: true }"
                   variant="outlined"
@@ -1780,13 +1942,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     <div>{{ cabinetComponentTypeMeta[component.component_type].title }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}</div>
                     <div v-if="component.linked_rcd_name" class="mt-1">FI: {{ component.linked_rcd_name }}</div>
                     <div v-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
-                    <ElectricalWiringSummary
-                      v-if="viewMode === 'expanded'"
-                      :topology="topology"
-                      endpoint-kind="cabinet_component"
-                      :endpoint-id="component.id"
-                      compact
-                    />
                   </v-card-text>
                   <v-card-actions class="module-device-actions pa-1">
                     <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Schrankkomponente bearbeiten" @click.stop="openCabinetComponent(component)" />
@@ -1796,11 +1951,13 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 <v-card
                   v-for="placement in simpleAssetPlacementsForRow(group.row)"
                   :key="placement.id"
+                  :data-electrical-endpoint-key="`asset:${placement.asset_id}`"
+                  :data-electrical-flow-through="placement.is_rcd ? 'true' : undefined"
                   class="module-device"
                   :class="{
                     'drag-ready': desktopDragEnabled,
                     'drag-source': draggedAsset?.assetId === placement.asset_id,
-                    'narrow-module-device': viewMode === 'compact' && placement.module_width === 1,
+                    'narrow-module-device': placement.module_width === 1,
                     [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                   }"
                   variant="outlined"
@@ -1822,13 +1979,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   <v-card-text class="pa-2 text-caption">
                     <div>{{ placement.product_name || placement.asset_code }} · TE {{ placement.start_position }}–{{ placement.start_position + placement.module_width - 1 }}</div>
                     <div>{{ liveValueText(placement) }}</div>
-                    <ElectricalWiringSummary
-                      v-if="viewMode === 'expanded'"
-                      :topology="topology"
-                      endpoint-kind="asset"
-                      :endpoint-id="placement.asset_id"
-                      compact
-                    />
                   </v-card-text>
                   <v-card-actions class="module-device-actions pa-1">
                     <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Platzierung bearbeiten" @click.stop="openAssetPlacement(undefined, placement)" />
@@ -1888,7 +2038,8 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             </v-btn>
           </div>
         </v-card-text>
-      </v-card>
+        </v-card>
+      </div>
       <v-alert
         v-if="!junctionBoxLayout && desktopDragEnabled && (structuredLayout || simpleLayoutConfigured)"
         type="info"
@@ -1906,7 +2057,13 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         Noch keine Felder angelegt. Lege zunächst ein Feld und darin die benötigten Bereiche an.
       </v-alert>
 
-      <div v-if="structuredLayout" class="layout-grid">
+      <div
+        v-if="structuredLayout"
+        class="cabinet-wiring-canvas"
+        :class="{ 'wiring-active': viewMode === 'wiring' }"
+      >
+        <CabinetWiringOverlay :topology="topology" :active="viewMode === 'wiring'" />
+        <div class="layout-grid">
         <v-card v-for="section in sections" :key="section.id" class="section-card" variant="outlined">
           <v-card-title class="d-flex align-center ga-2">
             <v-icon icon="mdi-view-column-outline" color="primary" />
@@ -1957,12 +2114,18 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   <section v-for="group in groupsForArea(area)" :key="group.row ?? 'unknown'" class="mb-4">
                     <div class="d-flex align-center justify-space-between mb-2">
                       <strong>{{ group.row === null ? 'Position unbekannt' : `Reihe ${group.row}` }}</strong>
-                      <v-chip size="x-small">{{ group.devices.length }}</v-chip>
+                      <v-chip
+                        v-if="areaRowElementCount(area.id, group.row) > 0"
+                        size="x-small"
+                        :title="`${areaRowElementCount(area.id, group.row)} platzierte Elemente in dieser Reihe`"
+                      >
+                        {{ areaRowElementCount(area.id, group.row) }} Elemente
+                      </v-chip>
                     </div>
                     <div v-if="group.row !== null && area.modules_per_row" class="module-scroll">
                       <div
                         class="module-board"
-                        :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': viewMode === 'compact' }"
+                        :class="{ 'is-dragging': draggedDeviceId !== null || draggedAsset !== null, 'compact-view': true }"
                         :style="moduleBoardStyle(area.modules_per_row)"
                       >
                         <div v-for="number in moduleNumbers(area.modules_per_row)" :key="number" class="module-cell" :style="{ gridColumn: number }">{{ number }}</div>
@@ -1980,12 +2143,14 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         <v-card
                           v-for="placement in modulePlacements(group.devices)"
                           :key="placement.device.id"
+                          :data-electrical-endpoint-key="`protective_device:${placement.device.id}`"
+                          :data-electrical-flow-through="placement.device.device_type === 'rcd' ? 'true' : undefined"
                           class="module-device"
                           :class="{
                             'drag-ready': desktopDragEnabled,
                             'drag-source': draggedDeviceId === placement.device.id,
                             'has-group-warning': placement.device.group_warnings.length > 0,
-                            'narrow-module-device': viewMode === 'compact' && placement.device.module_width === 1,
+                            'narrow-module-device': placement.device.module_width === 1,
                             [protectiveDeviceCabinetClass(placement.device.device_type)]: true
                           }"
                           :style="{ gridColumn: placement.gridColumn }"
@@ -2024,13 +2189,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                             <div v-if="placement.device.effective_rcd_name" class="text-medium-emphasis">FI: {{ placement.device.effective_rcd_name }}</div>
                             <div v-if="placement.device.effective_neutral_rail_name" class="text-medium-emphasis">N: {{ placement.device.effective_neutral_rail_name }}</div>
                             <v-icon v-if="placement.device.group_warnings.length" icon="mdi-alert-outline" color="warning" size="small" class="mt-1" />
-                            <ElectricalWiringSummary
-                              v-if="viewMode === 'expanded'"
-                              :topology="topology"
-                              endpoint-kind="protective_device"
-                              :endpoint-id="placement.device.id"
-                              compact
-                            />
                           </v-card-text>
                           <v-card-actions class="module-device-actions pa-1">
                             <v-btn icon="mdi-map-marker-path" size="x-small" variant="text" aria-label="Position bearbeiten" title="Position bearbeiten" @click.stop="openPlacement(placement.device, area)" />
@@ -2042,6 +2200,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         <v-card
                           v-for="component in cabinetComponentsForArea(area.id).filter((item) => item.row_number === group.row)"
                           :key="component.id"
+                          :data-electrical-endpoint-key="`cabinet_component:${component.id}`"
                           class="module-device cabinet-component-card"
                           :class="{ 'busbar-card': ['busbar', 'phase_rail'].includes(component.component_type), [cabinetComponentClass(component.component_type)]: true }"
                           variant="tonal"
@@ -2063,13 +2222,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                             <div>{{ cabinetComponentTypeMeta[component.component_type].title }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}</div>
                             <div v-if="component.linked_rcd_name" class="mt-1">FI: {{ component.linked_rcd_name }}</div>
                             <div v-if="component.phases.length" class="mt-1">Leiter: {{ component.phases.join(', ') }}</div>
-                            <ElectricalWiringSummary
-                              v-if="viewMode === 'expanded'"
-                              :topology="topology"
-                              endpoint-kind="cabinet_component"
-                              :endpoint-id="component.id"
-                              compact
-                            />
                           </v-card-text>
                           <v-card-actions class="module-device-actions pa-1">
                             <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Schrankkomponente bearbeiten" @click.stop="openCabinetComponent(component, area)" />
@@ -2079,11 +2231,13 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         <v-card
                           v-for="placement in assetPlacementsForArea(area.id).filter((item) => item.row_number === group.row)"
                           :key="placement.id"
+                          :data-electrical-endpoint-key="`asset:${placement.asset_id}`"
+                          :data-electrical-flow-through="placement.is_rcd ? 'true' : undefined"
                           class="module-device"
                           :class="{
                             'drag-ready': desktopDragEnabled,
                             'drag-source': draggedAsset?.assetId === placement.asset_id,
-                            'narrow-module-device': viewMode === 'compact' && placement.module_width === 1,
+                            'narrow-module-device': placement.module_width === 1,
                             [assetCabinetClass(placement.asset_type_name || 'Asset')]: true
                           }"
                           variant="outlined"
@@ -2105,13 +2259,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           <v-card-text class="pa-2 text-caption">
                             <div>{{ placement.product_name || placement.asset_code }} · TE {{ placement.start_position }}–{{ placement.start_position + placement.module_width - 1 }}</div>
                             <div>{{ liveValueText(placement) }}</div>
-                            <ElectricalWiringSummary
-                              v-if="viewMode === 'expanded'"
-                              :topology="topology"
-                              endpoint-kind="asset"
-                              :endpoint-id="placement.asset_id"
-                              compact
-                            />
                           </v-card-text>
                           <v-card-actions class="module-device-actions pa-1">
                             <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Platzierung bearbeiten" @click.stop="openAssetPlacement(area, placement)" />
@@ -2124,6 +2271,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                       <span
                         v-for="device in group.devices"
                         :key="device.id"
+                        :data-electrical-endpoint-key="`protective_device:${device.id}`"
                         class="d-inline-flex align-center ga-1 ma-1"
                         :class="{ 'drag-ready': desktopDragEnabled }"
                         :draggable="desktopDragEnabled"
@@ -2134,19 +2282,19 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                         <v-chip closable @click="openPlacement(device, area)" @click:close="unassignDevice(device)">
                           {{ device.asset.name }}
                         </v-chip>
-                        <ElectricalWiringSummary
-                          :topology="topology"
-                          endpoint-kind="protective_device"
-                          :endpoint-id="device.id"
-                          compact
-                        />
                         <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" aria-label="Schutzgerät archivieren" title="Schutzgerät archivieren" @click="archiveDevice(device)" />
                       </span>
                     </div>
                   </section>
                   <div v-if="cabinetComponentsForArea(area.id).length && !area.modules_per_row" class="mt-4">
                     <div class="text-subtitle-2 mb-2">Schrankkomponenten</div>
-                    <v-card v-for="component in cabinetComponentsForArea(area.id)" :key="component.id" variant="outlined" class="mb-2">
+                    <v-card
+                      v-for="component in cabinetComponentsForArea(area.id)"
+                      :key="component.id"
+                      :data-electrical-endpoint-key="`cabinet_component:${component.id}`"
+                      variant="outlined"
+                      class="mb-2"
+                    >
                       <v-card-text class="d-flex align-center ga-3">
                         <v-icon :icon="cabinetComponentTypeMeta[component.component_type].icon" color="primary" />
                         <div class="flex-grow-1">
@@ -2154,7 +2302,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                           <div class="text-caption text-medium-emphasis">
                             {{ cabinetComponentTypeMeta[component.component_type].title }} · Reihe {{ component.row_number }} · TE {{ component.start_position }}–{{ component.start_position + component.module_width - 1 }}
                           </div>
-                          <ElectricalWiringSummary :topology="topology" endpoint-kind="cabinet_component" :endpoint-id="component.id" compact />
                         </div>
                         <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Schrankkomponente bearbeiten" @click="openCabinetComponent(component, area)" />
                         <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" title="Schrankkomponente archivieren" @click="archiveCabinetComponent(component)" />
@@ -2163,7 +2310,13 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                   </div>
                   <div v-if="assetPlacementsForArea(area.id).length && !area.modules_per_row" class="mt-4">
                     <div class="text-subtitle-2 mb-2">DIN-Hutschienengeräte ohne Modulraster</div>
-                    <v-card v-for="placement in assetPlacementsForArea(area.id)" :key="placement.id" variant="outlined" class="mb-2">
+                    <v-card
+                      v-for="placement in assetPlacementsForArea(area.id)"
+                      :key="placement.id"
+                      :data-electrical-endpoint-key="`asset:${placement.asset_id}`"
+                      variant="outlined"
+                      class="mb-2"
+                    >
                       <v-card-text class="d-flex align-center ga-3">
                         <v-icon icon="mdi-memory" color="primary" />
                         <div class="flex-grow-1">
@@ -2184,7 +2337,13 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                 </template>
                 <template v-else-if="area.area_type === 'meter'">
                   <div v-if="metersForArea(area.id).length" class="d-flex flex-column ga-2">
-                    <v-card v-for="placement in metersForArea(area.id)" :key="placement.id" variant="outlined">
+                    <v-card
+                      v-for="placement in metersForArea(area.id)"
+                      :key="placement.id"
+                      :data-electrical-endpoint-key="meterPlacementEndpointKey(placement)"
+                      class="meter-placement-card"
+                      variant="outlined"
+                    >
                       <v-card-text class="d-flex align-center ga-3">
                         <v-icon icon="mdi-meter-electric-outline" color="primary" size="32" />
                         <div class="flex-grow-1">
@@ -2206,6 +2365,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                     <v-card
                       v-for="component in cabinetComponentsForArea(area.id)"
                       :key="component.id"
+                      :data-electrical-endpoint-key="`cabinet_component:${component.id}`"
                       variant="outlined"
                     >
                       <v-card-text class="d-flex align-center ga-3">
@@ -2216,12 +2376,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
                             {{ cabinetComponentTypeMeta[component.component_type].title }} · Leiter {{ component.phases.join(', ') }}
                             <span v-if="component.linked_rcd_name"> · FI/RCD {{ component.linked_rcd_name }}</span>
                           </div>
-                          <ElectricalWiringSummary
-                            :topology="topology"
-                            endpoint-kind="cabinet_component"
-                            :endpoint-id="component.id"
-                            compact
-                          />
                         </div>
                         <v-btn icon="mdi-pencil" size="x-small" variant="text" title="Schiene bearbeiten" @click="openCabinetComponent(component, area)" />
                         <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" title="Schiene archivieren" @click="archiveCabinetComponent(component)" />
@@ -2246,6 +2400,7 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             </v-card>
           </v-card-text>
         </v-card>
+        </div>
       </div>
 
       <v-card v-if="unassignedDevices.length" class="mt-5" title="Noch nicht platzierte Schutzgeräte" prepend-icon="mdi-map-marker-question-outline">
@@ -2263,12 +2418,6 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <v-chip @click="openPlacement(device)">
               {{ device.asset.name }} · {{ device.asset.jarvis_code }}
             </v-chip>
-            <ElectricalWiringSummary
-              :topology="topology"
-              endpoint-kind="protective_device"
-              :endpoint-id="device.id"
-              compact
-            />
             <v-btn icon="mdi-archive-arrow-down-outline" size="x-small" color="warning" variant="text" aria-label="Schutzgerät archivieren" title="Schutzgerät archivieren" @click="archiveDevice(device)" />
           </span>
         </v-card-text>
@@ -2371,6 +2520,69 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <v-btn color="warning" variant="tonal" prepend-icon="mdi-link-off" @click="unplaceAsset(detailAsset)">Aus Plan entfernen</v-btn>
           </div>
         </template>
+
+        <section v-if="detailEndpointKey" class="detail-connections mt-6">
+          <v-divider class="mb-4" />
+          <h3 class="text-subtitle-1 mb-2">Vorgelagerte Verbindungen</h3>
+          <v-list v-if="detailIncomingConnections.length" density="compact" lines="three" border rounded>
+            <v-list-item
+              v-for="connection in detailIncomingConnections"
+              :key="`incoming-${connection.id}`"
+              :prepend-icon="endpointKindIcons[connectedEndpoint(connection, 'incoming').kind]"
+              :title="connectedEndpoint(connection, 'incoming').name"
+              :subtitle="`${endpointKindLabels[connectedEndpoint(connection, 'incoming').kind]} · ${connectionDescription(connection)}`"
+              :to="connectionEndpointRoute(connectedEndpoint(connection, 'incoming'))"
+            >
+              <template #append>
+                <div class="d-flex flex-wrap justify-end ga-1 connection-phase-list">
+                  <v-chip
+                    v-for="phase in connection.effective_phases"
+                    :key="`${connection.id}-incoming-${phase}`"
+                    :class="connectionPhaseClass(phase)"
+                    size="x-small"
+                    variant="flat"
+                  >
+                    {{ phase }}
+                  </v-chip>
+                  <v-chip v-if="!connection.effective_phases.length" size="x-small" color="warning" variant="tonal">?</v-chip>
+                </div>
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-alert v-else type="info" variant="tonal" density="compact">
+            Keine vorgelagerte Verbindung dokumentiert.
+          </v-alert>
+
+          <h3 class="text-subtitle-1 mt-5 mb-2">Nachgelagerte Verbindungen</h3>
+          <v-list v-if="detailOutgoingConnections.length" density="compact" lines="three" border rounded>
+            <v-list-item
+              v-for="connection in detailOutgoingConnections"
+              :key="`outgoing-${connection.id}`"
+              :prepend-icon="endpointKindIcons[connectedEndpoint(connection, 'outgoing').kind]"
+              :title="connectedEndpoint(connection, 'outgoing').name"
+              :subtitle="`${endpointKindLabels[connectedEndpoint(connection, 'outgoing').kind]} · ${connectionDescription(connection)}`"
+              :to="connectionEndpointRoute(connectedEndpoint(connection, 'outgoing'))"
+            >
+              <template #append>
+                <div class="d-flex flex-wrap justify-end ga-1 connection-phase-list">
+                  <v-chip
+                    v-for="phase in connection.effective_phases"
+                    :key="`${connection.id}-outgoing-${phase}`"
+                    :class="connectionPhaseClass(phase)"
+                    size="x-small"
+                    variant="flat"
+                  >
+                    {{ phase }}
+                  </v-chip>
+                  <v-chip v-if="!connection.effective_phases.length" size="x-small" color="warning" variant="tonal">?</v-chip>
+                </div>
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-alert v-else type="info" variant="tonal" density="compact">
+            Keine nachgelagerte Verbindung dokumentiert.
+          </v-alert>
+        </section>
       </div>
     </v-navigation-drawer>
 
@@ -2731,8 +2943,67 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
 .busbar-inline-connector { display: block; width: 2px; height: 8px; border-radius: 999px; background: var(--phase-bg); }
 .phase-l1 { --phase-bg: #795548; --phase-fg: #ffffff; --phase-border: rgba(121, 85, 72, 0.42); }
 .phase-l2 { --phase-bg: #212121; --phase-fg: #ffffff; --phase-border: rgba(255, 255, 255, 0.20); }
-.phase-l3 { --phase-bg: #9e9e9e; --phase-fg: #111111; --phase-border: rgba(158, 158, 158, 0.46); }
+.phase-l3 { --phase-bg: #616161; --phase-fg: #ffffff; --phase-border: rgba(158, 158, 158, 0.46); }
+.phase-n { --phase-bg: #1565c0; --phase-fg: #ffffff; --phase-border: rgba(21, 101, 192, 0.55); }
+.phase-pe { --phase-bg: #2e7d32; --phase-fg: #ffffff; --phase-border: rgba(46, 125, 50, 0.55); }
 
+.cabinet-wiring-canvas {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+}
+.cabinet-wiring-canvas.wiring-active :deep(.v-card) {
+  transition: box-shadow 140ms ease, opacity 140ms ease;
+}
+.wiring-mode-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.wiring-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.wire-sample {
+  display: inline-block;
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.wire-sample-l1 { color: #e53935; }
+.wire-sample-l2 { color: #111; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.wire-sample-l3 { color: #bdbdbd; }
+.wire-sample-n { color: #1e88e5; }
+.wire-sample-pe {
+  color: #43a047;
+  background: repeating-linear-gradient(90deg, #43a047 0 8px, #fdd835 8px 12px);
+}
+.external-symbol {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-surface));
+}
+.external-symbol-grid { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.external-symbol-outgoing { border-radius: 50%; }
+.connection-phase-chip {
+  background: var(--phase-bg) !important;
+  color: var(--phase-fg) !important;
+  border: 1px solid var(--phase-border) !important;
+  font-weight: 800;
+}
+.connection-phase-list { max-width: 132px; }
+.detail-connections :deep(.v-list-item-subtitle) {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
 .drag-ready { cursor: grab; }
 .drag-ready:active, .drag-source { cursor: grabbing; }
 .device-list { display: flex; flex-wrap: wrap; }
