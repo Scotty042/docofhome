@@ -36,6 +36,20 @@ describe('cabinet visual wiring mode', () => {
     expect(layout).toContain('festem Abstand')
   })
 
+  it('shows direct wiring on hover and allows pinning in overview mode', () => {
+    expect(overlay).toContain('interactive?: boolean')
+    expect(overlay).toContain('focusedEndpointKey')
+    expect(overlay).toContain('handlePointerOver')
+    expect(overlay).toContain('handlePointerOut')
+    expect(overlay).toContain('handleClick')
+    expect(overlay).toContain("event.key !== 'Escape'")
+    expect(overlay).toContain("focusKey && connection.source.key !== focusKey && connection.target.key !== focusKey")
+    expect(overlay).toContain("focusKey !== connection.target.key")
+    expect(layout).toContain(":interactive=\"viewMode === 'overview'\"")
+    expect(layout).toContain('Mouse-over zeigt die direkt angeschlossene Verkabelung')
+    expect(layout).toContain('Klick oder Antippen fixiert sie')
+  })
+
   it('bundles duplicate main edges and uses standard external symbols', () => {
     expect(overlay).toContain('Mehrere Datensätze zwischen denselben Hauptkomponenten')
     expect(overlay).toContain('isAutomaticBusbarContact')

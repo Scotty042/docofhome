@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type {
   ElectricalConnection,
@@ -11,6 +11,7 @@ import type {
 const props = defineProps<{
   topology: ElectricalTopology
   active: boolean
+  interactive?: boolean
 }>()
 
 type Point = { x: number; y: number }
@@ -65,6 +66,9 @@ const height = ref(0)
 const paths = ref<WiringPath[]>([])
 const externalNodes = ref<ExternalNode[]>([])
 const flowPortMarkers = ref<FlowPortMarker[]>([])
+const hoveredEndpointKey = ref<string | null>(null)
+const pinnedEndpointKey = ref<string | null>(null)
+const focusedEndpointKey = computed(() => pinnedEndpointKey.value ?? hoveredEndpointKey.value)
 let resizeObserver: ResizeObserver | null = null
 let animationFrame = 0
 let container: HTMLElement | null = null
@@ -163,11 +167,20 @@ function conductorPhases(connection: ElectricalConnection): Array<ElectricalPhas
 
 function visibleConnections(): VisualConnection[] {
   const connections = activeConnections()
+  const focusKey = props.interactive ? focusedEndpointKey.value : null
   const grouped = new Map<string, VisualConnection>()
 
+  if (props.interactive && !focusKey) return []
+
   for (const connection of connections) {
-    if (isAutomaticBusbarContact(connection)) continue
+    // Automatische Einzelkontakte einer Kamm-/Sammelschiene bleiben in der
+    // Gesamtansicht verborgen. Beim Mouse-over einer konkreten Sicherung darf
+    // genau deren kurzer Schienenkontakt jedoch sichtbar werden.
+    if (isAutomaticBusbarContact(connection)) {
+      if (!props.interactive || focusKey !== connection.target.key) continue
+    }
     if (isIndividualCircuitBranch(connection)) continue
+    if (focusKey && connection.source.key !== focusKey && connection.target.key !== focusKey) continue
     if (!endpointElement(connection.source.key) && !endpointElement(connection.target.key)) continue
 
     // Mehrere Datensätze zwischen denselben Hauptkomponenten werden zu einem sichtbaren
@@ -412,6 +425,87 @@ function orthogonalPath(source: Anchor, target: Anchor, lane: number, conductorO
   return `M ${sx} ${sy} L ${sx} ${trackY} L ${tx} ${trackY} L ${tx} ${ty}`
 }
 
+function endpointFromEvent(event: Event): HTMLElement | null {
+  const target = event.target
+  if (!(target instanceof Element) || !container) return null
+  const endpoint = target.closest<HTMLElement>('[data-electrical-endpoint-key]')
+  return endpoint && container.contains(endpoint) ? endpoint : null
+}
+
+function clearEndpointFocusClasses() {
+  if (!container) return
+  container.querySelectorAll<HTMLElement>('[data-electrical-endpoint-key]').forEach((element) => {
+    element.classList.remove(
+      'cabinet-wiring-focus-selected',
+      'cabinet-wiring-focus-related',
+      'cabinet-wiring-focus-muted'
+    )
+  })
+}
+
+function applyEndpointFocus(connections: VisualConnection[]) {
+  clearEndpointFocusClasses()
+  if (!container || !props.interactive || !focusedEndpointKey.value) return
+
+  const selectedKey = focusedEndpointKey.value
+  const relatedKeys = new Set<string>([selectedKey])
+  connections.forEach((connection) => {
+    relatedKeys.add(connection.source.key)
+    relatedKeys.add(connection.target.key)
+  })
+
+  container.querySelectorAll<HTMLElement>('[data-electrical-endpoint-key]').forEach((element) => {
+    const key = element.dataset.electricalEndpointKey
+    if (!key) return
+    if (key === selectedKey) {
+      element.classList.add('cabinet-wiring-focus-selected')
+    } else if (relatedKeys.has(key)) {
+      element.classList.add('cabinet-wiring-focus-related')
+    } else {
+      element.classList.add('cabinet-wiring-focus-muted')
+    }
+  })
+}
+
+function handlePointerOver(event: PointerEvent) {
+  if (!props.interactive || pinnedEndpointKey.value) return
+  const endpoint = endpointFromEvent(event)
+  const key = endpoint?.dataset.electricalEndpointKey ?? null
+  if (hoveredEndpointKey.value === key) return
+  hoveredEndpointKey.value = key
+  scheduleRebuild()
+}
+
+function handlePointerOut(event: PointerEvent) {
+  if (!props.interactive || pinnedEndpointKey.value) return
+  const endpoint = endpointFromEvent(event)
+  if (!endpoint) return
+  const relatedTarget = event.relatedTarget
+  const relatedEndpoint = relatedTarget instanceof Element
+    ? relatedTarget.closest<HTMLElement>('[data-electrical-endpoint-key]')
+    : null
+  if (relatedEndpoint?.dataset.electricalEndpointKey === endpoint.dataset.electricalEndpointKey) return
+  hoveredEndpointKey.value = null
+  scheduleRebuild()
+}
+
+function handleClick(event: MouseEvent) {
+  if (!props.interactive) return
+  const endpoint = endpointFromEvent(event)
+  const key = endpoint?.dataset.electricalEndpointKey
+  if (!key) return
+  pinnedEndpointKey.value = pinnedEndpointKey.value === key ? null : key
+  hoveredEndpointKey.value = pinnedEndpointKey.value
+  scheduleRebuild()
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !props.interactive) return
+  pinnedEndpointKey.value = null
+  hoveredEndpointKey.value = null
+  scheduleRebuild()
+}
+
 function rebuild() {
   cancelAnimationFrame(animationFrame)
   animationFrame = requestAnimationFrame(() => {
@@ -419,6 +513,7 @@ function rebuild() {
       paths.value = []
       externalNodes.value = []
       flowPortMarkers.value = []
+      clearEndpointFocusClasses()
       return
     }
     container = svg.value.parentElement
@@ -427,6 +522,7 @@ function rebuild() {
     height.value = Math.max(container.clientHeight, container.scrollHeight)
 
     const connections = visibleConnections()
+    applyEndpointFocus(connections)
     const external = externalAnchors(connections)
     const resolved = connections.flatMap<ResolvedConnection>((connection) => {
       const source = representedAnchor(connection.source) ?? external.get(connection.source.key)
@@ -490,19 +586,34 @@ onMounted(() => {
   if (container) {
     resizeObserver.observe(container)
     container.addEventListener('scroll', scheduleRebuild, true)
+    container.addEventListener('pointerover', handlePointerOver)
+    container.addEventListener('pointerout', handlePointerOut)
+    container.addEventListener('click', handleClick)
   }
   window.addEventListener('resize', scheduleRebuild)
+  window.addEventListener('keydown', handleKeydown)
   scheduleRebuild()
 })
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(animationFrame)
   resizeObserver?.disconnect()
+  clearEndpointFocusClasses()
   container?.removeEventListener('scroll', scheduleRebuild, true)
+  container?.removeEventListener('pointerover', handlePointerOver)
+  container?.removeEventListener('pointerout', handlePointerOut)
+  container?.removeEventListener('click', handleClick)
   window.removeEventListener('resize', scheduleRebuild)
+  window.removeEventListener('keydown', handleKeydown)
 })
 
-watch(() => [props.active, props.topology], scheduleRebuild, { deep: true })
+watch(() => [props.active, props.topology, props.interactive, focusedEndpointKey.value], () => {
+  if (!props.interactive) {
+    hoveredEndpointKey.value = null
+    pinnedEndpointKey.value = null
+  }
+  scheduleRebuild()
+}, { deep: true })
 </script>
 
 <template>
@@ -626,5 +737,23 @@ watch(() => [props.active, props.topology], scheduleRebuild, { deep: true })
   stroke: rgb(var(--v-theme-surface));
   stroke-width: 3px;
   stroke-linejoin: round;
+}
+
+:global(.cabinet-wiring-focus-selected) {
+  position: relative;
+  z-index: 9;
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+  filter: brightness(1.08);
+}
+:global(.cabinet-wiring-focus-related) {
+  position: relative;
+  z-index: 9;
+  outline: 1px solid rgba(var(--v-theme-primary), 0.62);
+  outline-offset: 1px;
+}
+:global(.cabinet-wiring-focus-muted) {
+  opacity: 0.58;
+  transition: opacity 120ms ease;
 }
 </style>

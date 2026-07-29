@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.4.7 – 2026-07-29
+
+### Interaktive Verkabelung
+
+- Mouse-over in der normalen Übersicht blendet die direkten Hauptverbindungen des gewählten elektrischen Elements ein.
+- Klick oder Antippen fixiert die Auswahl; erneuter Klick oder Escape löst sie.
+- Gewähltes Gerät und direkte Nachbarn werden hervorgehoben, übrige Geräte dezent abgedunkelt.
+- Der automatische Kammschienenkontakt einer konkret überfahrenen Sicherung kann gezielt erscheinen; die Gesamtansicht bleibt reduziert.
+- Der vollständige Verkabelungsmodus bleibt erhalten.
+
+### Technik
+
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
+
 ## 1.7.4.6 – 2026-07-29
 
 ### Verkabelungsansicht

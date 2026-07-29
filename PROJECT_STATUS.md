@@ -2,15 +2,15 @@
 
 Stand: 29. Juli 2026
 
-Release: 1.7.4.6
+Release: 1.7.4.7
 
 Alembic-Head: `0049`
 
-DocOfHome 1.7.4.6 stabilisiert die kompakte Schaltschrankdarstellung um einen
-eigenen visuellen Verkabelungsmodus. Die gespeicherte Topologie wird direkt an
-den sichtbaren DIN-Geräten, Schienen und passiven Komponenten dargestellt.
-Detailansichten zeigen zusätzlich vor- und nachgelagerte Verbindungen; die
-bisherige unübersichtliche erweiterte Kartenansicht entfällt.
+DocOfHome 1.7.4.7 ergänzt die kompakte Schaltschrankdarstellung um eine
+interaktive Verkabelungsanzeige. In der normalen Übersicht werden beim
+Mouse-over nur die direkt angeschlossenen Hauptleitungen eines Geräts gezeigt;
+Klick oder Antippen fixiert die Auswahl. Der vollständige Verkabelungsmodus und
+die Detailansichten mit vor- und nachgelagerten Verbindungen bleiben erhalten.
 
 ## Verbindliche Elektro-Logik
 
@@ -64,6 +64,15 @@ erforderlich. Details stehen in `RELEASE_NOTES_1.6.3.md`.
 
 
 
+
+## Release 1.7.4.7
+
+- Alembic-Head bleibt `0049`;
+- normale Übersicht erhält eine interaktive Mouse-over-Verkabelung;
+- direkte vor- und nachgelagerte Hauptleitungen werden je Gerät selektiv eingeblendet;
+- Klick oder Antippen fixiert die Auswahl, Escape hebt sie auf;
+- gewählte und verbundene Geräte werden visuell hervorgehoben;
+- vollständiger Verkabelungsmodus bleibt unverändert.
 
 ## Release 1.7.4.6
 

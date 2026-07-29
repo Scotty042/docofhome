@@ -1,11 +1,20 @@
 # DocOfHome
 
-DocOfHome 1.7.4.6 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.4.7 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.4.7
+
+- in der normalen Schaltschrankübersicht zeigt Mouse-over nur die direkt am gewählten Gerät angeschlossenen Hauptleitungen;
+- Klick oder Antippen fixiert die hervorgehobene Verkabelung, ein weiterer Klick oder Escape hebt sie wieder auf;
+- das gewählte Gerät und seine direkten Nachbarn werden hervorgehoben, nicht beteiligte Geräte dezent zurückgenommen;
+- beim Überfahren einer Sicherung darf ihr eigener automatischer Kammschienenkontakt sichtbar werden, ohne sämtliche Kontakte der Schiene einzublenden;
+- der vollständige Modus **Verkabelung** bleibt unverändert verfügbar;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
 
 ## Neu in 1.7.4.6
 

@@ -1690,6 +1690,10 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
             <span class="legend-item cabinet-type-busbar">Sammel-/Kammschiene</span>
             <span class="legend-item cabinet-type-passive">Passive Komponente</span>
           </div>
+          <div v-if="viewMode === 'overview'" class="wiring-hover-hint mt-3">
+            <v-icon icon="mdi-source-branch" size="small" />
+            <span>Mouse-over zeigt die direkt angeschlossene Verkabelung. Klick oder Antippen fixiert sie, Escape hebt die Fixierung auf.</span>
+          </div>
           <div v-if="viewMode === 'wiring'" class="wiring-mode-legend mt-3" aria-label="Farblegende der Leiter">
             <span class="wiring-legend-item"><i class="wire-sample wire-sample-l1" />L1</span>
             <span class="wiring-legend-item"><i class="wire-sample wire-sample-l2" />L2</span>
@@ -1792,7 +1796,11 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         class="cabinet-wiring-canvas mb-5"
         :class="{ 'wiring-active': viewMode === 'wiring' }"
       >
-        <CabinetWiringOverlay :topology="topology" :active="viewMode === 'wiring'" />
+        <CabinetWiringOverlay
+          :topology="topology"
+          active
+          :interactive="viewMode === 'overview'"
+        />
         <v-card
           title="Einfache Reihenaufteilung"
           prepend-icon="mdi-view-sequential-outline"
@@ -2062,7 +2070,11 @@ async function dropDeviceSimple(_event: DragEvent, row: number, start: number) {
         class="cabinet-wiring-canvas"
         :class="{ 'wiring-active': viewMode === 'wiring' }"
       >
-        <CabinetWiringOverlay :topology="topology" :active="viewMode === 'wiring'" />
+        <CabinetWiringOverlay
+          :topology="topology"
+          active
+          :interactive="viewMode === 'overview'"
+        />
         <div class="layout-grid">
         <v-card v-for="section in sections" :key="section.id" class="section-card" variant="outlined">
           <v-card-title class="d-flex align-center ga-2">
@@ -2954,6 +2966,13 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
 }
 .cabinet-wiring-canvas.wiring-active :deep(.v-card) {
   transition: box-shadow 140ms ease, opacity 140ms ease;
+}
+.wiring-hover-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.78rem;
 }
 .wiring-mode-legend {
   display: flex;
