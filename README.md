@@ -1,13 +1,20 @@
 # DocOfHome
 
-DocOfHome 1.7.4.9 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.5 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
 
-## Neu in 1.7.4.9
+## Neu in 1.7.5
+
+- eigenständige Bezugsobjekte mit Tätigkeiten-Untermenü
+- schnelle Aktion „Heute erledigt“ bzw. bei Tieren „Heute gegeben“
+- Wiederholung alle X Tage, Wochen, Monate oder Jahre ohne Pflicht-Starttermin
+- reine Datums-Historie mit korrekter Sortierung und kompakter Intervallanzeige
+
+## Aus 1.7.4.9 übernommen
 
 - Wartungen und Tätigkeiten besitzen eine echte Durchführungshistorie mit frei nachtragbaren vergangenen Terminen;
 - Abstände zwischen Durchführungen werden automatisch in Tagen berechnet, inklusive Durchschnitt sowie kürzestem und längstem Intervall;

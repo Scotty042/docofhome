@@ -191,8 +191,6 @@ class WorkService:
         ):
             base = performed_at
             due_after = base + timedelta(days=record.recurrence_days)
-            while due_after <= now:
-                due_after += timedelta(days=record.recurrence_days)
             record.due_at = due_after
             record.completed_at = now
         elif (
@@ -282,10 +280,13 @@ class WorkService:
             .order_by(WorkItemEvent.occurred_at.desc(), WorkItemEvent.created_at.desc())
         ).all())
         interval_by_id = self._interval_map(events)
-        ordered_asc = sorted(events, key=lambda event: self._aware(event.occurred_at))
+        ordered_asc = sorted(
+            events,
+            key=lambda event: (self._aware(event.occurred_at).date(), event.created_at),
+        )
         intervals = [
             (self._aware(current.occurred_at).date() - self._aware(previous.occurred_at).date()).days
-            for previous, current in zip(ordered_asc, ordered_asc[1:])
+            for previous, current in zip(ordered_asc, ordered_asc[1:], strict=False)
         ]
         stats = WorkHistoryStatsRead(
             count=len(events),
@@ -915,20 +916,13 @@ class WorkService:
             return ZoneInfo("UTC")
 
     def _next_calendar_due(self, record: WorkItem, completed_at: datetime) -> datetime:
-        if record.due_at is None or record.calendar_months not in {1, 2, 3, 6, 12}:
+        if record.calendar_months is None or not 1 <= record.calendar_months <= 120:
             raise WorkValidationError("Der Kalenderplan ist unvollständig")
         zone = self._timezone()
-        current = self._aware(record.due_at).astimezone(zone)
         completed_local = completed_at.astimezone(zone)
-        while current <= completed_local:
-            absolute = current.year * 12 + current.month - 1 + record.calendar_months
-            year, month_index = divmod(absolute, 12)
-            month = month_index + 1
-            maximum = monthrange(year, month)[1]
-            day = (
-                maximum
-                if record.calendar_last_day
-                else min(record.calendar_day or current.day, maximum)
-            )
-            current = current.replace(year=year, month=month, day=day)
-        return current.astimezone(UTC)
+        absolute = completed_local.year * 12 + completed_local.month - 1 + record.calendar_months
+        year, month_index = divmod(absolute, 12)
+        month = month_index + 1
+        maximum = monthrange(year, month)[1]
+        day = maximum if record.calendar_last_day else min(completed_local.day, maximum)
+        return completed_local.replace(year=year, month=month, day=day).astimezone(UTC)

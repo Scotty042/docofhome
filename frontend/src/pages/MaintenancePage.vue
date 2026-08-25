@@ -30,6 +30,7 @@ const loading = ref(false)
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const error = ref<string | null>(null)
+const fieldErrors = ref<Record<string, string>>({})
 const statusFilter = ref<WorkStatus | 'all'>('open')
 const typeFilter = ref<WorkItemType | 'all'>('all')
 const subjectFilter = ref<string | 'all'>('all')
@@ -67,6 +68,8 @@ function emptyWorkForm() {
     due_at: '',
     recurrence_days: null as number | null,
     recurrence_mode: 'none' as RecurrenceMode,
+    interval_value: 1 as number | null,
+    interval_unit: 'months' as 'days' | 'weeks' | 'months' | 'years',
     calendar_months: 1 as number | null,
     calendar_day: null as number | null,
     calendar_month: null as number | null,
@@ -77,7 +80,7 @@ function emptyWorkForm() {
 
 function emptyHistoryForm(requireDate: boolean) {
   const now = new Date()
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
   return {
     occurred_at: requireDate ? local : '',
     note: '',
@@ -106,12 +109,22 @@ function toLocalInput(value: string | null): string {
   return local.toISOString().slice(0, 16)
 }
 
+function toDateInput(value: string | null): string {
+  if (!value) return ''
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : ''
+}
+
+function dateToIso(value: string): string | null {
+  return value ? `${value}T12:00:00.000Z` : null
+}
+
 function toIso(value: string): string | null {
   return value ? new Date(value).toISOString() : null
 }
 
 function historyPayload(source: ReturnType<typeof emptyHistoryForm>, requireDate: boolean): WorkHistoryEntryWrite {
-  const occurredAt = toIso(source.occurred_at)
+  const occurredAt = dateToIso(source.occurred_at)
   if (requireDate && !occurredAt) throw new Error('Bitte ein Durchführungsdatum angeben.')
   return {
     occurred_at: occurredAt ?? new Date().toISOString(),
@@ -172,9 +185,11 @@ function startEdit(item: WorkItemRead) {
     title: item.title,
     description: item.description ?? '',
     subject_id: item.subject_id,
-    due_at: toLocalInput(item.due_at),
+    due_at: toDateInput(item.due_at),
     recurrence_days: item.recurrence_days,
     recurrence_mode: item.recurrence_mode,
+    interval_value: item.recurrence_mode === 'interval' ? item.recurrence_days : (item.calendar_months === 12 ? 1 : item.calendar_months),
+    interval_unit: (item.recurrence_mode === 'interval' ? 'days' : (item.calendar_months === 12 ? 'years' : 'months')) as 'days' | 'weeks' | 'months' | 'years',
     calendar_months: item.calendar_months,
     calendar_day: item.calendar_day,
     calendar_month: item.calendar_month,
@@ -185,7 +200,10 @@ function startEdit(item: WorkItemRead) {
 }
 
 async function save() {
-  if (!form.value.title.trim()) return
+  fieldErrors.value = {}
+  if (!form.value.title.trim()) fieldErrors.value.title = 'Bitte eine Tätigkeit eingeben.'
+  if (form.value.item_type === 'maintenance' && form.value.recurrence_mode !== 'none' && !form.value.interval_value) fieldErrors.value.recurrence = 'Bitte ein Wiederholungsintervall eingeben.'
+  if (Object.keys(fieldErrors.value).length) return
   saving.value = true
   error.value = null
   const payload: WorkItemWrite = {
@@ -195,13 +213,13 @@ async function save() {
     target_type: editing.value?.target_type ?? null,
     target_id: editing.value?.target_id ?? null,
     subject_id: editing.value?.target_id ? null : form.value.subject_id,
-    due_at: toIso(form.value.due_at),
-    recurrence_days: form.value.item_type === 'maintenance' && form.value.recurrence_mode === 'interval' ? form.value.recurrence_days : null,
-    recurrence_mode: form.value.item_type === 'maintenance' ? form.value.recurrence_mode : 'none',
-    calendar_months: form.value.item_type === 'maintenance' && form.value.recurrence_mode === 'calendar' ? form.value.calendar_months : null,
-    calendar_day: form.value.item_type === 'maintenance' && form.value.recurrence_mode === 'calendar' && !form.value.calendar_last_day ? form.value.calendar_day : null,
-    calendar_month: form.value.item_type === 'maintenance' && form.value.recurrence_mode === 'calendar' ? form.value.calendar_month : null,
-    calendar_last_day: form.value.item_type === 'maintenance' && form.value.recurrence_mode === 'calendar' ? form.value.calendar_last_day : false,
+    due_at: dateToIso(form.value.due_at),
+    recurrence_days: form.value.item_type === 'maintenance' && form.value.recurrence_mode !== 'none' && ['days', 'weeks'].includes(form.value.interval_unit) ? (form.value.interval_value ?? 1) * (form.value.interval_unit === 'weeks' ? 7 : 1) : null,
+    recurrence_mode: form.value.item_type !== 'maintenance' ? 'none' : form.value.recurrence_mode === 'none' ? 'none' : ['months', 'years'].includes(form.value.interval_unit) ? 'calendar' : 'interval',
+    calendar_months: form.value.item_type === 'maintenance' && form.value.recurrence_mode !== 'none' && ['months', 'years'].includes(form.value.interval_unit) ? (form.value.interval_value ?? 1) * (form.value.interval_unit === 'years' ? 12 : 1) : null,
+    calendar_day: form.value.item_type === 'maintenance' && form.value.recurrence_mode !== 'none' && ['months', 'years'].includes(form.value.interval_unit) ? 1 : null,
+    calendar_month: null,
+    calendar_last_day: false,
     priority: form.value.priority
   }
   try {
@@ -210,7 +228,10 @@ async function save() {
     dialog.value = false
     await load()
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : 'Eintrag konnte nicht gespeichert werden.'
+    const message = reason instanceof Error ? reason.message : 'Eintrag konnte nicht gespeichert werden.'
+    if (/Titel|Bezeichnung/i.test(message)) fieldErrors.value.title = message
+    else if (/Wiederholung|Intervall|Kalender/i.test(message)) fieldErrors.value.recurrence = message
+    else error.value = message
   } finally {
     saving.value = false
   }
@@ -220,6 +241,22 @@ function startComplete(item: WorkItemRead) {
   completionItem.value = item
   completionForm.value = emptyHistoryForm(false)
   completionDialog.value = true
+}
+
+async function completeToday(item: WorkItemRead) {
+  actionId.value = item.id
+  error.value = null
+  try {
+    await workItemsApi.complete(item.id, {
+      occurred_at: dateToIso(new Date().toISOString().slice(0, 10)), note: null,
+      cost_amount: null, cost_currency: null, reading_value: null, reading_unit: null
+    })
+    await load()
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'Durchführung konnte nicht gespeichert werden.'
+  } finally {
+    actionId.value = null
+  }
 }
 
 async function completeItem() {
@@ -327,7 +364,7 @@ function startHistoryCreate() {
 function startHistoryEdit(event: WorkItemEvent) {
   editingHistoryEntry.value = event
   historyForm.value = {
-    occurred_at: toLocalInput(event.occurred_at),
+    occurred_at: toDateInput(event.occurred_at),
     note: event.note ?? '',
     cost_amount: event.cost_amount,
     cost_currency: event.cost_currency ?? 'EUR',
@@ -420,7 +457,13 @@ function subjectTypeLabel(type: WorkSubjectType | null): string {
 }
 
 function formatDate(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString() : '–'
+  if (!value) return '–'
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : '–'
+}
+
+function doneTodayLabel(item: WorkItemRead): string {
+  return item.subject_type === 'animal' ? 'Heute gegeben' : 'Heute erledigt'
 }
 
 onMounted(() => void load())
@@ -512,7 +555,7 @@ onMounted(() => void load())
             <div v-if="item.subject_name"><v-icon size="small" icon="mdi-tag-outline" /> {{ item.subject_name }} · {{ subjectTypeLabel(item.subject_type) }}</div>
             <div v-else-if="item.target_label"><router-link v-if="item.target_route" :to="item.target_route">{{ item.target_label }}</router-link><span v-else>{{ item.target_label }}</span></div>
             <div :class="item.overdue ? 'text-error font-weight-bold' : ''">
-              {{ item.due_at ? new Date(item.due_at).toLocaleString() : 'Keine Fälligkeit' }}
+              {{ item.due_at ? `Nächster Termin: ${formatDate(item.due_at)}` : 'Noch keine Durchführung' }}
               <span v-if="item.recurrence_days"> · alle {{ item.recurrence_days }} Tage</span>
             </div>
             <div v-if="item.history_count">Zuletzt durchgeführt: {{ formatDate(item.last_performed_at) }} · {{ item.history_count }} Historieneinträge</div>
@@ -523,7 +566,8 @@ onMounted(() => void load())
               <v-btn icon="mdi-history" size="small" variant="tonal" aria-label="Historie" @click="openHistory(item)" />
               <v-btn v-if="item.generated && item.target_route && item.status === 'open'" icon="mdi-counter" size="small" color="primary" variant="tonal" aria-label="Zähler ablesen" :to="item.target_route" />
               <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-pencil" size="small" variant="text" aria-label="Bearbeiten" @click="startEdit(item)" />
-              <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-check" size="small" color="success" variant="tonal" :loading="actionId === item.id" aria-label="Erledigen" @click="startComplete(item)" />
+              <v-btn v-if="item.status === 'open' && !item.generated" size="small" color="success" variant="tonal" :loading="actionId === item.id" @click="completeToday(item)">{{ doneTodayLabel(item) }}</v-btn>
+              <v-btn v-if="item.status === 'open' && !item.generated" size="small" variant="text" @click="startComplete(item)">Anderes Datum / Details</v-btn>
               <v-btn v-if="item.status === 'open' && !item.generated" icon="mdi-close" size="small" variant="text" aria-label="Abbrechen" @click="act(item, 'cancel')" />
               <v-btn v-else-if="!item.generated" icon="mdi-refresh" size="small" variant="text" aria-label="Wieder öffnen" @click="act(item, 'reopen')" />
               <v-btn v-if="!item.generated" icon="mdi-delete-outline" size="small" color="error" variant="text" aria-label="Löschen" @click="act(item, 'delete')" />
@@ -538,21 +582,16 @@ onMounted(() => void load())
       <v-card :title="editing ? 'Eintrag bearbeiten' : 'Eintrag anlegen'" prepend-icon="mdi-format-list-checks">
         <v-card-text>
           <v-select v-model="form.item_type" :items="[{ title: 'Aufgabe', value: 'task' }, { title: 'Wartung / wiederkehrende Tätigkeit', value: 'maintenance' }]" label="Typ" />
-          <v-text-field v-model="form.title" label="Tätigkeit / Titel" maxlength="200" counter autofocus />
+          <v-text-field v-model="form.title" label="Tätigkeit / Titel" maxlength="200" counter autofocus :error-messages="fieldErrors.title" />
           <v-autocomplete v-if="!editing?.target_id" v-model="form.subject_id" :items="subjectOptions" label="Bezugsobjekt (optional)" clearable hint="z. B. Penny, Kühlschrank, Auto, Badezimmer" persistent-hint />
           <v-alert v-else type="info" variant="tonal" density="compact" class="mb-3">Dieser bestehende Eintrag bleibt mit {{ editing.target_label }} verknüpft.</v-alert>
           <v-textarea v-model="form.description" label="Beschreibung" rows="4" />
-          <v-text-field v-model="form.due_at" label="Fällig am" type="datetime-local" />
-          <v-select v-if="form.item_type === 'maintenance'" v-model="form.recurrence_mode" :items="[{ title: 'Keine Wiederholung', value: 'none' }, { title: 'Festes Tagesintervall', value: 'interval' }, { title: 'Kalenderregel', value: 'calendar' }]" label="Wiederholung" />
-          <v-text-field v-if="form.item_type === 'maintenance' && form.recurrence_mode === 'interval'" v-model.number="form.recurrence_days" label="Wiederholung in Tagen" type="number" min="1" max="3650" clearable />
-          <template v-if="form.item_type === 'maintenance' && form.recurrence_mode === 'calendar'">
-            <v-row>
-              <v-col cols="12" sm="6"><v-select v-model="form.calendar_months" :items="[1, 2, 3, 6, 12]" label="Alle … Monate" /></v-col>
-              <v-col cols="12" sm="6"><v-select v-model="form.calendar_month" clearable label="Nur in diesem Monat (optional)" :items="[{ title: 'Januar', value: 1 }, { title: 'Februar', value: 2 }, { title: 'März', value: 3 }, { title: 'April', value: 4 }, { title: 'Mai', value: 5 }, { title: 'Juni', value: 6 }, { title: 'Juli', value: 7 }, { title: 'August', value: 8 }, { title: 'September', value: 9 }, { title: 'Oktober', value: 10 }, { title: 'November', value: 11 }, { title: 'Dezember', value: 12 }]" /></v-col>
-            </v-row>
-            <v-checkbox v-model="form.calendar_last_day" label="Am letzten Kalendertag des Monats" />
-            <v-text-field v-if="!form.calendar_last_day" v-model.number="form.calendar_day" type="number" min="1" max="31" label="Kalendertag" />
-          </template>
+          <v-text-field v-model="form.due_at" label="Erster Termin (optional)" type="date" hint="Ohne Termin wird die nächste Fälligkeit nach der ersten Durchführung berechnet." persistent-hint />
+          <v-select v-if="form.item_type === 'maintenance'" v-model="form.recurrence_mode" :items="[{ title: 'Keine feste Wiederholung', value: 'none' }, { title: 'Wiederkehrend', value: 'interval' }]" label="Wiederholung" />
+          <v-row v-if="form.item_type === 'maintenance' && form.recurrence_mode !== 'none'">
+            <v-col cols="5"><v-text-field v-model.number="form.interval_value" type="number" min="1" max="3650" label="Alle" :error-messages="fieldErrors.recurrence" /></v-col>
+            <v-col cols="7"><v-select v-model="form.interval_unit" :items="[{ title: 'Tage', value: 'days' }, { title: 'Wochen', value: 'weeks' }, { title: 'Monate', value: 'months' }, { title: 'Jahre', value: 'years' }]" label="Einheit" /></v-col>
+          </v-row>
           <v-select v-model="form.priority" :items="[{ title: 'Niedrig', value: 'low' }, { title: 'Normal', value: 'normal' }, { title: 'Hoch', value: 'high' }]" label="Priorität" />
         </v-card-text>
         <v-card-actions><v-spacer /><v-btn @click="dialog = false">Abbrechen</v-btn><v-btn color="primary" :disabled="!form.title.trim()" :loading="saving" @click="save">Speichern</v-btn></v-card-actions>
@@ -573,7 +612,7 @@ onMounted(() => void load())
     <v-dialog v-model="completionDialog" max-width="680">
       <v-card :title="`${completionItem?.title ?? 'Eintrag'} als durchgeführt markieren`" prepend-icon="mdi-check-circle-outline">
         <v-card-text>
-          <v-text-field v-model="completionForm.occurred_at" type="datetime-local" label="Durchgeführt am (leer = jetzt)" />
+          <v-text-field v-model="completionForm.occurred_at" type="date" label="Durchgeführt am (leer = heute)" />
           <v-textarea v-model="completionForm.note" label="Notiz (optional)" rows="3" />
           <v-row><v-col cols="8"><v-text-field v-model.number="completionForm.cost_amount" type="number" min="0" step="0.01" label="Kosten (optional)" /></v-col><v-col cols="4"><v-text-field v-model="completionForm.cost_currency" label="Währung" maxlength="3" /></v-col></v-row>
           <v-row><v-col cols="8"><v-text-field v-model.number="completionForm.reading_value" type="number" label="Mess-/Zählerwert (optional)" /></v-col><v-col cols="4"><v-text-field v-model="completionForm.reading_unit" label="Einheit" placeholder="km, h, kWh …" /></v-col></v-row>
@@ -589,18 +628,13 @@ onMounted(() => void load())
         <v-progress-linear v-if="historyLoading" indeterminate />
         <v-card-text v-if="history">
           <div v-if="historyItem?.subject_name" class="mb-3 text-medium-emphasis">Bezugsobjekt: <strong>{{ historyItem.subject_name }}</strong></div>
-          <v-row class="mb-4">
-            <v-col cols="6" md="3"><v-sheet border rounded class="pa-3"><div class="text-caption">Durchführungen</div><div class="history-metric">{{ history.stats.count }}</div></v-sheet></v-col>
-            <v-col cols="6" md="3"><v-sheet border rounded class="pa-3"><div class="text-caption">Letzter Abstand</div><div class="history-metric">{{ history.stats.last_interval_days == null ? '–' : `${history.stats.last_interval_days} T.` }}</div></v-sheet></v-col>
-            <v-col cols="6" md="3"><v-sheet border rounded class="pa-3"><div class="text-caption">Ø Abstand</div><div class="history-metric">{{ history.stats.average_interval_days == null ? '–' : `${history.stats.average_interval_days} T.` }}</div></v-sheet></v-col>
-            <v-col cols="6" md="3"><v-sheet border rounded class="pa-3"><div class="text-caption">Min. / Max.</div><div class="history-metric small">{{ history.stats.shortest_interval_days ?? '–' }} / {{ history.stats.longest_interval_days ?? '–' }} T.</div></v-sheet></v-col>
-          </v-row>
+          <div class="history-summary mb-4">{{ history.stats.count }} Durchführungen<span v-if="history.stats.average_interval_days != null"> · durchschnittlicher Abstand {{ history.stats.average_interval_days }} Tage</span></div>
 
           <v-timeline v-if="history.entries.length" side="end" density="compact">
             <v-timeline-item v-for="event in history.entries" :key="event.id" dot-color="primary" size="small">
               <div class="d-flex flex-wrap justify-space-between ga-2">
                 <div>
-                  <div class="font-weight-bold">{{ new Date(event.occurred_at).toLocaleString() }}</div>
+                  <div class="font-weight-bold">{{ formatDate(event.occurred_at) }}</div>
                   <div v-if="event.interval_days != null" class="text-medium-emphasis">{{ event.interval_days }} Tage seit der vorherigen Durchführung</div>
                   <div v-if="event.note" class="mt-1">{{ event.note }}</div>
                   <div v-if="event.cost_amount != null" class="text-medium-emphasis">Kosten: {{ event.cost_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} {{ event.cost_currency }}</div>
@@ -629,7 +663,7 @@ onMounted(() => void load())
     <v-dialog v-model="historyEntryDialog" max-width="680">
       <v-card :title="editingHistoryEntry ? 'Historieneintrag bearbeiten' : 'Vergangene Durchführung hinzufügen'" prepend-icon="mdi-history">
         <v-card-text>
-          <v-text-field v-model="historyForm.occurred_at" type="datetime-local" label="Durchgeführt am" />
+          <v-text-field v-model="historyForm.occurred_at" type="date" label="Durchgeführt am" />
           <v-textarea v-model="historyForm.note" label="Notiz (optional)" rows="3" />
           <v-row><v-col cols="8"><v-text-field v-model.number="historyForm.cost_amount" type="number" min="0" step="0.01" label="Kosten (optional)" /></v-col><v-col cols="4"><v-text-field v-model="historyForm.cost_currency" label="Währung" maxlength="3" /></v-col></v-row>
           <v-row><v-col cols="8"><v-text-field v-model.number="historyForm.reading_value" type="number" label="Mess-/Zählerwert (optional)" /></v-col><v-col cols="4"><v-text-field v-model="historyForm.reading_unit" label="Einheit" /></v-col></v-row>
@@ -650,6 +684,5 @@ onMounted(() => void load())
 <style scoped>
 .maintenance-page { max-width: 1500px; }
 .metric { font-size: 2rem; font-weight: 700; }
-.history-metric { font-size: 1.45rem; font-weight: 700; }
-.history-metric.small { font-size: 1.15rem; }
+.history-summary { color: rgb(var(--v-theme-on-surface-variant)); font-size: .95rem; }
 </style>

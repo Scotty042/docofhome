@@ -109,13 +109,14 @@ class WorkItemWrite(BaseModel):
         if (self.target_type is None) != (self.target_id is None):
             raise ValueError("Zieltyp und Ziel-ID müssen gemeinsam angegeben werden")
         if self.subject_id is not None and self.target_id is not None:
-            raise ValueError("Ein Eintrag kann entweder einem Bezugsobjekt oder einem bestehenden Objekt zugeordnet werden")
+            raise ValueError(
+                "Ein Eintrag kann entweder einem Bezugsobjekt oder einem bestehenden Objekt "
+                "zugeordnet werden"
+            )
         if self.recurrence_days is not None and self.recurrence_mode == RecurrenceMode.NONE:
             self.recurrence_mode = RecurrenceMode.INTERVAL
         if self.item_type == WorkItemType.TASK and self.recurrence_mode != RecurrenceMode.NONE:
             raise ValueError("Wiederholungen sind nur für Wartungen zulässig")
-        if self.recurrence_mode != RecurrenceMode.NONE and self.due_at is None:
-            raise ValueError("Wiederkehrende Wartungen benötigen einen Fälligkeitstermin")
         if self.recurrence_mode == RecurrenceMode.INTERVAL:
             if self.recurrence_days is None:
                 raise ValueError("Intervallwiederholungen benötigen eine Anzahl Tage")
@@ -130,8 +131,8 @@ class WorkItemWrite(BaseModel):
         if self.recurrence_mode == RecurrenceMode.CALENDAR:
             if self.recurrence_days is not None:
                 raise ValueError("Kalenderwiederholungen verwenden kein Tagesintervall")
-            if self.calendar_months not in {1, 2, 3, 6, 12}:
-                raise ValueError("Kalenderintervall muss 1, 2, 3, 6 oder 12 Monate betragen")
+            if self.calendar_months is None or not 1 <= self.calendar_months <= 120:
+                raise ValueError("Das Monatsintervall muss zwischen 1 und 120 liegen")
             if (self.calendar_day is None) == (not self.calendar_last_day):
                 raise ValueError("Kalenderwiederholung benötigt Kalendertag oder Monatsende")
         if self.recurrence_mode == RecurrenceMode.NONE:

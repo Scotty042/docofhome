@@ -72,15 +72,11 @@ class WorkItem(SQLModel, table=True):
             name="ck_work_items_recurrence_type",
         ),
         CheckConstraint(
-            "recurrence_days IS NULL OR due_at IS NOT NULL",
-            name="ck_work_items_recurrence_due",
-        ),
-        CheckConstraint(
             "recurrence_mode IN ('none', 'interval', 'calendar')",
             name="ck_work_items_recurrence_mode",
         ),
         CheckConstraint(
-            "calendar_months IS NULL OR calendar_months IN (1, 2, 3, 6, 12)",
+            "calendar_months IS NULL OR (calendar_months >= 1 AND calendar_months <= 120)",
             name="ck_work_items_calendar_months",
         ),
         CheckConstraint(
