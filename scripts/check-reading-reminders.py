@@ -1,4 +1,4 @@
-"""Run dependency-free regression checks for interval-based reading reminders."""
+"""Run dependency-free regression checks for all reading reminder date rules."""
 
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -8,7 +8,10 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.services.consumption_reminders import interval_due_date  # noqa: E402
+from app.services.consumption_reminders import (  # noqa: E402
+    interval_due_date,
+    monthly_reading_window,
+)
 
 
 def main() -> int:
@@ -34,6 +37,33 @@ def main() -> int:
         zone=zone,
     ) == date(2026, 8, 13)
 
+    january = monthly_reading_window(
+        year=2026,
+        month=1,
+        schedule_day=None,
+        last_day=True,
+        reminder_days=[],
+    )
+    february = monthly_reading_window(
+        year=2024,
+        month=2,
+        schedule_day=None,
+        last_day=True,
+        reminder_days=[],
+    )
+    april = monthly_reading_window(
+        year=2026,
+        month=4,
+        schedule_day=None,
+        last_day=True,
+        reminder_days=[12],
+    )
+    assert january.due_date == date(2026, 1, 31)
+    assert january.starts_on == date(2026, 1, 28)
+    assert february.due_date == date(2024, 2, 29)
+    assert april.due_date == date(2026, 4, 30)
+    assert april.starts_on == date(2026, 4, 12)
+
     maintenance_page = (ROOT / "frontend/src/pages/MaintenancePage.vue").read_text(
         encoding="utf-8"
     )
@@ -47,7 +77,7 @@ def main() -> int:
     assert "fallback_interval_days = self.get_settings().reminder_days" in consumption_service
     assert "latest_measured_at=latest.measured_at if latest else None" in consumption_service
 
-    print("Ableseerinnerungen: Intervall-Fallback und sichtbare Wartungskarte geprüft")
+    print("Ableseerinnerungen: Intervall, Monatsfenster und Wartungskarte geprüft")
     return 0
 
 

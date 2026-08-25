@@ -56,7 +56,11 @@ from app.schemas.consumption import (
     ConsumptionWaterRole,
 )
 from app.schemas.home_assistant import HomeAssistantSelectionScope
-from app.services.consumption_reminders import interval_due_date
+from app.services.consumption_reminders import (
+    interval_due_date,
+    monthly_reading_window,
+    shift_month,
+)
 from app.services.home_assistant import (
     HomeAssistantConfigurationError,
     HomeAssistantConnectionError,
@@ -871,16 +875,15 @@ class ConsumptionService:
             )
         return rows
 
-    def reading_reminders(self, *, days_ahead: int = 3) -> list[ConsumptionReadingReminderRead]:
+    def reading_reminders(
+        self, *, days_ahead: int = 3, _today: date | None = None
+    ) -> list[ConsumptionReadingReminderRead]:
         if days_ahead < 0 or days_ahead > 31:
             raise ConsumptionValidationError(
                 "Der Erinnerungshorizont muss zwischen 0 und 31 liegen"
             )
         zone = self._timezone()
-        local_now = datetime.now(zone)
-        today = local_now.date()
-        period_start = datetime(today.year, today.month, 1, tzinfo=zone)
-        period_end = self._add_months(period_start, 1)
+        today = _today or datetime.now(zone).date()
         fallback_interval_days = self.get_settings().reminder_days
         reminders: list[ConsumptionReadingReminderRead] = []
         for meter in self.repository.list_meters():
@@ -888,29 +891,49 @@ class ConsumptionService:
                 meter.reading_schedule_day is not None or meter.reading_schedule_last_day
             )
             if has_monthly_schedule:
-                readings = self.repository.list_readings(
-                    meter_id=meter.id,
-                    start=period_start.astimezone(UTC),
-                    end=period_end.astimezone(UTC),
-                    limit=1,
-                )
-                if readings:
+                try:
+                    configured_days = [
+                        int(value) for value in json.loads(meter.reminder_days_json or "[]")
+                    ]
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    configured_days = []
+                due_date = None
+                # Prefer the oldest still-open occurrence. Looking back one month
+                # preserves an overdue reminder across the month boundary.
+                for offset in (-1, 0):
+                    year, month = shift_month(today.year, today.month, offset)
+                    window = monthly_reading_window(
+                        year=year,
+                        month=month,
+                        schedule_day=meter.reading_schedule_day,
+                        last_day=meter.reading_schedule_last_day,
+                        reminder_days=configured_days,
+                    )
+                    created_at = (
+                        meter.created_at.replace(tzinfo=UTC)
+                        if meter.created_at.tzinfo is None
+                        else meter.created_at
+                    )
+                    created_on = created_at.astimezone(zone).date()
+                    if window.due_date < created_on:
+                        continue
+                    start_local = datetime.combine(window.starts_on, time.min, tzinfo=zone)
+                    end_local = datetime.combine(window.ends_before, time.min, tzinfo=zone)
+                    readings = self.repository.list_readings(
+                        meter_id=meter.id,
+                        start=start_local.astimezone(UTC),
+                        end=end_local.astimezone(UTC),
+                        limit=1,
+                    )
+                    if readings:
+                        continue
+                    configured_visible = window.starts_on <= today
+                    horizon_visible = (window.due_date - today).days <= days_ahead
+                    if configured_visible or horizon_visible:
+                        due_date = window.due_date
+                        break
+                if due_date is None:
                     continue
-                last_day = monthrange(today.year, today.month)[1]
-                configured_days = json.loads(meter.reminder_days_json or "[]")
-                primary_day = (
-                    last_day if meter.reading_schedule_last_day else meter.reading_schedule_day
-                )
-                days = sorted(
-                    {
-                        min(int(day), last_day)
-                        for day in [primary_day, *configured_days]
-                        if day is not None
-                    }
-                )
-                dates = [date(today.year, today.month, day) for day in days]
-                upcoming = [candidate for candidate in dates if candidate >= today]
-                due_date = upcoming[0] if upcoming else dates[-1]
             else:
                 latest = self.repository.latest_reading(meter.id)
                 due_date = interval_due_date(

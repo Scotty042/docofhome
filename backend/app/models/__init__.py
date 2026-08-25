@@ -63,7 +63,7 @@ from app.models.smart_meter import (
     SmartMeterMeasurementPoint,
 )
 from app.models.system_setting import SystemSetting
-from app.models.work import WorkItem, WorkItemEvent
+from app.models.work import WorkItem, WorkItemEvent, WorkItemEventAttachment, WorkSubject
 
 __all__ = [
     "ApplicationSetting",
@@ -118,4 +118,6 @@ __all__ = [
     "WikiPage",
     "WorkItem",
     "WorkItemEvent",
+    "WorkItemEventAttachment",
+    "WorkSubject",
 ]

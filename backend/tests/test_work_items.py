@@ -1,5 +1,7 @@
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
@@ -113,7 +115,7 @@ def test_monthly_meter_task_is_idempotent_and_completed_by_reading(
 ) -> None:
     from app.models.consumption import ConsumptionMeter, ConsumptionReading
 
-    now = datetime.now(UTC)
+    now = datetime.now(ZoneInfo("Europe/Berlin"))
     meter = ConsumptionMeter(
         name="Strombezug Haus",
         meter_type="electricity_grid",
@@ -159,6 +161,7 @@ def test_disabling_monthly_meter_plan_cancels_open_generated_task(
         meter_type="gas",
         unit="m³",
         reading_schedule_last_day=True,
+        reminder_days_json=json.dumps([datetime.now(ZoneInfo("Europe/Berlin")).day]),
     )
     work_session.add(meter)
     work_session.commit()
@@ -181,6 +184,7 @@ def test_reenabling_monthly_plan_reopens_generated_task(work_session: Session) -
         meter_type="water",
         unit="m³",
         reading_schedule_last_day=True,
+        reminder_days_json=json.dumps([datetime.now(ZoneInfo("Europe/Berlin")).day]),
     )
     work_session.add(meter)
     work_session.commit()
@@ -210,6 +214,7 @@ def test_generated_meter_task_cannot_be_changed_manually(work_session: Session) 
         meter_type="electricity_pv",
         unit="kWh",
         reading_schedule_last_day=True,
+        reminder_days_json=json.dumps([datetime.now(ZoneInfo("Europe/Berlin")).day]),
     )
     work_session.add(meter)
     work_session.commit()
@@ -222,3 +227,65 @@ def test_generated_meter_task_cannot_be_changed_manually(work_session: Session) 
         service.cancel(generated.id)
     with pytest.raises(WorkConflictError):
         service.delete(generated.id)
+
+
+def test_work_subject_and_manual_history_statistics(work_session: Session) -> None:
+    from app.schemas.work import WorkHistoryEntryWrite, WorkSubjectType, WorkSubjectWrite
+
+    service = WorkService(work_session)
+    penny = service.create_subject(
+        WorkSubjectWrite(name="Penny", subject_type=WorkSubjectType.ANIMAL)
+    )
+    item = service.create(
+        WorkItemWrite(
+            item_type=WorkItemType.MAINTENANCE,
+            title="Impfung",
+            subject_id=penny.id,
+        )
+    )
+    first = datetime(2025, 2, 3, 10, 0, tzinfo=UTC)
+    second = datetime(2026, 2, 4, 10, 0, tzinfo=UTC)
+    service.add_history(item.id, WorkHistoryEntryWrite(occurred_at=first, note="Erste Impfung"))
+    service.add_history(item.id, WorkHistoryEntryWrite(occurred_at=second, note="Auffrischung"))
+
+    history = service.history(item.id)
+    assert history.stats.count == 2
+    assert history.stats.last_interval_days == 366
+    assert history.stats.average_interval_days == 366
+    assert history.entries[0].interval_days == 366
+    refreshed = service.get(item.id)
+    assert refreshed.subject_name == "Penny"
+    assert refreshed.history_count == 2
+
+
+def test_history_entry_supports_cost_reading_and_database_attachment(work_session: Session) -> None:
+    from app.schemas.work import WorkHistoryEntryWrite
+
+    service = WorkService(work_session)
+    item = service.create(
+        WorkItemWrite(item_type=WorkItemType.MAINTENANCE, title="Filter wechseln")
+    )
+    entry = service.add_history(
+        item.id,
+        WorkHistoryEntryWrite(
+            occurred_at=datetime(2026, 8, 1, 12, 0, tzinfo=UTC),
+            note="Filter ersetzt",
+            cost_amount=24.9,
+            cost_currency="EUR",
+            reading_value=123.0,
+            reading_unit="h",
+        ),
+    )
+    attachment = service.add_attachment(
+        item.id,
+        entry.id,
+        "beleg.pdf",
+        "application/pdf",
+        b"%PDF-test",
+    )
+    _record, content = service.attachment(item.id, entry.id, attachment.id)
+    assert content == b"%PDF-test"
+    loaded = service.history(item.id).entries[0]
+    assert loaded.cost_amount == 24.9
+    assert loaded.reading_value == 123.0
+    assert loaded.attachments[0].file_name == "beleg.pdf"

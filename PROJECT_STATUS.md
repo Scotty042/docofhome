@@ -1,16 +1,17 @@
 # DocOfHome – Projektstatus
 
-Stand: 29. Juli 2026
+Stand: 24. August 2026
 
-Release: 1.7.4.7
+Release: 1.7.4.9
 
-Alembic-Head: `0049`
+Alembic-Head: `0050`
 
-DocOfHome 1.7.4.7 ergänzt die kompakte Schaltschrankdarstellung um eine
-interaktive Verkabelungsanzeige. In der normalen Übersicht werden beim
-Mouse-over nur die direkt angeschlossenen Hauptleitungen eines Geräts gezeigt;
-Klick oder Antippen fixiert die Auswahl. Der vollständige Verkabelungsmodus und
-die Detailansichten mit vor- und nachgelagerten Verbindungen bleiben erhalten.
+DocOfHome 1.7.4.9 erweitert „Wartung & Aufgaben“ um eine vollständige
+Durchführungshistorie. Tätigkeiten können technischen Bestandsobjekten oder neuen
+allgemeinen Bezugsobjekten wie Tieren, Fahrzeugen, Räumen oder Anlagen zugeordnet
+werden. Vergangene Termine sind nachtragbar; Zeitabstände und Intervallstatistiken
+werden automatisch berechnet. Historieneinträge unterstützen Notizen, Kosten,
+Messwerte und DB-basierte Anhänge.
 
 ## Verbindliche Elektro-Logik
 
@@ -64,6 +65,27 @@ erforderlich. Details stehen in `RELEASE_NOTES_1.6.3.md`.
 
 
 
+
+
+## Release 1.7.4.9
+
+- Alembic-Head `0050`;
+- allgemeine Bezugsobjekte für Tätigkeiten und Wartungen;
+- rückwirkend pflegbare Durchführungshistorie;
+- automatische Tagesabstände sowie Durchschnitt, Minimum und Maximum;
+- automatische Historie beim Erledigen;
+- Notizen, Kosten, Mess-/Zählerwerte und Anhänge pro Durchführung;
+- bestehende Asset-/Orts-/Elektro-Verknüpfungen bleiben erhalten.
+
+## Release 1.7.4.8
+
+- Alembic-Head bleibt `0049`;
+- Monatsende berücksichtigt 28, 29, 30 und 31 Tage korrekt;
+- frühe Monatsablesungen schließen keine Monatsend-Aufgabe;
+- gültige und verspätete Ablesungen werden eindeutig einem Ablesefenster zugeordnet;
+- offene Aufgaben bleiben nach Monatswechsel überfällig sichtbar;
+- weitere Erinnerungstage sind konkrete Kalendertage;
+- Reminder-API und automatischer Aufgabengenerator nutzen eine gemeinsame Logik.
 
 ## Release 1.7.4.7
 

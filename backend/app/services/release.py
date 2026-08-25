@@ -63,7 +63,7 @@ from app.models.release import (
     ServiceWorkload,
 )
 from app.models.system_setting import SystemSetting
-from app.models.work import WorkItem, WorkItemEvent
+from app.models.work import WorkItem, WorkItemEvent, WorkSubject
 from app.repositories.asset_engine import AssetRepository
 from app.repositories.network import NetworkRepository
 from app.schemas.asset_engine import AssetWrite
@@ -524,6 +524,7 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("document_links", DocumentLink, True),
     ("wiki_pages", WikiPage, True),
     ("domain_notes", DomainNote, True),
+    ("work_subjects", WorkSubject, True),
     ("work_items", WorkItem, True),
     ("work_item_events", WorkItemEvent, True),
     ("quality_runs", QualityRun, True),
@@ -650,6 +651,9 @@ class PortabilityService:
                     if not isinstance(raw, dict):
                         raise ReleaseValidationError(f"{module}: ungültiger Datensatz")
                     row = cast(dict[str, object], raw)
+                    if module == "work_item_events" and not row.get("occurred_at"):
+                        row = dict(row)
+                        row["occurred_at"] = row.get("created_at")
                     if self._existing(model, row) is not None:
                         conflict_count += 1
                         if strategy == "fail":
@@ -764,6 +768,7 @@ class PortabilityService:
             "meter_id": ConsumptionMeter,
             "parent_meter_id": ConsumptionMeter,
             "work_item_id": WorkItem,
+            "subject_id": WorkSubject,
             "distribution_id": ElectricalDistribution,
             "parent_distribution_id": ElectricalDistribution,
             "circuit_id": ElectricalCircuit,
@@ -866,6 +871,7 @@ class PortabilityService:
             "electrical_circuits": f"/electrical/circuits/{object_id}",
             "consumption_meters": "/consumption",
             "consumption_readings": "/consumption",
+            "work_subjects": "/maintenance",
             "work_items": "/maintenance",
             "wiki_pages": "/wiki",
             "domain_notes": "/wiki",

@@ -30,6 +30,47 @@ class RecurrenceMode(StrEnum):
     CALENDAR = "calendar"
 
 
+class WorkSubjectType(StrEnum):
+    DEVICE = "device"
+    ANIMAL = "animal"
+    VEHICLE = "vehicle"
+    BUILDING = "building"
+    ROOM = "room"
+    INSTALLATION = "installation"
+    GENERAL = "general"
+    OTHER = "other"
+
+
+class WorkSubjectWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    subject_type: WorkSubjectType = WorkSubjectType.GENERAL
+    description: str | None = Field(default=None, max_length=20000)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Der Name darf nicht leer sein")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value.strip()
+
+
+class WorkSubjectRead(WorkSubjectWrite):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    activity_count: int = Field(default=0, ge=0)
+
+
 class WorkItemWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -38,6 +79,7 @@ class WorkItemWrite(BaseModel):
     description: str | None = Field(default=None, max_length=20000)
     target_type: KnowledgeTargetType | None = None
     target_id: UUID | None = None
+    subject_id: UUID | None = None
     due_at: datetime | None = None
     recurrence_days: int | None = Field(default=None, ge=1, le=3650)
     recurrence_mode: RecurrenceMode = RecurrenceMode.NONE
@@ -66,6 +108,8 @@ class WorkItemWrite(BaseModel):
     def validate_target_and_recurrence(self) -> "WorkItemWrite":
         if (self.target_type is None) != (self.target_id is None):
             raise ValueError("Zieltyp und Ziel-ID müssen gemeinsam angegeben werden")
+        if self.subject_id is not None and self.target_id is not None:
+            raise ValueError("Ein Eintrag kann entweder einem Bezugsobjekt oder einem bestehenden Objekt zugeordnet werden")
         if self.recurrence_days is not None and self.recurrence_mode == RecurrenceMode.NONE:
             self.recurrence_mode = RecurrenceMode.INTERVAL
         if self.item_type == WorkItemType.TASK and self.recurrence_mode != RecurrenceMode.NONE:
@@ -108,6 +152,9 @@ class WorkItemRead(BaseModel):
     description: str | None
     target_type: KnowledgeTargetType | None
     target_id: UUID | None
+    subject_id: UUID | None
+    subject_name: str | None
+    subject_type: WorkSubjectType | None
     target_label: str | None
     target_route: str | None
     automation_key: str | None = None
@@ -125,8 +172,21 @@ class WorkItemRead(BaseModel):
     due_status: str | None
     days_remaining: int | None
     completed_at: datetime | None
+    history_count: int = Field(default=0, ge=0)
+    last_performed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class WorkEventAttachmentRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    event_id: UUID
+    file_name: str
+    content_type: str
+    size_bytes: int = Field(ge=0)
+    created_at: datetime
 
 
 class WorkItemEventRead(BaseModel):
@@ -138,6 +198,13 @@ class WorkItemEventRead(BaseModel):
     note: str | None
     due_at_before: datetime | None
     due_at_after: datetime | None
+    occurred_at: datetime
+    cost_amount: float | None
+    cost_currency: str | None
+    reading_value: float | None
+    reading_unit: str | None
+    interval_days: int | None = None
+    attachments: list[WorkEventAttachmentRead] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -145,13 +212,49 @@ class WorkCompletionWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     note: str | None = Field(default=None, max_length=2000)
+    occurred_at: datetime | None = None
+    cost_amount: float | None = Field(default=None, ge=0, le=1_000_000_000)
+    cost_currency: str | None = Field(default="EUR", min_length=3, max_length=3)
+    reading_value: float | None = None
+    reading_unit: str | None = Field(default=None, max_length=30)
 
-    @field_validator("note")
+    @field_validator("note", "reading_unit")
     @classmethod
-    def normalize_note(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None or not value.strip():
             return None
         return value.strip()
+
+    @field_validator("cost_currency")
+    @classmethod
+    def normalize_currency(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value.strip().upper()
+
+
+class WorkHistoryEntryWrite(WorkCompletionWrite):
+    occurred_at: datetime
+
+
+class WorkHistoryStatsRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    count: int = Field(ge=0)
+    last_performed_at: datetime | None
+    previous_performed_at: datetime | None
+    last_interval_days: int | None
+    average_interval_days: float | None
+    shortest_interval_days: int | None
+    longest_interval_days: int | None
+
+
+class WorkHistoryRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: UUID
+    stats: WorkHistoryStatsRead
+    entries: list[WorkItemEventRead]
 
 
 class WorkSummaryRead(BaseModel):

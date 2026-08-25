@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.7.4.9 – 2026-08-24
+
+### Wartungs- und Tätigkeitshistorie
+
+- Vergangene Durchführungen können mit frei wählbarem Datum nachgetragen werden.
+- Das Erledigen einer Aufgabe oder Wartung erzeugt automatisch einen Historieneintrag.
+- Pro Tätigkeit werden letzter und vorheriger Termin, letzter Abstand, Durchschnitt sowie kürzestes und längstes Intervall berechnet.
+- Historieneinträge unterstützen Notizen, Kosten, Mess-/Zählerwerte und Dateianhänge.
+- Historieneinträge und Anhänge können nachträglich bearbeitet beziehungsweise gelöscht werden.
+
+### Bezugsobjekte
+
+- Wartungen sind nicht mehr auf technische Assets angewiesen.
+- Neue Bezugsobjekte unterstützen Geräte, Tiere, Fahrzeuge, Gebäude, Räume, Anlagen/Installationen sowie allgemeine und sonstige Objekte.
+- Tätigkeiten eines Bezugsobjekts lassen sich gemeinsam filtern und aufrufen.
+- Bestehende Verknüpfungen zu Assets, Orten und Elektroobjekten bleiben kompatibel.
+
+### Technik
+
+- Migration `0050` ergänzt `work_subjects`, die Zuordnung `work_items.subject_id`, detaillierte Historienfelder und DB-basierte Anhänge.
+- Anhänge liegen als BLOB in SQLite und werden dadurch von den bestehenden Datenbank-Backups mitgesichert.
+
+## 1.7.4.8 – 2026-08-24
+
+### Zählerablesungen
+
+- Monatsend-Fälligkeiten werden anhand des tatsächlichen letzten Kalendertags berechnet.
+- Eine Ablesung gilt nur innerhalb des zur Fälligkeit gehörenden, nicht überlappenden Ablesefensters.
+- Ablesungen vor dem Fenster schließen Monatsend-Aufgaben nicht mehr.
+- Verspätete Ablesungen nach dem Monatswechsel können die offene Vormonatsaufgabe erledigen.
+- Nicht erledigte Aufgaben bleiben nach Monatsende als überfällig erhalten.
+- Weitere Erinnerungstage werden als konkrete Kalendertage und nicht als Tagesabstände ausgewertet.
+- Reminder-API und automatischer Aufgabengenerator verwenden dieselben Datumshelfer.
+
+### Technik
+
+- Regressionstests für 30/31 Tage, Februar, Schaltjahr, frühe, fristgerechte und verspätete Ablesungen sowie zusätzliche Erinnerungstage.
+- Keine Datenbankmigration; Alembic-Head bleibt `0049`.
+
 ## 1.7.4.7 – 2026-07-29
 
 ### Interaktive Verkabelung

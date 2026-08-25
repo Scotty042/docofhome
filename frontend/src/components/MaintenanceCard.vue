@@ -69,6 +69,7 @@ async function saveItem() {
     description: form.value.description.trim() || null,
     target_type: props.targetType,
     target_id: props.targetId,
+    subject_id: null,
     due_at: toIso(form.value.due_at),
     recurrence_days: form.value.item_type === 'maintenance' ? form.value.recurrence_days : null,
     recurrence_mode: form.value.item_type === 'maintenance' && form.value.recurrence_days ? 'interval' : 'none',
@@ -136,9 +137,20 @@ watch(() => [props.targetType, props.targetId], () => void loadItems())
         <v-list-item-subtitle>
           <span :class="item.overdue ? 'text-error font-weight-bold' : ''">{{ formatDue(item) }}</span>
           <span v-if="item.recurrence_days"> · alle {{ item.recurrence_days }} Tage</span>
+          <div v-if="item.history_count" class="text-medium-emphasis">
+            Zuletzt durchgeführt: {{ item.last_performed_at ? new Date(item.last_performed_at).toLocaleDateString() : '–' }} · {{ item.history_count }} Einträge
+          </div>
           <div v-if="item.description" class="text-truncate">{{ item.description }}</div>
         </v-list-item-subtitle>
         <template #append>
+          <div class="d-flex ga-1">
+          <v-btn
+            icon="mdi-history"
+            variant="text"
+            size="small"
+            aria-label="Historie öffnen"
+            :to="{ path: '/maintenance', query: { history: item.id } }"
+          />
           <v-btn
             v-if="!readOnly"
             icon="mdi-check"
@@ -149,6 +161,7 @@ watch(() => [props.targetType, props.targetId], () => void loadItems())
             aria-label="Eintrag abschließen"
             @click="completeItem(item)"
           />
+          </div>
         </template>
       </v-list-item>
     </v-list>

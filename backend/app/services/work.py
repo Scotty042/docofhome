@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -18,19 +19,27 @@ from app.models.electrical import (
     ElectricalProtectiveDevice,
 )
 from app.models.electrical_circuit import ElectricalCircuit
-from app.models.work import WorkItem, WorkItemEvent
+from app.models.work import WorkItem, WorkItemEvent, WorkItemEventAttachment, WorkSubject
 from app.schemas.knowledge import KnowledgeTargetType
 from app.schemas.work import (
     RecurrenceMode,
     WorkCompletionWrite,
+    WorkEventAttachmentRead,
+    WorkHistoryEntryWrite,
+    WorkHistoryRead,
+    WorkHistoryStatsRead,
     WorkItemEventRead,
     WorkItemRead,
     WorkItemType,
     WorkItemWrite,
     WorkPriority,
     WorkStatus,
+    WorkSubjectRead,
+    WorkSubjectWrite,
+    WorkSubjectType,
     WorkSummaryRead,
 )
+from app.services.consumption_reminders import monthly_reading_window, shift_month
 from app.services.knowledge import KnowledgeValidationError, require_domain_target
 
 
@@ -61,11 +70,14 @@ class WorkService:
         item_type: WorkItemType | None = None,
         target_type: KnowledgeTargetType | None = None,
         target_id: UUID | None = None,
+        subject_id: UUID | None = None,
         include_archived: bool = False,
     ) -> list[WorkItemRead]:
         self._sync_monthly_meter_tasks()
         if (target_type is None) != (target_id is None):
             raise WorkValidationError("Zieltyp und Ziel-ID müssen gemeinsam angegeben werden")
+        if subject_id is not None and target_id is not None:
+            raise WorkValidationError("Bezugsobjekt und bestehendes Ziel können nicht gleichzeitig gefiltert werden")
         statement = select(WorkItem)
         if not include_archived:
             statement = statement.where(WorkItem.deleted_at.is_(None))
@@ -77,6 +89,8 @@ class WorkService:
             statement = statement.where(WorkItem.target_type == target_type.value).where(
                 WorkItem.target_id == target_id
             )
+        if subject_id is not None:
+            statement = statement.where(WorkItem.subject_id == subject_id)
         records = list(self.session.exec(statement).all())
         records.sort(
             key=lambda item: (
@@ -94,12 +108,14 @@ class WorkService:
 
     def create(self, payload: WorkItemWrite) -> WorkItemRead:
         self._validate_target(payload.target_type, payload.target_id)
+        self._validate_subject(payload.subject_id)
         record = WorkItem(
             item_type=payload.item_type.value,
             title=payload.title,
             description=payload.description,
             target_type=payload.target_type.value if payload.target_type else None,
             target_id=payload.target_id,
+            subject_id=payload.subject_id,
             due_at=payload.due_at,
             recurrence_days=payload.recurrence_days,
             recurrence_mode=payload.recurrence_mode.value,
@@ -135,11 +151,14 @@ class WorkService:
             payload.target_id,
             include_deleted=same_target,
         )
+        same_subject = record.subject_id == payload.subject_id
+        self._validate_subject(payload.subject_id, include_deleted=same_subject)
         record.item_type = payload.item_type.value
         record.title = payload.title
         record.description = payload.description
         record.target_type = payload.target_type.value if payload.target_type else None
         record.target_id = payload.target_id
+        record.subject_id = payload.subject_id
         record.due_at = payload.due_at
         record.recurrence_days = payload.recurrence_days
         record.recurrence_mode = payload.recurrence_mode.value
@@ -162,6 +181,7 @@ class WorkService:
         if record.status != WorkStatus.OPEN.value:
             raise WorkConflictError("Nur offene Einträge können abgeschlossen werden")
         now = datetime.now(UTC)
+        performed_at = self._aware(payload.occurred_at) if payload.occurred_at else now
         due_before = record.due_at
         due_after: datetime | None = None
         if (
@@ -169,7 +189,7 @@ class WorkService:
             and record.recurrence_mode == RecurrenceMode.INTERVAL.value
             and record.recurrence_days
         ):
-            base = self._aware(record.due_at) if record.due_at else now
+            base = performed_at
             due_after = base + timedelta(days=record.recurrence_days)
             while due_after <= now:
                 due_after += timedelta(days=record.recurrence_days)
@@ -179,7 +199,7 @@ class WorkService:
             record.item_type == WorkItemType.MAINTENANCE.value
             and record.recurrence_mode == RecurrenceMode.CALENDAR.value
         ):
-            due_after = self._next_calendar_due(record, now)
+            due_after = self._next_calendar_due(record, performed_at)
             record.due_at = due_after
             record.completed_at = now
         else:
@@ -192,6 +212,11 @@ class WorkService:
             note=payload.note,
             due_at_before=due_before,
             due_at_after=due_after,
+            occurred_at=performed_at,
+            cost_amount=payload.cost_amount,
+            cost_currency=payload.cost_currency if payload.cost_amount is not None else None,
+            reading_value=payload.reading_value,
+            reading_unit=payload.reading_unit if payload.reading_value is not None else None,
         )
         self.session.add(record)
         self.session.add(event)
@@ -242,20 +267,190 @@ class WorkService:
         records = self.session.exec(
             select(WorkItemEvent)
             .where(WorkItemEvent.work_item_id == item_id)
-            .order_by(WorkItemEvent.created_at.desc())
+            .order_by(WorkItemEvent.occurred_at.desc(), WorkItemEvent.created_at.desc())
         ).all()
-        return [
-            WorkItemEventRead(
-                id=event.id,
-                work_item_id=event.work_item_id,
-                event_type=event.event_type,
-                note=event.note,
-                due_at_before=self._aware(event.due_at_before) if event.due_at_before else None,
-                due_at_after=self._aware(event.due_at_after) if event.due_at_after else None,
-                created_at=self._aware(event.created_at),
-            )
-            for event in records
+        completed = [event for event in records if event.event_type == "completed"]
+        interval_by_id = self._interval_map(completed)
+        return [self._event_read(event, interval_by_id.get(event.id)) for event in records]
+
+    def history(self, item_id: UUID) -> WorkHistoryRead:
+        self._require_item(item_id)
+        events = list(self.session.exec(
+            select(WorkItemEvent)
+            .where(WorkItemEvent.work_item_id == item_id)
+            .where(WorkItemEvent.event_type == "completed")
+            .order_by(WorkItemEvent.occurred_at.desc(), WorkItemEvent.created_at.desc())
+        ).all())
+        interval_by_id = self._interval_map(events)
+        ordered_asc = sorted(events, key=lambda event: self._aware(event.occurred_at))
+        intervals = [
+            (self._aware(current.occurred_at).date() - self._aware(previous.occurred_at).date()).days
+            for previous, current in zip(ordered_asc, ordered_asc[1:])
         ]
+        stats = WorkHistoryStatsRead(
+            count=len(events),
+            last_performed_at=self._aware(events[0].occurred_at) if events else None,
+            previous_performed_at=self._aware(events[1].occurred_at) if len(events) > 1 else None,
+            last_interval_days=interval_by_id.get(events[0].id) if events else None,
+            average_interval_days=(round(sum(intervals) / len(intervals), 1) if intervals else None),
+            shortest_interval_days=min(intervals) if intervals else None,
+            longest_interval_days=max(intervals) if intervals else None,
+        )
+        return WorkHistoryRead(
+            item_id=item_id,
+            stats=stats,
+            entries=[self._event_read(event, interval_by_id.get(event.id)) for event in events],
+        )
+
+    def add_history(self, item_id: UUID, payload: WorkHistoryEntryWrite) -> WorkItemEventRead:
+        record = self._require_item(item_id)
+        self._require_user_managed(record)
+        event = WorkItemEvent(
+            work_item_id=item_id,
+            event_type="completed",
+            note=payload.note,
+            occurred_at=self._aware(payload.occurred_at),
+            cost_amount=payload.cost_amount,
+            cost_currency=payload.cost_currency if payload.cost_amount is not None else None,
+            reading_value=payload.reading_value,
+            reading_unit=payload.reading_unit if payload.reading_value is not None else None,
+        )
+        self.session.add(event)
+        self.session.commit()
+        self.session.refresh(event)
+        return self._event_read(event, self._interval_for_event(event))
+
+    def update_history(
+        self, item_id: UUID, event_id: UUID, payload: WorkHistoryEntryWrite
+    ) -> WorkItemEventRead:
+        record = self._require_item(item_id)
+        self._require_user_managed(record)
+        event = self._require_history_event(item_id, event_id)
+        event.note = payload.note
+        event.occurred_at = self._aware(payload.occurred_at)
+        event.cost_amount = payload.cost_amount
+        event.cost_currency = payload.cost_currency if payload.cost_amount is not None else None
+        event.reading_value = payload.reading_value
+        event.reading_unit = payload.reading_unit if payload.reading_value is not None else None
+        self.session.add(event)
+        self.session.commit()
+        self.session.refresh(event)
+        return self._event_read(event, self._interval_for_event(event))
+
+    def delete_history(self, item_id: UUID, event_id: UUID) -> None:
+        record = self._require_item(item_id)
+        self._require_user_managed(record)
+        event = self._require_history_event(item_id, event_id)
+        attachments = self.session.exec(
+            select(WorkItemEventAttachment).where(WorkItemEventAttachment.event_id == event.id)
+        ).all()
+        for attachment in attachments:
+            self.session.delete(attachment)
+        self.session.delete(event)
+        self.session.commit()
+
+    def add_attachment(
+        self, item_id: UUID, event_id: UUID, file_name: str, content_type: str, content: bytes
+    ) -> WorkEventAttachmentRead:
+        record = self._require_item(item_id)
+        self._require_user_managed(record)
+        event = self._require_history_event(item_id, event_id)
+        if not content or len(content) > 20 * 1024 * 1024:
+            raise WorkValidationError("Anhang muss zwischen 1 Byte und 20 MB groß sein")
+        safe_name = Path(file_name).name.strip()
+        if not safe_name or safe_name in {".", ".."}:
+            raise WorkValidationError("Ungültiger Dateiname")
+        normalized_type = (content_type or "application/octet-stream").strip()[:120]
+        attachment = WorkItemEventAttachment(
+            event_id=event.id,
+            file_name=safe_name,
+            content_type=normalized_type,
+            size_bytes=len(content),
+            content=content,
+        )
+        self.session.add(attachment)
+        self.session.commit()
+        self.session.refresh(attachment)
+        return self._attachment_read(attachment)
+
+    def attachment(
+        self, item_id: UUID, event_id: UUID, attachment_id: UUID
+    ) -> tuple[WorkItemEventAttachment, bytes]:
+        self._require_item(item_id)
+        event = self._require_history_event(item_id, event_id)
+        attachment = self.session.get(WorkItemEventAttachment, attachment_id)
+        if attachment is None or attachment.event_id != event.id:
+            raise WorkNotFoundError("Anhang wurde nicht gefunden")
+        return attachment, attachment.content
+
+    def delete_attachment(self, item_id: UUID, event_id: UUID, attachment_id: UUID) -> None:
+        record = self._require_item(item_id)
+        self._require_user_managed(record)
+        event = self._require_history_event(item_id, event_id)
+        attachment = self.session.get(WorkItemEventAttachment, attachment_id)
+        if attachment is None or attachment.event_id != event.id:
+            raise WorkNotFoundError("Anhang wurde nicht gefunden")
+        self.session.delete(attachment)
+        self.session.commit()
+
+    def list_subjects(self) -> list[WorkSubjectRead]:
+        subjects = list(self.session.exec(
+            select(WorkSubject).where(WorkSubject.deleted_at.is_(None)).order_by(WorkSubject.name)
+        ).all())
+        return [self._subject_read(subject) for subject in subjects]
+
+    def create_subject(self, payload: WorkSubjectWrite) -> WorkSubjectRead:
+        existing = self.session.exec(
+            select(WorkSubject)
+            .where(WorkSubject.deleted_at.is_(None))
+            .where(WorkSubject.name == payload.name)
+            .where(WorkSubject.subject_type == payload.subject_type.value)
+        ).first()
+        if existing is not None:
+            raise WorkConflictError("Ein Bezugsobjekt mit diesem Namen und Typ existiert bereits")
+        subject = WorkSubject(
+            name=payload.name,
+            subject_type=payload.subject_type.value,
+            description=payload.description,
+        )
+        self.session.add(subject)
+        self.session.commit()
+        self.session.refresh(subject)
+        return self._subject_read(subject)
+
+    def update_subject(self, subject_id: UUID, payload: WorkSubjectWrite) -> WorkSubjectRead:
+        subject = self._require_subject(subject_id)
+        duplicate = self.session.exec(
+            select(WorkSubject)
+            .where(WorkSubject.deleted_at.is_(None))
+            .where(WorkSubject.id != subject_id)
+            .where(WorkSubject.name == payload.name)
+            .where(WorkSubject.subject_type == payload.subject_type.value)
+        ).first()
+        if duplicate is not None:
+            raise WorkConflictError("Ein Bezugsobjekt mit diesem Namen und Typ existiert bereits")
+        subject.name = payload.name
+        subject.subject_type = payload.subject_type.value
+        subject.description = payload.description
+        subject.updated_at = datetime.now(UTC)
+        self.session.add(subject)
+        self.session.commit()
+        self.session.refresh(subject)
+        return self._subject_read(subject)
+
+    def delete_subject(self, subject_id: UUID) -> None:
+        subject = self._require_subject(subject_id)
+        active_item = self.session.exec(
+            select(WorkItem)
+            .where(WorkItem.subject_id == subject_id)
+            .where(WorkItem.deleted_at.is_(None))
+        ).first()
+        if active_item is not None:
+            raise WorkConflictError("Bezugsobjekt wird noch von Aufgaben oder Wartungen verwendet")
+        subject.deleted_at = datetime.now(UTC)
+        subject.updated_at = subject.deleted_at
+        self.session.add(subject)
+        self.session.commit()
 
     def summary(self) -> WorkSummaryRead:
         self._sync_monthly_meter_tasks()
@@ -313,24 +508,23 @@ class WorkService:
         except (ValueError, TypeError):
             return None
 
-    def _sync_monthly_meter_tasks(self) -> None:
+    def _sync_monthly_meter_tasks(self, *, _today: date | None = None) -> None:
         """Create exactly one task per active monthly meter plan and month.
 
-        Repeated calls are idempotent through ``automation_key``. A reading in the
-        planned month completes the generated task automatically; disabling a plan
-        cancels an open generated task for the current month.
+        Repeated calls are idempotent through ``automation_key``. The shared
+        monthly reading window decides both when a task appears and which reading
+        completes it. Open tasks from the previous month remain active until a
+        valid (possibly late) reading is stored.
         """
 
         zone = self._timezone()
-        now = datetime.now(UTC)
-        today = now.astimezone(zone).date()
-        period_start_local = datetime(today.year, today.month, 1, tzinfo=zone)
-        if today.month == 12:
-            period_end_local = datetime(today.year + 1, 1, 1, tzinfo=zone)
-        else:
-            period_end_local = datetime(today.year, today.month + 1, 1, tzinfo=zone)
-        period_key = f"{today.year:04d}-{today.month:02d}"
-        prefix = f"meter-reading:"
+        now = (
+            datetime.now(UTC)
+            if _today is None
+            else datetime.combine(_today, time(hour=12), tzinfo=zone).astimezone(UTC)
+        )
+        today = _today or now.astimezone(zone).date()
+        prefix = "meter-reading:"
         existing = {
             item.automation_key: item
             for item in self.session.exec(
@@ -348,68 +542,98 @@ class WorkService:
         for meter in meters:
             if meter.reading_schedule_day is None and not meter.reading_schedule_last_day:
                 continue
-            key = f"meter-reading:{meter.id}:{period_key}"
-            active_keys.add(key)
-            record = existing.get(key)
-            reading = self.session.exec(
-                select(ConsumptionReading).where(
-                    ConsumptionReading.meter_id == meter.id,
-                    ConsumptionReading.measured_at >= period_start_local.astimezone(UTC),
-                    ConsumptionReading.measured_at < period_end_local.astimezone(UTC),
-                    col(ConsumptionReading.deleted_at).is_(None),
-                )
-            ).first()
-            if reading is not None:
-                if record is not None and record.status == WorkStatus.OPEN.value:
-                    record.status = WorkStatus.COMPLETED.value
-                    record.completed_at = now
-                    record.updated_at = now
-                    self.session.add(record)
-                    self.session.add(
-                        WorkItemEvent(
-                            work_item_id=record.id,
-                            event_type="completed",
-                            note="Automatisch durch gespeicherte Zählerablesung erledigt.",
-                            due_at_before=record.due_at,
-                        )
-                    )
-                    changed = True
-                continue
-            maximum = monthrange(today.year, today.month)[1]
-            due_day = maximum if meter.reading_schedule_last_day else min(
-                meter.reading_schedule_day or maximum, maximum
-            )
-            due_date = date(today.year, today.month, due_day)
-            due_at = datetime.combine(due_date, time(hour=12), tzinfo=zone).astimezone(UTC)
-            reminder_days = []
             try:
                 reminder_days = [
-                    max(0, int(value))
-                    for value in json.loads(meter.reminder_days_json or "[]")
+                    int(value) for value in json.loads(meter.reminder_days_json or "[]")
                 ]
             except (TypeError, ValueError, json.JSONDecodeError):
                 reminder_days = []
-            lead_days = max(reminder_days or [3])
-            if today < due_date - timedelta(days=lead_days) and record is None:
-                active_keys.discard(key)
-                continue
-            if record is None:
-                record = WorkItem(
-                    item_type=WorkItemType.TASK.value,
-                    title=f"Zähler ablesen: {meter.name}",
-                    description=(
-                        f"Monatliche Ablesung für {meter.name}. "
-                        "Die Aufgabe wird nach einer gespeicherten Ablesung automatisch erledigt."
-                    ),
-                    due_at=due_at,
-                    recurrence_mode=RecurrenceMode.NONE.value,
-                    priority=WorkPriority.NORMAL.value,
-                    automation_key=key,
+
+            periods = {shift_month(today.year, today.month, offset) for offset in (-1, 0)}
+            for key, record in existing.items():
+                if (
+                    self._automation_meter_id(key) != meter.id
+                    or record.status != WorkStatus.OPEN.value
+                ):
+                    continue
+                try:
+                    raw_period = key.rsplit(":", 1)[1]
+                    year, month = (int(part) for part in raw_period.split("-", 1))
+                    periods.add((year, month))
+                except (ValueError, IndexError):
+                    continue
+
+            created_at = (
+                meter.created_at.replace(tzinfo=UTC)
+                if meter.created_at.tzinfo is None
+                else meter.created_at
+            )
+            created_on = created_at.astimezone(zone).date()
+            for year, month in sorted(periods):
+                window = monthly_reading_window(
+                    year=year,
+                    month=month,
+                    schedule_day=meter.reading_schedule_day,
+                    last_day=meter.reading_schedule_last_day,
+                    reminder_days=reminder_days,
                 )
-                self.session.add(record)
-                existing[key] = record
-                changed = True
-            else:
+                if window.due_date < created_on:
+                    continue
+                key = f"meter-reading:{meter.id}:{year:04d}-{month:02d}"
+                record = existing.get(key)
+                active_keys.add(key)
+                start_local = datetime.combine(window.starts_on, time.min, tzinfo=zone)
+                end_local = datetime.combine(window.ends_before, time.min, tzinfo=zone)
+                reading = self.session.exec(
+                    select(ConsumptionReading).where(
+                        ConsumptionReading.meter_id == meter.id,
+                        ConsumptionReading.measured_at >= start_local.astimezone(UTC),
+                        ConsumptionReading.measured_at < end_local.astimezone(UTC),
+                        col(ConsumptionReading.deleted_at).is_(None),
+                    )
+                ).first()
+                if reading is not None:
+                    if record is not None and record.status == WorkStatus.OPEN.value:
+                        record.status = WorkStatus.COMPLETED.value
+                        record.completed_at = now
+                        record.updated_at = now
+                        self.session.add(record)
+                        self.session.add(
+                            WorkItemEvent(
+                                work_item_id=record.id,
+                                event_type="completed",
+                                note="Automatisch durch gespeicherte Zählerablesung erledigt.",
+                                due_at_before=record.due_at,
+                            )
+                        )
+                        changed = True
+                    continue
+                if today < window.starts_on and record is None:
+                    active_keys.discard(key)
+                    continue
+
+                due_at = datetime.combine(
+                    window.due_date, time(hour=12), tzinfo=zone
+                ).astimezone(UTC)
+                if record is None:
+                    record = WorkItem(
+                        item_type=WorkItemType.TASK.value,
+                        title=f"Zähler ablesen: {meter.name}",
+                        description=(
+                            f"Monatliche Ablesung für {meter.name}. "
+                            "Die Aufgabe wird nur durch eine Ablesung im gültigen "
+                            "Ablesefenster automatisch erledigt."
+                        ),
+                        due_at=due_at,
+                        recurrence_mode=RecurrenceMode.NONE.value,
+                        priority=WorkPriority.NORMAL.value,
+                        automation_key=key,
+                    )
+                    self.session.add(record)
+                    existing[key] = record
+                    changed = True
+                    continue
+
                 expected_title = f"Zähler ablesen: {meter.name}"
                 record_changed = False
                 if record.status == WorkStatus.CANCELLED.value:
@@ -435,7 +659,7 @@ class WorkService:
                     changed = True
 
         for key, record in existing.items():
-            if not key.endswith(f":{period_key}") or key in active_keys:
+            if key in active_keys:
                 continue
             if record.status == WorkStatus.OPEN.value:
                 record.status = WorkStatus.CANCELLED.value
@@ -458,6 +682,92 @@ class WorkService:
                 # partial unique index makes the operation idempotent at database
                 # level; a retry on the next read will return the winning row.
                 self.session.rollback()
+
+    def _validate_subject(self, subject_id: UUID | None, *, include_deleted: bool = False) -> None:
+        if subject_id is None:
+            return
+        subject = self.session.get(WorkSubject, subject_id)
+        if subject is None or (subject.deleted_at is not None and not include_deleted):
+            raise WorkValidationError("Bezugsobjekt wurde nicht gefunden")
+
+    def _require_subject(self, subject_id: UUID) -> WorkSubject:
+        subject = self.session.get(WorkSubject, subject_id)
+        if subject is None or subject.deleted_at is not None:
+            raise WorkNotFoundError("Bezugsobjekt wurde nicht gefunden")
+        return subject
+
+    def _subject_read(self, subject: WorkSubject) -> WorkSubjectRead:
+        activity_count = len(self.session.exec(
+            select(WorkItem)
+            .where(WorkItem.subject_id == subject.id)
+            .where(WorkItem.deleted_at.is_(None))
+        ).all())
+        return WorkSubjectRead(
+            id=subject.id,
+            name=subject.name,
+            subject_type=WorkSubjectType(subject.subject_type),
+            description=subject.description,
+            created_at=self._aware(subject.created_at),
+            updated_at=self._aware(subject.updated_at),
+            activity_count=activity_count,
+        )
+
+    def _require_history_event(self, item_id: UUID, event_id: UUID) -> WorkItemEvent:
+        event = self.session.get(WorkItemEvent, event_id)
+        if event is None or event.work_item_id != item_id or event.event_type != "completed":
+            raise WorkNotFoundError("Historieneintrag wurde nicht gefunden")
+        return event
+
+    def _event_read(self, event: WorkItemEvent, interval_days: int | None = None) -> WorkItemEventRead:
+        attachments = self.session.exec(
+            select(WorkItemEventAttachment)
+            .where(WorkItemEventAttachment.event_id == event.id)
+            .order_by(WorkItemEventAttachment.created_at)
+        ).all()
+        return WorkItemEventRead(
+            id=event.id,
+            work_item_id=event.work_item_id,
+            event_type=event.event_type,
+            note=event.note,
+            due_at_before=self._aware(event.due_at_before) if event.due_at_before else None,
+            due_at_after=self._aware(event.due_at_after) if event.due_at_after else None,
+            occurred_at=self._aware(event.occurred_at),
+            cost_amount=event.cost_amount,
+            cost_currency=event.cost_currency,
+            reading_value=event.reading_value,
+            reading_unit=event.reading_unit,
+            interval_days=interval_days,
+            attachments=[self._attachment_read(attachment) for attachment in attachments],
+            created_at=self._aware(event.created_at),
+        )
+
+    def _attachment_read(self, attachment: WorkItemEventAttachment) -> WorkEventAttachmentRead:
+        return WorkEventAttachmentRead(
+            id=attachment.id,
+            event_id=attachment.event_id,
+            file_name=attachment.file_name,
+            content_type=attachment.content_type,
+            size_bytes=attachment.size_bytes,
+            created_at=self._aware(attachment.created_at),
+        )
+
+    def _interval_map(self, events: list[WorkItemEvent]) -> dict[UUID, int]:
+        ordered = sorted(events, key=lambda event: self._aware(event.occurred_at))
+        result: dict[UUID, int] = {}
+        for previous, current in zip(ordered, ordered[1:]):
+            result[current.id] = (
+                self._aware(current.occurred_at).date()
+                - self._aware(previous.occurred_at).date()
+            ).days
+        return result
+
+    def _interval_for_event(self, event: WorkItemEvent) -> int | None:
+        events = list(self.session.exec(
+            select(WorkItemEvent)
+            .where(WorkItemEvent.work_item_id == event.work_item_id)
+            .where(WorkItemEvent.event_type == "completed")
+        ).all())
+        return self._interval_map(events).get(event.id)
 
     def _validate_target(
         self,
@@ -496,6 +806,16 @@ class WorkService:
     def _read(self, record: WorkItem) -> WorkItemRead:
         target_type = KnowledgeTargetType(record.target_type) if record.target_type else None
         target_label, target_route = self._target_presentation(target_type, record.target_id)
+        subject = self.session.get(WorkSubject, record.subject_id) if record.subject_id else None
+        if subject is not None:
+            target_label = subject.name
+            target_route = f"/maintenance?subject={subject.id}"
+        completed_events = list(self.session.exec(
+            select(WorkItemEvent)
+            .where(WorkItemEvent.work_item_id == record.id)
+            .where(WorkItemEvent.event_type == "completed")
+            .order_by(WorkItemEvent.occurred_at.desc())
+        ).all())
         if record.automation_key and record.automation_key.startswith("meter-reading:"):
             meter_id = self._automation_meter_id(record.automation_key)
             meter = self.session.get(ConsumptionMeter, meter_id) if meter_id else None
@@ -518,6 +838,9 @@ class WorkService:
             description=record.description,
             target_type=target_type,
             target_id=record.target_id,
+            subject_id=record.subject_id,
+            subject_name=subject.name if subject else None,
+            subject_type=WorkSubjectType(subject.subject_type) if subject else None,
             target_label=target_label,
             target_route=target_route,
             automation_key=record.automation_key,
@@ -539,6 +862,8 @@ class WorkService:
             due_status=due_status,
             days_remaining=days_remaining,
             completed_at=self._aware(record.completed_at) if record.completed_at else None,
+            history_count=len(completed_events),
+            last_performed_at=(self._aware(completed_events[0].occurred_at) if completed_events else None),
             created_at=self._aware(record.created_at),
             updated_at=self._aware(record.updated_at),
         )

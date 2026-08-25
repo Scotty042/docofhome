@@ -1,11 +1,32 @@
 # DocOfHome
 
-DocOfHome 1.7.4.7 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.4.9 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.4.9
+
+- Wartungen und Tätigkeiten besitzen eine echte Durchführungshistorie mit frei nachtragbaren vergangenen Terminen;
+- Abstände zwischen Durchführungen werden automatisch in Tagen berechnet, inklusive Durchschnitt sowie kürzestem und längstem Intervall;
+- „Als durchgeführt markieren“ erzeugt automatisch einen Historieneintrag;
+- Historieneinträge können Notiz, Kosten, Mess-/Zählerwert und Dateianhänge enthalten und nachträglich bearbeitet oder gelöscht werden;
+- neue **Bezugsobjekte** lösen Wartungen von der reinen Asset-Logik: Geräte, Tiere, Fahrzeuge, Gebäude, Räume, Anlagen oder allgemeine Objekte können unabhängig vom technischen Inventar dokumentiert werden;
+- dadurch kann beispielsweise `Penny → Impfung` oder `Kühlschrank → Filter wechseln` mit jeweils eigener Historie geführt werden;
+- bestehende Asset-, Raum- und Elektro-Verknüpfungen bleiben kompatibel;
+- Migration `0050` ergänzt Bezugsobjekte, Historienmetadaten und DB-basierte Anhänge.
+
+## Neu in 1.7.4.8
+
+- Monatsend-Ablesungen werden exakt am letzten Kalendertag fällig;
+- Ablesungen vor dem gültigen Erinnerungsfenster erledigen die Aufgabe nicht mehr;
+- verspätete Ablesungen können eine offene Aufgabe des Vormonats korrekt schließen;
+- überfällige Monatsaufgaben bleiben über den Monatswechsel hinweg sichtbar;
+- weitere Erinnerungstage werden als konkrete Kalendertage interpretiert;
+- API und automatische Aufgaben verwenden dieselbe Berechnungslogik;
+- Alembic-Head bleibt `0049`; es ist keine neue Datenbankmigration erforderlich.
 
 ## Neu in 1.7.4.7
 
