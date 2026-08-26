@@ -1,7 +1,7 @@
 export type IntegrationKind = 'home_assistant' | 'immich' | 'nextcloud' | 'fritzbox'
 export type Language = 'de' | 'en'
 export type ThemePreference = 'dark' | 'light'
-export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality'
+export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality' | 'cookbook'
 
 export type McpPermission = 'read' | 'write' | 'admin'
 
@@ -72,6 +72,7 @@ export interface ConfigurationRead {
   product_image_source_wikimedia_enabled: boolean
   product_image_source_duckduckgo_enabled: boolean
   enabled_modules?: ModuleKey[]
+  main_menu_modules?: ModuleKey[]
   setup_completed_at: string
   integrations: IntegrationRead[]
 }
@@ -85,6 +86,7 @@ export interface ConfigurationWrite {
   product_image_source_wikimedia_enabled: boolean
   product_image_source_duckduckgo_enabled: boolean
   enabled_modules?: ModuleKey[]
+  main_menu_modules?: ModuleKey[]
   integrations: IntegrationWrite[]
 }
 
@@ -105,7 +107,8 @@ export const moduleKeys: ModuleKey[] = [
   'consumption',
   'wiki',
   'maintenance',
-  'quality'
+  'quality',
+  'cookbook'
 ]
 
 
@@ -119,6 +122,7 @@ export function createDefaultConfiguration(): ConfigurationWrite {
     product_image_source_wikimedia_enabled: true,
     product_image_source_duckduckgo_enabled: true,
     enabled_modules: [...moduleKeys],
+    main_menu_modules: [...moduleKeys],
     integrations: integrationKinds.map((kind) => ({
       kind,
       enabled: false,
@@ -141,6 +145,7 @@ export function editableConfiguration(configuration: ConfigurationRead): Configu
     product_image_source_wikimedia_enabled: configuration.product_image_source_wikimedia_enabled,
     product_image_source_duckduckgo_enabled: configuration.product_image_source_duckduckgo_enabled,
     enabled_modules: [...(configuration.enabled_modules ?? moduleKeys)],
+    main_menu_modules: [...(configuration.main_menu_modules ?? configuration.enabled_modules ?? moduleKeys)],
     integrations: integrationKinds.map((kind) => {
       const stored = configuration.integrations.find((integration) => integration.kind === kind)
       return {

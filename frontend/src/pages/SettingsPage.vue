@@ -315,7 +315,7 @@ async function testIntegration(kind: IntegrationKind) {
         </v-card-text>
       </v-card>
 
-      <ModuleSettingsCard v-model="form.enabled_modules" class="mb-5" />
+      <ModuleSettingsCard v-model="form.enabled_modules" v-model:main-menu-value="form.main_menu_modules" class="mb-5" />
 
       <h2 class="text-h5 mb-1">Integrationen</h2>
       <p class="text-medium-emphasis mb-4">
@@ -502,6 +502,8 @@ async function testIntegration(kind: IntegrationKind) {
             Stellt DocOfHome über den integrierten MCP-Endpunkt für ChatGPT und andere MCP-Clients bereit.
             Der Zugriff ist immer durch einen eigenen Bearer-Token geschützt.
           </p>
+          <v-btn to="/wiki/handbuch#begriff-mcp" prepend-icon="mdi-book-open-page-variant"
+            variant="tonal" color="primary" class="mb-4">MCP-Dokumentation im Handbuch öffnen</v-btn>
 
           <v-alert
             v-if="mcpForm.enabled && !mcpTokenConfigured"

@@ -355,6 +355,43 @@ export const handbookSections: HandbookSection[] = [
       { id: 'release', term: 'Release', category: 'operations', summary: 'Geprüfter, dokumentierter und verpackter Softwarestand.', details: 'Ein Release enthält Quellstand, Versionsinformationen, Release Notes, Prüfsumme, Manifest und einen ehrlichen Validierungsbericht. Nicht ausgeführte Tests dürfen nicht als bestanden gelten.', related: ['Version', 'Logs', 'Healthcheck'] },
       { id: 'logs', term: 'Logs', category: 'operations', summary: 'Zeitlich geordnete Laufzeitmeldungen von Anwendung und Containern.', details: 'Logs helfen bei Fehleranalyse und Healthchecks. Vor einer Weitergabe müssen Zugangsdaten, Tokens und private Inhalte ausgeschlossen werden.', related: ['Healthcheck', 'Container'] },
       { id: 'healthcheck', term: 'Healthcheck', category: 'operations', summary: 'Automatische Prüfung, ob der Dienst grundsätzlich betriebsbereit ist.', details: 'Ein Healthcheck bestätigt Erreichbarkeit und Basisfunktion, ersetzt aber keine fachliche Prüfung von Navigation, Suche, Datenzugriff und Backup.', related: ['Container', 'Logs', 'Release'] }
+      ,{ id: 'mcp', term: 'MCP-Zugriff und SWAG', aliases: ['ChatGPT', 'Model Context Protocol', 'docofhome.subdomain.conf'], category: 'operations', summary: 'Sicherer KI-Zugriff auf fachlich begrenzte DocOfHome-Werkzeuge.', details: `MCP wird unter Einstellungen → Integrationen → ChatGPT / MCP aktiviert. Dort Token erzeugen, Berechtigung (Lesen, Lesen & Schreiben oder Vollzugriff) wählen und die öffentliche, exakt auf /mcp endende Adresse speichern. Der Bearer-Token wird nur einmal angezeigt; DocOfHome speichert seinen SHA-256-Hash.
+
+Für SWAG heißt die Datei docofhome.subdomain.conf. DNS und server_name müssen zu docofhome.<domain> passen. SWAG und DocOfHome müssen im gemeinsamen externen Docker-Netzwerk swag_proxy liegen. Ein reales Upstream-Beispiel ist scotty042_docofhome:8000. Der Host-Port 8088 bildet nur Host → Container ab und wird nicht für Container-zu-Container-Kommunikation verwendet.
+
+Der vHost erlaubt ausschließlich location = /mcp und location ^~ /mcp/; location / liefert 404. In beiden MCP-Locations werden /config/nginx/proxy.conf und /config/nginx/resolver.conf eingebunden, der Upstream auf http://scotty042_docofhome:8000 gesetzt sowie proxy_buffering off und proxy_request_buffering off verwendet. Keine eigenen proxy_read_timeout- oder proxy_send_timeout-Direktiven ergänzen: proxy.conf definiert diese bereits und doppelte Direktiven verhindern den Nginx-Reload.
+
+Vollständige Konfiguration:
+server {
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  server_name docofhome.<domain>;
+  include /config/nginx/ssl.conf;
+  client_max_body_size 0;
+  location = /mcp {
+    include /config/nginx/proxy.conf;
+    include /config/nginx/resolver.conf;
+    set $upstream_app scotty042_docofhome;
+    set $upstream_port 8000;
+    set $upstream_proto http;
+    proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
+  location ^~ /mcp/ {
+    include /config/nginx/proxy.conf;
+    include /config/nginx/resolver.conf;
+    set $upstream_app scotty042_docofhome;
+    set $upstream_port 8000;
+    set $upstream_proto http;
+    proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    proxy_buffering off;
+    proxy_request_buffering off;
+  }
+  location / { return 404; }
+}
+
+Vor Freigabe: docker exec -it linuxserver_swag nginx -t, danach Nginx neu laden und aus SWAG http://scotty042_docofhome:8000/mcp testen. Je nach MCP-Handshake ist eine 4xx-Antwort auf einen einfachen GET zulässig; entscheidend ist, dass sie von DocOfHome stammt.`, related: ['Docker', 'Container', 'Integration', 'Token'] }
     ]
   }
 ]

@@ -52,6 +52,7 @@ from app.models.network import (
     NetworkSegment,
 )
 from app.models.quality import QualityIssue, QualityRun
+from app.models.recipe import Recipe
 from app.models.release import (
     AuditEvent,
     DashboardSetting,
@@ -91,6 +92,7 @@ __all__ = [
     "ConsumptionSetting",
     "DocumentLink",
     "DashboardSetting",
+    "Recipe",
     "DomainNote",
     "HomeAssistantAssetLink",
     "HomeAssistantEntitySelection",

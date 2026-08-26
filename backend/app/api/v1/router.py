@@ -19,6 +19,7 @@ from app.api.v1 import (
     mcp_settings,
     network,
     quality,
+    recipes,
     release,
     search,
     settings,
@@ -41,6 +42,7 @@ api_router.include_router(knowledge.router)
 api_router.include_router(network.router)
 api_router.include_router(work.router)
 api_router.include_router(quality.router)
+api_router.include_router(recipes.router)
 api_router.include_router(release.router)
 api_router.include_router(home_assistant.router)
 api_router.include_router(immich.router)

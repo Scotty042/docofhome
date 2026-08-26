@@ -54,3 +54,7 @@ const vuetify = createVuetify({
 })
 
 createApp(App).use(pinia).use(router).use(vuetify).mount('#app')
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'))
+}

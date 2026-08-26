@@ -2,16 +2,14 @@
 
 Stand: 26. August 2026
 
-Release: 1.7.6
+Release: 1.7.7
 
-Alembic-Head: `0051`
+Alembic-Head: `0052`
 
-DocOfHome 1.7.6 ergänzt den bestehenden FastAPI-/Docker-Stack um einen optionalen,
-token-geschützten MCP-Endpunkt unter `/mcp`. Die Konfiguration erfolgt vollständig
-in der Weboberfläche; der Token wird nur einmal im Klartext ausgegeben und danach
-ausschließlich als SHA-256-Hash gespeichert. MCP nutzt dieselben fachlichen Services
-für Bezugsobjekte, Tätigkeiten und Historien wie die REST-API. Die Daten- und
-Tätigkeitsverbesserungen aus 1.7.5 bleiben vollständig erhalten.
+DocOfHome 1.7.7 ergänzt 1.7.6 um ein strukturiertes Kochbuch, eine zentrale getrennte
+Modul-/Hauptmenüsteuerung, PWA-Installierbarkeit sowie die integrierte MCP-/SWAG-
+Betriebsdokumentation. Migration `0052` ergänzt Rezepte und Hauptmenü-Sichtbarkeit.
+Alle Fach- und MCP-Funktionen aus 1.7.6 bleiben erhalten.
 
 ## Verbindliche Elektro-Logik
 

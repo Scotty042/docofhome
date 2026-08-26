@@ -349,6 +349,50 @@ Version 1.7 behebt kritische Inkonsistenzen in der Elektro- und Zählerlogik, er
 
 ## Release- und Deployment-Runbook
 
+### MCP und SWAG
+
+MCP wird in **Einstellungen → Integrationen → ChatGPT / MCP** aktiviert. Token erzeugen,
+Berechtigung wählen und eine öffentliche URL speichern, die exakt auf `/mcp` endet.
+Für SWAG wird `docofhome.subdomain.conf` verwendet. `server_name` muss zu
+`docofhome.<domain>` passen. SWAG und DocOfHome liegen im gemeinsamen externen
+Docker-Netzwerk `swag_proxy`; als reales Beispiel ist der Containername
+`scotty042_docofhome` dokumentiert. Container sprechen intern Port `8000` an.
+Der veröffentlichte Host-Port `8088` ist **nicht** für Container-zu-Container-Verkehr gedacht.
+
+```nginx
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name docofhome.<domain>;
+    include /config/nginx/ssl.conf;
+    client_max_body_size 0;
+    location = /mcp {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app scotty042_docofhome;
+        set $upstream_port 8000;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+    location ^~ /mcp/ {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app scotty042_docofhome;
+        set $upstream_port 8000;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+    location / { return 404; }
+}
+```
+
+Keine zusätzlichen `proxy_read_timeout`- oder `proxy_send_timeout`-Direktiven ergänzen:
+`proxy.conf` bringt sie bereits mit, doppelte Direktiven verhindern den Reload.
+
 - Aktuellen produktiven Datenbankstand und Medienordner sichern.
 - Aktuelles 1.6.x-Image beziehungsweise Git-Tag als Rollback-Stand festhalten.
 - Migration zunächst gegen eine Kopie produktionsnaher Daten ausführen.

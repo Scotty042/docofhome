@@ -32,6 +32,7 @@ class ModuleKey(StrEnum):
     WIKI = "wiki"
     MAINTENANCE = "maintenance"
     QUALITY = "quality"
+    COOKBOOK = "cookbook"
 
 
 class ThemePreference(StrEnum):
@@ -133,6 +134,10 @@ class ConfigurationWrite(BaseModel):
         default_factory=default_enabled_modules,
         max_length=len(ModuleKey),
     )
+    main_menu_modules: list[ModuleKey] = Field(
+        default_factory=default_enabled_modules,
+        max_length=len(ModuleKey),
+    )
     integrations: list[IntegrationWrite] = Field(default_factory=list, max_length=4)
 
     @model_validator(mode="after")
@@ -163,7 +168,7 @@ class ConfigurationWrite(BaseModel):
             raise ValueError("Unknown IANA timezone") from exc
         return normalized
 
-    @field_validator("enabled_modules")
+    @field_validator("enabled_modules", "main_menu_modules")
     @classmethod
     def modules_are_unique(cls, value: list[ModuleKey]) -> list[ModuleKey]:
         if len(value) != len(set(value)):
@@ -205,6 +210,7 @@ class ConfigurationRead(BaseModel):
     product_image_source_wikimedia_enabled: bool
     product_image_source_duckduckgo_enabled: bool
     enabled_modules: list[ModuleKey]
+    main_menu_modules: list[ModuleKey]
     setup_completed_at: datetime
     integrations: list[IntegrationRead]
 

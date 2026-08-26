@@ -1,11 +1,22 @@
 # DocOfHome
 
-DocOfHome 1.7.6 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.7 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.7
+
+- eigenständiges, strukturiertes Kochbuch unter Wiki mit Zutaten, Schritten, Suche,
+  Kategorien, Tags, Bildern/Anhängen, Favoriten, Duplizieren, Portionsumrechnung und Druckansicht
+- getrennte Modulschalter **Aktiviert** und **Im Hauptmenü anzeigen**; aktive ausgeblendete
+  Module erscheinen dynamisch unter **Sonstiges**
+- installierbare PWA mit Manifest, Standalone-Darstellung und updatefreundlichem Service Worker
+- MCP-Anleitung vollständig im Handbuch/Runbook einschließlich funktionierender SWAG-Konfiguration
+- Smart Home und Verbrauch werden als verfügbare Funktionen dargestellt
+- Migration `0052` ergänzt Rezepte und Hauptmenü-Sichtbarkeit; Deaktivieren löscht keine Daten
 
 ## Neu in 1.7.6
 

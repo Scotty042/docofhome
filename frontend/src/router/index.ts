@@ -10,6 +10,7 @@ import DashboardPage from '../pages/DashboardPage.vue'
 import DataManagementPage from '../pages/DataManagementPage.vue'
 import DocumentsPage from '../pages/DocumentsPage.vue'
 import ConsumptionPage from '../pages/ConsumptionPage.vue'
+import CookbookPage from '../pages/CookbookPage.vue'
 import ImmichGalleryPage from '../pages/ImmichGalleryPage.vue'
 import GuidedSetupPage from '../pages/GuidedSetupPage.vue'
 import MasterDataPage from '../pages/MasterDataPage.vue'
@@ -47,6 +48,7 @@ const router = createRouter({
     { path: '/consumption', name: 'consumption', component: ConsumptionPage },
     ...handbookRoutes,
     { path: '/wiki', name: 'wiki', component: WikiPage },
+    { path: '/wiki/kochbuch', name: 'cookbook', component: CookbookPage },
     { path: '/maintenance', name: 'maintenance', component: MaintenancePage },
     { path: '/network', name: 'network', component: NetworkPage },
     { path: '/workloads', name: 'workloads', component: WorkloadsPage },
@@ -72,7 +74,18 @@ router.beforeEach(async (to) => {
   const settings = useSettingsStore(pinia)
   try {
     const completed = await settings.fetchSetupStatus()
-    return resolveSetupNavigation(String(to.name ?? ''), to.fullPath, completed)
+    const setupRedirect = resolveSetupNavigation(String(to.name ?? ''), to.fullPath, completed)
+    if (setupRedirect !== true) return setupRedirect
+    if (!settings.configuration) await settings.fetchConfiguration()
+    const routeModules: Array<[string, string]> = [
+      ['/locations', 'locations'], ['/electrical', 'electrical'], ['/assets', 'assets'],
+      ['/master-data', 'master_data'], ['/network', 'network'], ['/smart-home', 'smart_home'],
+      ['/consumption', 'consumption'], ['/maintenance', 'maintenance'], ['/quality', 'quality'],
+      ['/wiki/kochbuch', 'cookbook'], ['/wiki', 'wiki']
+    ]
+    const required = routeModules.find(([prefix]) => to.path.startsWith(prefix))?.[1]
+    if (required && !(settings.configuration?.enabled_modules ?? []).includes(required as never)) return '/'
+    return true
   } catch {
     return resolveSetupNavigation(String(to.name ?? ''), to.fullPath, 'unavailable')
   }

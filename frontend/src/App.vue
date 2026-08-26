@@ -49,20 +49,29 @@ const moduleNavigation: ModuleNavigationItem[] = [
   { key: 'smart_home', title: 'Smart Home', icon: 'mdi-home-assistant', to: '/smart-home' },
   { key: 'consumption', title: 'Verbrauch', icon: 'mdi-chart-line', to: '/consumption' },
   { key: 'maintenance', title: 'Wartung & Aufgaben', icon: 'mdi-format-list-checks', to: '/maintenance' },
-  { key: 'quality', title: 'Dokumentationsqualität', icon: 'mdi-clipboard-check-outline', to: '/quality' }
+  { key: 'quality', title: 'Dokumentationsqualität', icon: 'mdi-clipboard-check-outline', to: '/quality' },
+  { key: 'cookbook', title: 'Kochbuch', icon: 'mdi-chef-hat', to: '/wiki/kochbuch' }
 ]
 const enabledModules = computed(() => new Set(settings.configuration?.enabled_modules ?? moduleKeys))
+const mainMenuModules = computed(() => new Set(settings.configuration?.main_menu_modules ?? settings.configuration?.enabled_modules ?? moduleKeys))
 const visibleModuleNavigation = computed(() => (
-  moduleNavigation.filter((item) => enabledModules.value.has(item.key))
+  moduleNavigation.filter((item) => enabledModules.value.has(item.key) && mainMenuModules.value.has(item.key))
 ))
-const wikiEnabled = computed(() => enabledModules.value.has('wiki'))
+const wikiEnabled = computed(() => enabledModules.value.has('wiki') && mainMenuModules.value.has('wiki'))
+const hiddenModuleNavigation = computed(() => {
+  const items = moduleNavigation.filter((item) => enabledModules.value.has(item.key) && !mainMenuModules.value.has(item.key))
+  if (enabledModules.value.has('wiki') && !mainMenuModules.value.has('wiki')) {
+    items.push({ key: 'wiki', title: 'Wiki', icon: 'mdi-book-open-page-variant', to: '/wiki' })
+  }
+  return items
+})
 
 watch(mdAndUp, (isDesktop) => {
   drawerOpen.value = isDesktop
 })
 
 watch(openNavigationGroups, (groups) => {
-  for (const group of ['wiki', 'more']) {
+  for (const group of ['wiki', 'other', 'more']) {
     sessionStorage.setItem(
       `docofhome.navigation.${group}`,
       groups.includes(group) ? 'open' : 'closed'
@@ -141,6 +150,11 @@ onMounted(async () => {
             </template>
             <v-list-item prepend-icon="mdi-file-document-outline" title="Wiki-Seiten" to="/wiki" />
             <v-list-item prepend-icon="mdi-format-list-bulleted" title="Handbuch & Glossar" to="/wiki/handbuch" />
+            <v-list-item v-if="enabledModules.has('cookbook')" prepend-icon="mdi-chef-hat" title="Kochbuch" to="/wiki/kochbuch" />
+          </v-list-group>
+          <v-list-group v-if="hiddenModuleNavigation.length" value="other">
+            <template #activator="{ props }"><v-list-item v-bind="props" prepend-icon="mdi-dots-horizontal-circle-outline" title="Sonstiges" /></template>
+            <v-list-item v-for="item in hiddenModuleNavigation" :key="item.key" :prepend-icon="item.icon" :title="item.title" :to="item.to" />
           </v-list-group>
           <v-list-item prepend-icon="mdi-image-multiple-outline" title="Bilder" to="/images" />
           <v-list-item prepend-icon="mdi-folder-outline" title="Dokumente" to="/documents" />

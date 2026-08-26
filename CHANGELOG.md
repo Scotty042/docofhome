@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.7.7 – 2026-08-26
+
+### Kochbuch und Navigation
+
+- Eigenständiges Rezeptmodell mit strukturierten Zutaten und nummerierten Schritten.
+- Rezeptübersicht, Suche nach Titel/Zutaten, Kategorien, Tags, Favoriten, Medienlinks,
+  Duplizieren, Portionsumrechnung und Druckansicht.
+- Module getrennt aktivierbar und im Hauptmenü platzierbar; dynamisches „Sonstiges“.
+- Deaktivierte Module verlieren keine Daten.
+
+### MCP und PWA
+
+- MCP-Anleitung mit erprobter SWAG-Konfiguration in Handbuch und Runbook integriert.
+- Direkter Dokumentationsbutton in den MCP-Einstellungen.
+- Installierbarkeit als Progressive Web App mit zurückhaltendem, network-first Service Worker.
+- Smart Home und Verbrauch nicht mehr als „In Vorbereitung“ gekennzeichnet.
+
+### Technik
+
+- Alembic-Head `0052` für Rezepte und getrennte Hauptmenü-Sichtbarkeit.
+
 ## 1.7.6 – 2026-08-26
 
 ### MCP / ChatGPT

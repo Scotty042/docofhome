@@ -49,6 +49,7 @@ function serializable(configuration: ConfigurationWrite): ConfigurationWrite {
   return {
     ...configuration,
     enabled_modules: configuration.enabled_modules ?? [...moduleKeys],
+    main_menu_modules: configuration.main_menu_modules ?? configuration.enabled_modules ?? [...moduleKeys],
     integrations: configuration.integrations.map((integration) => ({
       kind: integration.kind,
       enabled: integration.enabled,

@@ -1,4 +1,10 @@
-# DocOfHome MCP einrichten
+# DocOfHome MCP einrichten (Verweis)
+
+Die vollständige und maßgebliche MCP-Anleitung ist seit 1.7.7 in das bestehende
+**DocOfHome-Handbuch/Runbook** integriert. In der Anwendung führt der Button
+**„MCP-Dokumentation im Handbuch öffnen“** direkt zum Abschnitt „MCP-Zugriff und SWAG“.
+
+Die folgende ältere Kurzfassung bleibt als Kompatibilitätsverweis erhalten.
 
 DocOfHome 1.7.6 enthält den MCP-Server direkt im vorhandenen Backend. Es wird kein
 zusätzlicher Docker-Container und kein zusätzlicher veröffentlichter Container-Port benötigt.

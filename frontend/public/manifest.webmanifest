@@ -1,0 +1,13 @@
+{
+  "name": "DocOfHome",
+  "short_name": "DocOfHome",
+  "description": "Dein lokaler digitaler Zwilling für Zuhause.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1720",
+  "theme_color": "#0f1720",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

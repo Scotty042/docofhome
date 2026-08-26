@@ -62,6 +62,7 @@ class SettingsService:
             timezone=payload.timezone,
             theme=payload.theme.value,
             enabled_modules_json=self._serialize_modules(payload.enabled_modules),
+            main_menu_modules_json=self._serialize_modules(payload.main_menu_modules),
         )
         if existing is None:
             self.repository.add_application(setting)
@@ -112,6 +113,7 @@ class SettingsService:
             payload.product_image_source_duckduckgo_enabled
         )
         setting.enabled_modules_json = self._serialize_modules(payload.enabled_modules)
+        setting.main_menu_modules_json = self._serialize_modules(payload.main_menu_modules)
         setting.updated_at = now
 
         submitted = {integration.kind: integration for integration in payload.integrations}
@@ -202,6 +204,7 @@ class SettingsService:
                 setting.product_image_source_duckduckgo_enabled
             ),
             enabled_modules=self._deserialize_modules(setting.enabled_modules_json),
+            main_menu_modules=self._deserialize_modules(setting.main_menu_modules_json),
             setup_completed_at=setting.setup_completed_at,
             integrations=integrations,
         )
