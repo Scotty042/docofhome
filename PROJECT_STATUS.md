@@ -1,17 +1,17 @@
 # DocOfHome – Projektstatus
 
-Stand: 24. August 2026
+Stand: 26. August 2026
 
-Release: 1.7.5
+Release: 1.7.6
 
-Alembic-Head: `0050`
+Alembic-Head: `0051`
 
-DocOfHome 1.7.4.9 erweitert „Wartung & Aufgaben“ um eine vollständige
-Durchführungshistorie. Tätigkeiten können technischen Bestandsobjekten oder neuen
-allgemeinen Bezugsobjekten wie Tieren, Fahrzeugen, Räumen oder Anlagen zugeordnet
-werden. Vergangene Termine sind nachtragbar; Zeitabstände und Intervallstatistiken
-werden automatisch berechnet. Historieneinträge unterstützen Notizen, Kosten,
-Messwerte und DB-basierte Anhänge.
+DocOfHome 1.7.6 ergänzt den bestehenden FastAPI-/Docker-Stack um einen optionalen,
+token-geschützten MCP-Endpunkt unter `/mcp`. Die Konfiguration erfolgt vollständig
+in der Weboberfläche; der Token wird nur einmal im Klartext ausgegeben und danach
+ausschließlich als SHA-256-Hash gespeichert. MCP nutzt dieselben fachlichen Services
+für Bezugsobjekte, Tätigkeiten und Historien wie die REST-API. Die Daten- und
+Tätigkeitsverbesserungen aus 1.7.5 bleiben vollständig erhalten.
 
 ## Verbindliche Elektro-Logik
 
@@ -66,6 +66,22 @@ erforderlich. Details stehen in `RELEASE_NOTES_1.6.3.md`.
 
 
 
+## Release 1.7.6
+
+- integrierter MCP-Server unter `/mcp` im bestehenden Container;
+- Web-Konfiguration mit Aktivierung, öffentlicher Adresse und Token-Rotation;
+- Token wird nur gehasht gespeichert;
+- Rechte `read`, `write` und `admin`;
+- fachlich begrenzte Tools für Bezugsobjekte, Tätigkeiten, Historie und Fälligkeiten;
+- keine neue Datenbankmigration, Alembic-Head bleibt `0051`.
+
+## Release 1.7.5
+
+- Alembic-Head `0051`;
+- eigene Tätigkeiten-Untermenüs für Bezugsobjekte;
+- reine Datums-Historie ohne Uhrzeit;
+- Wiederholungen ohne separaten Start-Fälligkeitstermin;
+- nächste Fälligkeit aus tatsächlicher Durchführung plus Intervall.
 
 ## Release 1.7.4.9
 

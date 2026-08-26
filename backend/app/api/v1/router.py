@@ -16,6 +16,7 @@ from app.api.v1 import (
     home_assistant,
     immich,
     knowledge,
+    mcp_settings,
     network,
     quality,
     release,
@@ -31,6 +32,7 @@ api_router.include_router(about.router)
 api_router.include_router(health.router)
 api_router.include_router(system.router)
 api_router.include_router(settings.router)
+api_router.include_router(mcp_settings.router)
 api_router.include_router(backups.router)
 api_router.include_router(documents.router)
 api_router.include_router(document_links.router)

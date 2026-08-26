@@ -3,6 +3,26 @@ export type Language = 'de' | 'en'
 export type ThemePreference = 'dark' | 'light'
 export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality'
 
+export type McpPermission = 'read' | 'write' | 'admin'
+
+export interface McpSettingsRead {
+  enabled: boolean
+  permission: McpPermission
+  public_url: string | null
+  token_configured: boolean
+}
+
+export interface McpSettingsWrite {
+  enabled: boolean
+  permission: McpPermission
+  public_url: string | null
+}
+
+export interface McpTokenCreated {
+  token: string
+  settings: McpSettingsRead
+}
+
 export interface SetupStatus {
   setup_required: boolean
   completed: boolean

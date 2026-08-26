@@ -107,6 +107,35 @@ describe('settings API', () => {
     expect(body.integrations.find((item) => item.kind === 'immich')?.document_root).toBeNull()
   })
 
+
+  it('reads and rotates the MCP configuration through dedicated endpoints', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        enabled: false,
+        permission: 'read',
+        public_url: null,
+        token_configured: false
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'doh_mcp_test-token',
+        settings: {
+          enabled: false,
+          permission: 'read',
+          public_url: null,
+          token_configured: true
+        }
+      }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const current = await settingsApi.readMcp()
+    const rotated = await settingsApi.rotateMcpToken()
+
+    expect(current.enabled).toBe(false)
+    expect(rotated.token).toBe('doh_mcp_test-token')
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/settings/mcp', expect.anything())
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/settings/mcp/token', expect.objectContaining({ method: 'POST' }))
+  })
+
   it('surfaces a readable API error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ detail: 'Setup has already been completed' }),

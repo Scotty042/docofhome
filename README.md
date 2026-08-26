@@ -1,11 +1,22 @@
 # DocOfHome
 
-DocOfHome 1.7.5 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.6 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.6
+
+- integrierter MCP-Server im bestehenden DocOfHome-Backend unter `/mcp`
+- Konfiguration vollständig in **Einstellungen → Integrationen → ChatGPT / MCP**
+- sicherer Bearer-Token, der nur einmal angezeigt und ausschließlich gehasht gespeichert wird
+- Berechtigungsstufen **Nur lesen**, **Lesen & Schreiben** und **Vollzugriff**
+- MCP-Werkzeuge für Bezugsobjekte, Tätigkeiten, Durchführungen, Historien und Fälligkeiten
+- kein zusätzlicher Container und keine neue Datenbankmigration erforderlich
+- Reverse-Proxy-Betrieb kann extern auf ausschließlich `/mcp` begrenzt werden
+- Einrichtungsbeispiel für Reverse Proxy und Client: [`docs/MCP_SETUP.md`](docs/MCP_SETUP.md)
 
 ## Neu in 1.7.5
 

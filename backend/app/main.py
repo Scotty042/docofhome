@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.v1 import electrical_layout
 from app.api.v1.router import api_router
 from app.core.settings import settings
+from app.mcp_server import mcp_http_app, mcp_server
 from app.services.backup_schedule import backup_scheduler_loop
 from app.services.quality_schedule import quality_scheduler_loop
 
@@ -24,7 +25,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     scheduler_task = asyncio.create_task(backup_scheduler_loop())
     quality_task = asyncio.create_task(quality_scheduler_loop())
     try:
-        yield
+        async with mcp_server.session_manager.run():
+            yield
     finally:
         scheduler_task.cancel()
         quality_task.cancel()
@@ -43,6 +45,7 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.include_router(api_router)
 app.include_router(electrical_layout.router, prefix="/api/v1")
+app.add_route("/mcp", mcp_http_app, methods=["GET", "POST", "DELETE"], name="mcp")
 
 static_dir = settings.static_dir
 assets_dir = static_dir / "assets"

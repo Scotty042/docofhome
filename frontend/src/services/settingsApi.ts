@@ -5,6 +5,9 @@ import type {
   IntegrationKind,
   IntegrationTestResult,
   IntegrationWrite,
+  McpSettingsRead,
+  McpSettingsWrite,
+  McpTokenCreated,
   SetupStatus
 } from '../types/settings'
 import { moduleKeys } from '../types/settings'
@@ -81,5 +84,14 @@ export const settingsApi = {
   testIntegrationDraft: (integration: IntegrationWrite) => request<IntegrationTestResult>(
     '/settings/integrations/test',
     { method: 'POST', body: JSON.stringify(integration) }
+  ),
+  readMcp: () => request<McpSettingsRead>('/settings/mcp'),
+  updateMcp: (configuration: McpSettingsWrite) => request<McpSettingsRead>(
+    '/settings/mcp',
+    { method: 'PUT', body: JSON.stringify(configuration) }
+  ),
+  rotateMcpToken: () => request<McpTokenCreated>(
+    '/settings/mcp/token',
+    { method: 'POST' }
   )
 }

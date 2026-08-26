@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.7.6 – 2026-08-26
+
+### MCP / ChatGPT
+
+- MCP-Server direkt in das bestehende DocOfHome-Backend integriert.
+- Streamable-HTTP-Endpunkt unter `/mcp`, kein zusätzlicher Container erforderlich.
+- Aktivierung, öffentliche URL, Berechtigungsstufe und Token-Rotation in den Einstellungen.
+- Bearer-Token mit 256 Bit Zufall; gespeichert wird ausschließlich der SHA-256-Hash.
+- Lesende, schreibende und administrative MCP-Tools sind nach Berechtigungsstufe getrennt.
+- Bezugsobjekte, Tätigkeiten, Durchführungen, Historien und Fälligkeiten sind über MCP nutzbar.
+
+### Technik
+
+- Offizielles MCP Python SDK 2.x als Runtime-Abhängigkeit.
+- MCP und REST verwenden dieselben DocOfHome-Services.
+- Reiner ASGI-Authentifizierungswrapper für Streamable HTTP.
+- Keine Datenbankmigration; Alembic-Head bleibt `0051`.
+
+## 1.7.5 – 2026-08-25
+
+### Bezugsobjekte / Tätigkeiten
+
+- Tätigkeiten-Untermenü für Bezugsobjekte.
+- Schnelle Aktionen „Heute erledigt“ und bei Tieren „Heute gegeben“.
+- Wiederholungen alle X Tage, Wochen, Monate oder Jahre ohne initiale Pflicht-Fälligkeit.
+- Historie arbeitet ausschließlich mit Kalendertagen und korrigiert zweistellige Jahreswerte.
+- Nächste Fälligkeit basiert auf der letzten tatsächlichen Durchführung.
+
+### Technik
+
+- Migration `0051` repariert fehlerhafte zweistellige Jahreswerte und lockert die Wiederholungslogik.
+
 ## 1.7.4.9 – 2026-08-24
 
 ### Wartungs- und Tätigkeitshistorie

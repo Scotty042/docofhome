@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import ModuleSettingsCard from '../components/ModuleSettingsCard.vue'
 import { immichApi } from '../services/immichApi'
@@ -10,7 +10,8 @@ import {
   createDefaultConfiguration,
   editableConfiguration,
   type IntegrationKind,
-  type IntegrationTestResult
+  type IntegrationTestResult,
+  type McpSettingsWrite
 } from '../types/settings'
 import type { ImmichAlbum } from '../types/immich'
 
@@ -28,6 +29,26 @@ const testResults = ref<Partial<Record<IntegrationKind, IntegrationTestResult>>>
 const immichAlbums = ref<ImmichAlbum[]>([])
 const immichAlbumsLoading = ref(false)
 const immichAlbumsError = ref<string | null>(null)
+const mcpForm = ref<McpSettingsWrite>({ enabled: false, permission: 'read', public_url: null })
+const mcpTokenConfigured = ref(false)
+const mcpToken = ref<string | null>(null)
+const rotatingMcpToken = ref(false)
+const copiedMcpToken = ref(false)
+const copiedMcpUrl = ref(false)
+const effectiveMcpUrl = computed(() => mcpForm.value.public_url?.trim() || `${window.location.origin}/mcp`)
+const mcpUrlRule = (value: string | null) => {
+  if (!value?.trim()) return true
+  try {
+    const parsed = new URL(value.trim())
+    if (!['http:', 'https:'].includes(parsed.protocol)) return 'Bitte eine HTTP(S)-Adresse angeben.'
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return 'Die Adresse darf keine Zugangsdaten, Query-Parameter oder Fragmente enthalten.'
+    }
+    return parsed.pathname.replace(/\/+$/, '') === '/mcp' || 'Die Adresse muss auf /mcp enden.'
+  } catch {
+    return 'Bitte eine gültige MCP-Adresse angeben.'
+  }
+}
 
 const integrationMeta: Record<IntegrationKind, {
   name: string
@@ -70,8 +91,17 @@ const secretRule = (kind: IntegrationKind, enabled: boolean, value: string | und
 
 onMounted(async () => {
   try {
-    const configuration = await settings.fetchConfiguration()
+    const [configuration, mcpConfiguration] = await Promise.all([
+      settings.fetchConfiguration(),
+      settingsApi.readMcp()
+    ])
     form.value = editableConfiguration(configuration)
+    mcpForm.value = {
+      enabled: mcpConfiguration.enabled,
+      permission: mcpConfiguration.permission,
+      public_url: mcpConfiguration.public_url
+    }
+    mcpTokenConfigured.value = mcpConfiguration.token_configured
     const immich = configuration.integrations.find((integration) => integration.kind === 'immich')
     if (immich?.enabled && immich.secret_configured) await loadImmichAlbums()
   } catch (reason) {
@@ -111,15 +141,63 @@ async function persistConfiguration(): Promise<boolean> {
 }
 
 async function save() {
-  saving.value = true
   saved.value = false
   error.value = null
+  if (mcpForm.value.enabled && !mcpTokenConfigured.value) {
+    error.value = 'Erzeuge zuerst einen MCP-Token, bevor du MCP aktivierst.'
+    return
+  }
+  saving.value = true
   try {
-    if (await persistConfiguration()) saved.value = true
+    if (await persistConfiguration()) {
+      const storedMcp = await settingsApi.updateMcp(mcpForm.value)
+      mcpForm.value = {
+        enabled: storedMcp.enabled,
+        permission: storedMcp.permission,
+        public_url: storedMcp.public_url
+      }
+      mcpTokenConfigured.value = storedMcp.token_configured
+      saved.value = true
+    }
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Einstellungen konnten nicht gespeichert werden.'
   } finally {
     saving.value = false
+  }
+}
+
+async function rotateMcpToken() {
+  rotatingMcpToken.value = true
+  error.value = null
+  saved.value = false
+  try {
+    const created = await settingsApi.rotateMcpToken()
+    mcpToken.value = created.token
+    mcpTokenConfigured.value = created.settings.token_configured
+    copiedMcpToken.value = false
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'MCP-Token konnte nicht erzeugt werden.'
+  } finally {
+    rotatingMcpToken.value = false
+  }
+}
+
+async function copyMcpToken() {
+  if (!mcpToken.value) return
+  try {
+    await navigator.clipboard.writeText(mcpToken.value)
+    copiedMcpToken.value = true
+  } catch {
+    error.value = 'Der MCP-Token konnte nicht in die Zwischenablage kopiert werden.'
+  }
+}
+
+async function copyMcpUrl() {
+  try {
+    await navigator.clipboard.writeText(effectiveMcpUrl.value)
+    copiedMcpUrl.value = true
+  } catch {
+    error.value = 'Die MCP-Adresse konnte nicht in die Zwischenablage kopiert werden.'
   }
 }
 
@@ -397,6 +475,132 @@ async function testIntegration(kind: IntegrationKind) {
             </div>
           </v-card-text>
         </v-expand-transition>
+      </v-card>
+
+      <v-card class="mt-6 mb-4">
+        <v-card-title class="d-flex align-center ga-3">
+          <v-icon icon="mdi-robot-outline" color="primary" />
+          ChatGPT / MCP
+          <v-spacer />
+          <v-chip
+            :color="mcpForm.enabled ? 'success' : 'default'"
+            size="small"
+            variant="tonal"
+          >
+            {{ mcpForm.enabled ? 'Aktiv' : 'Deaktiviert' }}
+          </v-chip>
+          <v-switch
+            v-model="mcpForm.enabled"
+            color="primary"
+            hide-details
+            inset
+            aria-label="MCP-Zugriff aktivieren"
+          />
+        </v-card-title>
+        <v-card-text>
+          <p class="text-medium-emphasis mb-4">
+            Stellt DocOfHome über den integrierten MCP-Endpunkt für ChatGPT und andere MCP-Clients bereit.
+            Der Zugriff ist immer durch einen eigenen Bearer-Token geschützt.
+          </p>
+
+          <v-alert
+            v-if="mcpForm.enabled && !mcpTokenConfigured"
+            type="warning"
+            variant="tonal"
+            class="mb-4"
+          >
+            Erzeuge zuerst einen MCP-Token. Ohne Token lässt sich MCP nicht aktivieren.
+          </v-alert>
+
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="mcpForm.permission"
+                label="Berechtigung"
+                :items="[
+                  { title: 'Nur lesen', value: 'read' },
+                  { title: 'Lesen & Schreiben', value: 'write' },
+                  { title: 'Vollzugriff', value: 'admin' }
+                ]"
+                hint="Schreiben erlaubt normale Einträge und Änderungen. Löschen ist nur mit Vollzugriff möglich."
+                persistent-hint
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="mcpForm.public_url"
+                label="Öffentliche MCP-Adresse"
+                placeholder="https://mcp.example.de/mcp"
+                prepend-inner-icon="mdi-web"
+                :rules="[mcpUrlRule]"
+                hint="Optional. Leer bedeutet die aktuelle DocOfHome-Adresse mit /mcp. Für SWAG kann hier der externe MCP-Hostname hinterlegt werden."
+                persistent-hint
+              />
+            </v-col>
+          </v-row>
+
+          <v-alert type="info" variant="tonal" class="mt-2 mb-4">
+            <div class="d-flex flex-column flex-sm-row align-sm-center ga-2">
+              <div class="flex-grow-1">
+                <div class="text-caption text-medium-emphasis">MCP-Verbindungsadresse</div>
+                <code>{{ effectiveMcpUrl }}</code>
+              </div>
+              <v-btn
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-content-copy"
+                @click="copyMcpUrl"
+              >
+                {{ copiedMcpUrl ? 'Kopiert' : 'Adresse kopieren' }}
+              </v-btn>
+            </div>
+          </v-alert>
+
+          <div class="d-flex flex-column flex-md-row align-md-center ga-3 mb-3">
+            <div class="flex-grow-1">
+              <div class="text-subtitle-2">MCP-Token</div>
+              <div class="text-medium-emphasis text-body-2">
+                {{ mcpTokenConfigured ? 'Ein Token ist eingerichtet.' : 'Noch kein Token eingerichtet.' }}
+                Gespeichert wird ausschließlich ein SHA-256-Hash.
+              </div>
+            </div>
+            <v-btn
+              color="primary"
+              variant="tonal"
+              prepend-icon="mdi-key-plus"
+              :loading="rotatingMcpToken"
+              @click="rotateMcpToken"
+            >
+              {{ mcpTokenConfigured ? 'Token erneuern' : 'Token erzeugen' }}
+            </v-btn>
+          </div>
+
+          <v-alert v-if="mcpToken" type="warning" variant="tonal" class="mb-4">
+            <div class="font-weight-medium mb-2">Neuen Token jetzt kopieren</div>
+            <p class="mb-3">
+              Aus Sicherheitsgründen wird der Token nur unmittelbar nach dem Erzeugen im Klartext angezeigt.
+            </p>
+            <v-text-field
+              :model-value="mcpToken"
+              label="MCP-Token"
+              readonly
+              hide-details
+              class="mb-3"
+            />
+            <v-btn
+              variant="tonal"
+              prepend-icon="mdi-content-copy"
+              @click="copyMcpToken"
+            >
+              {{ copiedMcpToken ? 'Token kopiert' : 'Token kopieren' }}
+            </v-btn>
+          </v-alert>
+
+          <v-alert type="success" variant="tonal" density="compact" icon="mdi-shield-lock-outline">
+            Empfohlen: Über den Reverse Proxy extern ausschließlich <code>/mcp</code> freigeben.
+            Weboberfläche, REST-API und <code>/docs</code> müssen nicht öffentlich erreichbar sein.
+          </v-alert>
+        </v-card-text>
       </v-card>
 
       <div class="d-flex justify-end mt-6">
