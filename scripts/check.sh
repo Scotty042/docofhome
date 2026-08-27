@@ -8,7 +8,7 @@ python scripts/check-version.py
 python scripts/check-branding.py
 python scripts/check-collected-fixes.py
 python scripts/check-reading-reminders.py
-python scripts/check-release-1.7.12.py
+python scripts/check-release-1.7.13.py
 python scripts/check-electrical-integrity-1.6.3.py
 python scripts/check-phase-rail-runtime-sync.py
 python scripts/check-phase-rail-explicit-sync.py

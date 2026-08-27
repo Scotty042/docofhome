@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.13 – 2026-08-27
+
+- Rezept-Lesemodus, Editor und Kochmodus klar getrennt.
+- Ablenkungsfreier, iPad-optimierter Vollbild-Kochmodus mit Portionsskalierung und optionalem Screen Wake Lock.
+- Neuer Zutateneditor mit Autocomplete, Sortierfunktionen und Touch-tauglichen Aktionen.
+- Responsive Rezeptansicht und größere Zubereitungskarten für Tablet und Desktop.
+- Keine Datenbankmigration; Alembic-Head bleibt `0052`.
+
 ## 1.7.12 – 2026-08-27
 
 - `save_recipe` veröffentlicht alle Rezeptfelder als explizites MCP-Eingabeschema.

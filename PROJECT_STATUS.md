@@ -2,13 +2,13 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.12
+Release: 1.7.13
 
 Alembic-Head: `0052`
 
-DocOfHome 1.7.10 korrigiert den Frontend-Build des MCP-Handbucheintrags aus 1.7.9.
-Die MCP-Erweiterungen für Kochbuch, Wiki, Notizen, Assets, Orte, Stammdaten, Verbrauch
-und Netzwerk bleiben unverändert. Es ist keine Migration erforderlich; `0052` bleibt aktuell.
+DocOfHome 1.7.13 überarbeitet die Kochbuch-Oberfläche für Desktop und iPad. Lesemodus,
+Editor und ein ablenkungsfreier Vollbild-Kochmodus sind nun klar getrennt; Zutaten und
+Arbeitsschritte sind touch-tauglich bedienbar. Es ist keine Migration erforderlich; `0052` bleibt aktuell.
 
 ## Verbindliche Elektro-Logik
 
