@@ -1,5 +1,9 @@
 # DocOfHome MCP einrichten (Verweis)
 
+Seit 1.7.9 umfasst MCP zusätzlich Kochbuch, Wiki, Notizen, Assets, Orte, Stammdaten,
+Verbrauch und Netzwerk. Vor dem Anlegen sollen immer die jeweiligen Suchwerkzeuge verwendet
+werden. Lesezugriffe benötigen `read`, Änderungen `write` und Lösch-/Archivieraktionen `admin`.
+
 Clients ohne konfigurierbaren Bearer-Header können denselben Server über
 `https://example.test/mcp/<token>` ansprechen. Tokenprüfung und Berechtigungen sind identisch.
 Da Token-URLs in Browser-Historien und Proxy-Logs erscheinen können, bleibt

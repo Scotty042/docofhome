@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.9 – 2026-08-27
+
+- MCP-Werkzeuge für Kochbuch, Wiki und verknüpfte Notizen.
+- MCP-Werkzeuge für Assets, Orte, Assettypen, Produkte und Labels.
+- MCP-Werkzeuge für Verbrauchszähler, Ablesungen und Verbrauchszusammenfassung.
+- MCP-Werkzeuge für Netzwerkgeräte, Segmente, Schnittstellen, Adressen und Verbindungen.
+- Einheitliches Berechtigungsmodell: Lesen, Schreiben und Löschen nur mit Vollzugriff.
+- Keine Datenbankmigration; Alembic-Head bleibt `0052`.
+
 ## 1.7.8 – 2026-08-27
 
 - MCP zusätzlich über `/mcp/<token>`; `/mcp` mit Bearer-Header bleibt unverändert.

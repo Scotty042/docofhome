@@ -2,14 +2,13 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.8
+Release: 1.7.9
 
 Alembic-Head: `0052`
 
-DocOfHome 1.7.8 ergänzt 1.7.7 um MCP-Token-URLs, eine robuste zentrale Kopierfunktion,
-lesbarere Markdown-/Codefenster und Schutz vor ungespeicherten Einstellungen. Es ist keine
-Migration erforderlich; `0052` bleibt aktuell. Alle Fach- und MCP-Funktionen aus 1.7.7
-bleiben erhalten.
+DocOfHome 1.7.9 erweitert die MCP-Abdeckung auf Kochbuch, Wiki, Notizen, Assets, Orte,
+Stammdaten, Verbrauch und Netzwerk. Es ist keine Migration erforderlich; `0052` bleibt
+aktuell. Alle Funktionen aus 1.7.8 bleiben erhalten.
 
 ## Verbindliche Elektro-Logik
 
