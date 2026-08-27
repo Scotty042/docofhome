@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.13.2 – 2026-08-27
+
+- „Kochbuch“ aus dem aufgeklappten Wiki-Untermenü entfernt.
+- Der eigenständige Kochbuch-Eintrag im Hauptmenü bleibt unverändert erhalten.
+- Keine Datenbankmigration; Alembic-Head bleibt `0052`.
+
 ## 1.7.13.1 – 2026-08-27
 
 - Rezept-Lesemodus, Editor und Kochmodus klar getrennt.

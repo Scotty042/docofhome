@@ -150,7 +150,6 @@ onMounted(async () => {
             </template>
             <v-list-item prepend-icon="mdi-file-document-outline" title="Wiki-Seiten" to="/wiki" />
             <v-list-item prepend-icon="mdi-format-list-bulleted" title="Handbuch & Glossar" to="/wiki/handbuch" />
-            <v-list-item v-if="enabledModules.has('cookbook')" prepend-icon="mdi-chef-hat" title="Kochbuch" to="/wiki/kochbuch" />
           </v-list-group>
           <v-list-group v-if="hiddenModuleNavigation.length" value="other">
             <template #activator="{ props }"><v-list-item v-bind="props" prepend-icon="mdi-dots-horizontal-circle-outline" title="Sonstiges" /></template>
