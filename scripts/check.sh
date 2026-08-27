@@ -8,7 +8,7 @@ python scripts/check-version.py
 python scripts/check-branding.py
 python scripts/check-collected-fixes.py
 python scripts/check-reading-reminders.py
-python scripts/check-release-1.7.13.3.py
+python scripts/check-release-1.7.13.4.py
 python scripts/check-electrical-integrity-1.6.3.py
 python scripts/check-phase-rail-runtime-sync.py
 python scripts/check-phase-rail-explicit-sync.py
@@ -35,6 +35,7 @@ python scripts/check-migration-0049.py
 python scripts/check-migration-0050.py
 python scripts/check-migration-0051.py
 python scripts/check-migration-0052.py
+python scripts/check-migration-0053.py
 
 cd "$ROOT_DIR/backend"
 ruff check app tests

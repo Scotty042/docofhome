@@ -4,7 +4,8 @@ from sqlmodel import Field, SQLModel
 
 DEFAULT_ENABLED_MODULES_JSON = (
     '["locations","electrical","assets","master_data","network",'
-    '"smart_home","consumption","wiki","maintenance","quality"]'
+    '"smart_home","consumption","wiki","maintenance","quality",'
+    '"cookbook","images","documents","workloads"]'
 )
 DEFAULT_MAIN_MENU_MODULES_JSON = DEFAULT_ENABLED_MODULES_JSON
 

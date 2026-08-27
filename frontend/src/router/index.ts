@@ -81,6 +81,7 @@ router.beforeEach(async (to) => {
       ['/locations', 'locations'], ['/electrical', 'electrical'], ['/assets', 'assets'],
       ['/master-data', 'master_data'], ['/network', 'network'], ['/smart-home', 'smart_home'],
       ['/consumption', 'consumption'], ['/maintenance', 'maintenance'], ['/quality', 'quality'],
+      ['/images', 'images'], ['/documents', 'documents'], ['/workloads', 'workloads'],
       ['/wiki/kochbuch', 'cookbook'], ['/wiki', 'wiki']
     ]
     const required = routeModules.find(([prefix]) => to.path.startsWith(prefix))?.[1]

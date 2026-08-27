@@ -1,7 +1,7 @@
 export type IntegrationKind = 'home_assistant' | 'immich' | 'nextcloud' | 'fritzbox'
 export type Language = 'de' | 'en'
 export type ThemePreference = 'dark' | 'light'
-export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality' | 'cookbook'
+export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality' | 'cookbook' | 'images' | 'documents' | 'workloads'
 
 export type McpPermission = 'read' | 'write' | 'admin'
 
@@ -108,7 +108,10 @@ export const moduleKeys: ModuleKey[] = [
   'wiki',
   'maintenance',
   'quality',
-  'cookbook'
+  'cookbook',
+  'images',
+  'documents',
+  'workloads'
 ]
 
 

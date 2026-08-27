@@ -74,7 +74,25 @@ const modules: ModuleOption[] = [
   },
   {
     key: 'cookbook', title: 'Kochbuch', icon: 'mdi-chef-hat',
-    description: 'Strukturierte Rezepte im Wiki verwalten, suchen und drucken.'
+    description: 'Strukturierte Rezepte verwalten, suchen und drucken.'
+  },
+  {
+    key: 'images',
+    title: 'Bilder',
+    icon: 'mdi-image-multiple-outline',
+    description: 'Immich-Bilder durchsuchen und mit DocOfHome-Inhalten verknüpfen.',
+  },
+  {
+    key: 'documents',
+    title: 'Dokumente',
+    icon: 'mdi-folder-outline',
+    description: 'Dokumente über den konfigurierten Nextcloud-Speicher verwalten und verknüpfen.',
+  },
+  {
+    key: 'workloads',
+    title: 'Dienste & Container (Docker)',
+    icon: 'mdi-docker',
+    description: 'Logische Dienste, Container und deren Zuordnungen dokumentieren.',
   }
 ]
 

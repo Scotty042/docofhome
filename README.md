@@ -1,11 +1,18 @@
 # DocOfHome
 
-DocOfHome 1.7.13.3 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.13.4 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.13.4
+
+- **Bilder**, **Dokumente** und **Dienste & Container (Docker)** vollständig in die Modulsteuerung aufgenommen
+- pro Bereich getrennte Schalter für **Aktiviert** und **Im Hauptmenü anzeigen**
+- aktive ausgeblendete Bereiche erscheinen unter **Sonstiges**
+- Migration `0053` erhält die bisherige Sichtbarkeit beim Upgrade
 
 ## Neu in 1.7.13.3
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.13.4 – 2026-08-27
+
+- Bilder, Dokumente und Dienste & Container (Docker) in die Modul-/Navigationsübersicht aufgenommen.
+- Alle drei Bereiche können nun separat aktiviert und im Hauptmenü ein- oder ausgeblendet werden.
+- Aktive ausgeblendete Bereiche erscheinen unter „Sonstiges“; deaktivierte direkte Routen werden gesperrt.
+- Migration `0053` erhält für bestehende Installationen zunächst die bisherige Sichtbarkeit.
+
 ## 1.7.13.3 – 2026-08-27
 
 - Rezeptbilder direkt per Kamera oder Dateiauswahl hochladen und lokal speichern.

@@ -33,6 +33,9 @@ class ModuleKey(StrEnum):
     MAINTENANCE = "maintenance"
     QUALITY = "quality"
     COOKBOOK = "cookbook"
+    IMAGES = "images"
+    DOCUMENTS = "documents"
+    WORKLOADS = "workloads"
 
 
 class ThemePreference(StrEnum):

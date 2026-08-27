@@ -52,14 +52,24 @@ const moduleNavigation: ModuleNavigationItem[] = [
   { key: 'quality', title: 'Dokumentationsqualität', icon: 'mdi-clipboard-check-outline', to: '/quality' },
   { key: 'cookbook', title: 'Kochbuch', icon: 'mdi-chef-hat', to: '/wiki/kochbuch' }
 ]
+const utilityNavigation: ModuleNavigationItem[] = [
+  { key: 'images', title: 'Bilder', icon: 'mdi-image-multiple-outline', to: '/images' },
+  { key: 'documents', title: 'Dokumente', icon: 'mdi-folder-outline', to: '/documents' },
+  { key: 'workloads', title: 'Dienste & Container', icon: 'mdi-docker', to: '/workloads' }
+]
 const enabledModules = computed(() => new Set(settings.configuration?.enabled_modules ?? moduleKeys))
 const mainMenuModules = computed(() => new Set(settings.configuration?.main_menu_modules ?? settings.configuration?.enabled_modules ?? moduleKeys))
 const visibleModuleNavigation = computed(() => (
   moduleNavigation.filter((item) => enabledModules.value.has(item.key) && mainMenuModules.value.has(item.key))
 ))
+const visibleUtilityNavigation = computed(() => (
+  utilityNavigation.filter((item) => enabledModules.value.has(item.key) && mainMenuModules.value.has(item.key))
+))
 const wikiEnabled = computed(() => enabledModules.value.has('wiki') && mainMenuModules.value.has('wiki'))
 const hiddenModuleNavigation = computed(() => {
-  const items = moduleNavigation.filter((item) => enabledModules.value.has(item.key) && !mainMenuModules.value.has(item.key))
+  const items = [...moduleNavigation, ...utilityNavigation].filter(
+    (item) => enabledModules.value.has(item.key) && !mainMenuModules.value.has(item.key)
+  )
   if (enabledModules.value.has('wiki') && !mainMenuModules.value.has('wiki')) {
     items.push({ key: 'wiki', title: 'Wiki', icon: 'mdi-book-open-page-variant', to: '/wiki' })
   }
@@ -155,9 +165,13 @@ onMounted(async () => {
             <template #activator="{ props }"><v-list-item v-bind="props" prepend-icon="mdi-dots-horizontal-circle-outline" title="Sonstiges" /></template>
             <v-list-item v-for="item in hiddenModuleNavigation" :key="item.key" :prepend-icon="item.icon" :title="item.title" :to="item.to" />
           </v-list-group>
-          <v-list-item prepend-icon="mdi-image-multiple-outline" title="Bilder" to="/images" />
-          <v-list-item prepend-icon="mdi-folder-outline" title="Dokumente" to="/documents" />
-          <v-list-item prepend-icon="mdi-docker" title="Dienste & Container" to="/workloads" />
+          <v-list-item
+            v-for="item in visibleUtilityNavigation"
+            :key="item.key"
+            :prepend-icon="item.icon"
+            :title="item.title"
+            :to="item.to"
+          />
           <v-list-group value="more">
             <template #activator="{ props }">
               <v-list-item v-bind="props" prepend-icon="mdi-menu" title="Mehr" />

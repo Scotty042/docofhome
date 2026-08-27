@@ -2,9 +2,11 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.13.3
+Release: 1.7.13.4
 
-Alembic-Head: `0052`
+Alembic-Head: `0053`
+
+DocOfHome 1.7.13.4 vervollständigt die Modul- und Menüsteuerung um Bilder, Dokumente und Dienste & Container (Docker). Die drei zuvor fest sichtbaren Bereiche lassen sich jetzt aktivieren/deaktivieren und unabhängig im Hauptmenü ein- oder ausblenden. Migration `0053` erhält beim Upgrade zunächst die bisherige Sichtbarkeit.
 
 DocOfHome 1.7.13.3 korrigiert die Rezeptbildpflege: Kamera/Datei und Immich stehen direkt im Editor zur Verfügung, Bilder werden lokal gespeichert. Zusätzlich ist der Abstand zwischen Mengen-/Einheitenangabe und Zutatenname in der Darstellung abgesichert. Keine Datenbankmigration erforderlich.
 
