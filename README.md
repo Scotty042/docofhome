@@ -1,11 +1,16 @@
 # DocOfHome
 
-DocOfHome 1.7.9 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.10 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.10
+
+- korrigierter Frontend-Build des MCP-Handbucheintrags aus 1.7.9
+- keine fachlichen oder Datenbankänderungen gegenüber 1.7.9
 
 ## Neu in 1.7.9
 

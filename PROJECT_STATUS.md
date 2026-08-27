@@ -2,13 +2,13 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.9
+Release: 1.7.10
 
 Alembic-Head: `0052`
 
-DocOfHome 1.7.9 erweitert die MCP-Abdeckung auf Kochbuch, Wiki, Notizen, Assets, Orte,
-Stammdaten, Verbrauch und Netzwerk. Es ist keine Migration erforderlich; `0052` bleibt
-aktuell. Alle Funktionen aus 1.7.8 bleiben erhalten.
+DocOfHome 1.7.10 korrigiert den Frontend-Build des MCP-Handbucheintrags aus 1.7.9.
+Die MCP-Erweiterungen für Kochbuch, Wiki, Notizen, Assets, Orte, Stammdaten, Verbrauch
+und Netzwerk bleiben unverändert. Es ist keine Migration erforderlich; `0052` bleibt aktuell.
 
 ## Verbindliche Elektro-Logik
 

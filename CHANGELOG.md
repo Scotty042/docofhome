@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.10 – 2026-08-27
+
+- TypeScript-Syntax des MCP-Handbucheintrags korrigiert.
+- Markdown-Inline-Code und nginx-Codeblock innerhalb des Template-Strings korrekt maskiert.
+- Funktional identisch zu 1.7.9; keine Datenbankmigration.
+
 ## 1.7.9 – 2026-08-27
 
 - MCP-Werkzeuge für Kochbuch, Wiki und verknüpfte Notizen.
