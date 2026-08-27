@@ -5,7 +5,7 @@ import cookMode from '../components/RecipeCookMode.vue?raw'
 import detailDialog from '../components/RecipeDetailDialog.vue?raw'
 import editorDialog from '../components/RecipeEditorDialog.vue?raw'
 
-describe('release 1.7.13 cookbook tablet experience', () => {
+describe('release 1.7.13.1 cookbook tablet experience', () => {
   it('keeps the normal recipe view inside DocOfHome and makes only cooking immersive', () => {
     expect(cookbook).toContain('RecipeDetailDialog')
     expect(cookbook).toContain('RecipeCookMode')

@@ -2,11 +2,11 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.13
+Release: 1.7.13.1
 
 Alembic-Head: `0052`
 
-DocOfHome 1.7.13 überarbeitet die Kochbuch-Oberfläche für Desktop und iPad. Lesemodus,
+DocOfHome 1.7.13.1 überarbeitet die Kochbuch-Oberfläche für Desktop und iPad. Lesemodus,
 Editor und ein ablenkungsfreier Vollbild-Kochmodus sind nun klar getrennt; Zutaten und
 Arbeitsschritte sind touch-tauglich bedienbar. Es ist keine Migration erforderlich; `0052` bleibt aktuell.
 

@@ -1,4 +1,6 @@
-# DocOfHome 1.7.13
+# DocOfHome 1.7.13.1
+
+Patch-Release für 1.7.13. Behebt den TypeScript-Buildfehler im neuen Kochmodus: Die Screen-Wake-Lock-API verwendet nun die nativen DOM-Typen, sodass `vue-tsc --noEmit` nicht mehr an einer inkompatiblen `Navigator`-Erweiterung scheitert.
 
 Das Kochbuch erhält eine neu aufgebaute Rezeptoberfläche mit klar getrennten Ansichten für
 Lesen, Bearbeiten und Kochen. Die normale Rezeptansicht bleibt in der DocOfHome-Oberfläche;

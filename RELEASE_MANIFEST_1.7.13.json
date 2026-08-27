@@ -1,9 +1,0 @@
-{
-  "name": "DocOfHome",
-  "version": "1.7.13",
-  "base_version": "1.7.12",
-  "built_on": "2026-08-27",
-  "alembic_head": "0052",
-  "database_migration_required": false,
-  "release_reason": "Tablet-friendly cookbook detail, ingredient editor and immersive cooking mode"
-}

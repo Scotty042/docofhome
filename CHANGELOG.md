@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.7.13 – 2026-08-27
+## 1.7.13.1 – 2026-08-27
 
 - Rezept-Lesemodus, Editor und Kochmodus klar getrennt.
 - Ablenkungsfreier, iPad-optimierter Vollbild-Kochmodus mit Portionsskalierung und optionalem Screen Wake Lock.

@@ -2,17 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Recipe } from '../types/recipe'
 
-interface WakeLockSentinelLike extends EventTarget {
-  release: () => Promise<void>
-  released?: boolean
-}
-
-interface WakeLockNavigator extends Navigator {
-  wakeLock?: {
-    request: (type: 'screen') => Promise<WakeLockSentinelLike>
-  }
-}
-
 const props = defineProps<{
   recipe: Recipe
   portions: number
@@ -28,7 +17,7 @@ const checkedSteps = ref<Set<number>>(new Set())
 const keepScreenAwake = ref(true)
 const wakeLockSupported = ref(false)
 const wakeLockActive = ref(false)
-let wakeLockSentinel: WakeLockSentinelLike | null = null
+let wakeLockSentinel: WakeLockSentinel | null = null
 
 const totalMinutes = computed(() => (props.recipe.preparation_minutes ?? 0) + (props.recipe.cooking_minutes ?? 0))
 const scaledIngredients = computed(() => {
@@ -64,8 +53,8 @@ function toggleStep(index: number) {
 
 async function acquireWakeLock() {
   if (!keepScreenAwake.value || document.visibilityState !== 'visible') return
-  const wakeLock = (navigator as WakeLockNavigator).wakeLock
-  if (!wakeLock || wakeLockSentinel) return
+  if (!('wakeLock' in navigator) || wakeLockSentinel) return
+  const wakeLock = navigator.wakeLock
   try {
     wakeLockSentinel = await wakeLock.request('screen')
     wakeLockActive.value = true
