@@ -2,7 +2,7 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.11
+Release: 1.7.12
 
 Alembic-Head: `0052`
 

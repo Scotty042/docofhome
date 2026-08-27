@@ -1,11 +1,15 @@
 # DocOfHome
 
-DocOfHome 1.7.11 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.12 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.12
+
+- explizites, typisiertes MCP-Eingabeschema für das Speichern von Rezepten
 
 ## Neu in 1.7.11
 

@@ -21,7 +21,7 @@ from app.schemas.consumption import ConsumptionMeterWrite, ConsumptionNoteWrite,
 from app.schemas.knowledge import KnowledgeTargetType, NoteCreate, NoteUpdate, WikiPageCreate, WikiPageUpdate
 from app.schemas.mcp import McpPermission
 from app.schemas.network import NetworkAddressWrite, NetworkConnectionWrite, NetworkDeviceWrite, NetworkInterfaceWrite, NetworkSegmentWrite
-from app.schemas.recipe import RecipeWrite
+from app.schemas.recipe import Ingredient, RecipeWrite
 from app.schemas.work import (
     RecurrenceMode,
     WorkCompletionWrite,
@@ -540,15 +540,58 @@ def get_recipe(recipe_id: str) -> dict[str, Any]:
 
 
 @mcp_server.tool()
-def save_recipe(payload: dict[str, Any], recipe_id: str | None = None) -> dict[str, Any]:
-    """Legt ein Rezept an oder ersetzt es vollständig. payload entspricht RecipeWrite."""
-    data = RecipeWrite.model_validate(payload)
-    with Session(engine) as session:
-        _permission(session, McpPermission.WRITE)
-        row = session.get(Recipe, _uuid(recipe_id, "recipe_id")) if recipe_id else Recipe(title=data.title)
-        if row is None: raise ValueError("Rezept wurde nicht gefunden")
-        apply_recipe(row, data); session.add(row); session.commit(); session.refresh(row)
-        return read_recipe(row).model_dump(mode="json")
+def save_recipe(
+    title: str,
+    ingredients: list[Ingredient] | None = None,
+    steps: list[str] | None = None,
+    recipe_id: str | None = None,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    preparation_minutes: int | None = None,
+    cooking_minutes: int | None = None,
+    servings: float = 4,
+    favorite: bool = False,
+    notes: str | None = None,
+    source_url: str | None = None,
+    image_url: str | None = None,
+    attachments: list[str] | None = None,
+) -> dict[str, Any]:
+    """Legt ein vollständiges Rezept an oder ersetzt es anhand seiner recipe_id."""
+    try:
+        data = RecipeWrite(
+            title=title,
+            category=category or "",
+            tags=tags or [],
+            preparation_minutes=preparation_minutes,
+            cooking_minutes=cooking_minutes,
+            servings=servings,
+            favorite=favorite,
+            image_url=image_url or None,
+            ingredients=ingredients or [],
+            steps=steps or [],
+            notes=notes or "",
+            source_url=source_url or None,
+            attachments=attachments or [],
+        )
+        with Session(engine) as session:
+            _permission(session, McpPermission.WRITE)
+            created = recipe_id is None
+            row = (
+                session.get(Recipe, _uuid(recipe_id, "recipe_id"))
+                if recipe_id
+                else Recipe(title=data.title)
+            )
+            if row is None:
+                raise ValueError("Rezept wurde nicht gefunden")
+            apply_recipe(row, data)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return {"item": read_recipe(row).model_dump(mode="json"), "created": created}
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Rezept konnte nicht gespeichert werden: {exc}") from exc
 
 
 @mcp_server.tool()

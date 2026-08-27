@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.12 – 2026-08-27
+
+- `save_recipe` veröffentlicht alle Rezeptfelder als explizites MCP-Eingabeschema.
+- Generisches, für Clients nicht ausreichend beschreibbares `payload` entfernt.
+- Stabile Speicherantwort mit `item` und `created`; unerwartete Fehler werden als Werkzeugfehler gemeldet.
+
 ## 1.7.11 – 2026-08-27
 
 - `search_recipes` akzeptiert fehlende und explizit als `null` gesendete Filter.
