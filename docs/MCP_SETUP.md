@@ -1,5 +1,10 @@
 # DocOfHome MCP einrichten (Verweis)
 
+Clients ohne konfigurierbaren Bearer-Header können denselben Server über
+`https://example.test/mcp/<token>` ansprechen. Tokenprüfung und Berechtigungen sind identisch.
+Da Token-URLs in Browser-Historien und Proxy-Logs erscheinen können, bleibt
+`Authorization: Bearer <token>` die bevorzugte Variante.
+
 Die vollständige und maßgebliche MCP-Anleitung ist seit 1.7.7 in das bestehende
 **DocOfHome-Handbuch/Runbook** integriert. In der Anwendung führt der Button
 **„MCP-Dokumentation im Handbuch öffnen“** direkt zum Abschnitt „MCP-Zugriff und SWAG“.

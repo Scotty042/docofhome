@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 
 import ModuleSettingsCard from '../components/ModuleSettingsCard.vue'
 import { immichApi } from '../services/immichApi'
@@ -14,6 +15,7 @@ import {
   type McpSettingsWrite
 } from '../types/settings'
 import type { ImmichAlbum } from '../types/immich'
+import { copyText } from '../utils/clipboard'
 
 type FormHandle = { validate: () => Promise<{ valid: boolean }> }
 
@@ -35,7 +37,16 @@ const mcpToken = ref<string | null>(null)
 const rotatingMcpToken = ref(false)
 const copiedMcpToken = ref(false)
 const copiedMcpUrl = ref(false)
+const copiedTokenMcpUrl = ref(false)
 const effectiveMcpUrl = computed(() => mcpForm.value.public_url?.trim() || `${window.location.origin}/mcp`)
+const tokenMcpUrl = computed(() => mcpToken.value ? `${effectiveMcpUrl.value}/${encodeURIComponent(mcpToken.value)}` : null)
+const savedForm = ref(createDefaultConfiguration())
+const savedMcpForm = ref<McpSettingsWrite>({ enabled: false, permission: 'read', public_url: null })
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const dirty = computed(() => !loading.value && (
+  JSON.stringify(form.value) !== JSON.stringify(savedForm.value) ||
+  JSON.stringify(mcpForm.value) !== JSON.stringify(savedMcpForm.value)
+))
 const mcpUrlRule = (value: string | null) => {
   if (!value?.trim()) return true
   try {
@@ -102,6 +113,8 @@ onMounted(async () => {
       public_url: mcpConfiguration.public_url
     }
     mcpTokenConfigured.value = mcpConfiguration.token_configured
+    savedForm.value = clone(form.value)
+    savedMcpForm.value = clone(mcpForm.value)
     const immich = configuration.integrations.find((integration) => integration.kind === 'immich')
     if (immich?.enabled && immich.secret_configured) await loadImmichAlbums()
   } catch (reason) {
@@ -110,6 +123,22 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+function warnBeforeUnload(event: BeforeUnloadEvent) {
+  if (!dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+window.addEventListener('beforeunload', warnBeforeUnload)
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
+onBeforeRouteLeave(() => !dirty.value || window.confirm('Es gibt ungespeicherte Änderungen. Möchtest du sie verwerfen und die Seite verlassen?'))
+
+function discardChanges() {
+  form.value = clone(savedForm.value)
+  mcpForm.value = clone(savedMcpForm.value)
+  error.value = null
+  saved.value = false
+}
 
 async function loadImmichAlbums() {
   immichAlbumsLoading.value = true
@@ -157,6 +186,8 @@ async function save() {
         public_url: storedMcp.public_url
       }
       mcpTokenConfigured.value = storedMcp.token_configured
+      savedForm.value = clone(form.value)
+      savedMcpForm.value = clone(mcpForm.value)
       saved.value = true
     }
   } catch (reason) {
@@ -185,7 +216,7 @@ async function rotateMcpToken() {
 async function copyMcpToken() {
   if (!mcpToken.value) return
   try {
-    await navigator.clipboard.writeText(mcpToken.value)
+    await copyText(mcpToken.value)
     copiedMcpToken.value = true
   } catch {
     error.value = 'Der MCP-Token konnte nicht in die Zwischenablage kopiert werden.'
@@ -194,10 +225,20 @@ async function copyMcpToken() {
 
 async function copyMcpUrl() {
   try {
-    await navigator.clipboard.writeText(effectiveMcpUrl.value)
+    await copyText(effectiveMcpUrl.value)
     copiedMcpUrl.value = true
   } catch {
     error.value = 'Die MCP-Adresse konnte nicht in die Zwischenablage kopiert werden.'
+  }
+}
+
+async function copyTokenMcpUrl() {
+  if (!tokenMcpUrl.value) return
+  try {
+    await copyText(tokenMcpUrl.value)
+    copiedTokenMcpUrl.value = true
+  } catch {
+    error.value = 'Die MCP-Token-Adresse konnte nicht in die Zwischenablage kopiert werden.'
   }
 }
 
@@ -596,6 +637,12 @@ async function testIntegration(kind: IntegrationKind) {
             >
               {{ copiedMcpToken ? 'Token kopiert' : 'Token kopieren' }}
             </v-btn>
+            <div v-if="tokenMcpUrl" class="mt-4">
+              <div class="text-caption text-medium-emphasis">URL für Clients ohne Bearer-Header</div>
+              <code class="token-url">{{ tokenMcpUrl }}</code>
+              <v-btn class="mt-2" size="small" variant="tonal" prepend-icon="mdi-content-copy" @click="copyTokenMcpUrl">{{ copiedTokenMcpUrl ? 'URL kopiert' : 'Token-URL kopieren' }}</v-btn>
+              <p class="text-caption mt-2 mb-0">Diese URL enthält ein Geheimnis und kann in Browser- oder Proxy-Logs erscheinen.</p>
+            </div>
           </v-alert>
 
           <v-alert type="success" variant="tonal" density="compact" icon="mdi-shield-lock-outline">
@@ -605,10 +652,13 @@ async function testIntegration(kind: IntegrationKind) {
         </v-card-text>
       </v-card>
 
-      <div class="d-flex justify-end mt-6">
-        <v-btn color="primary" size="large" type="submit" :loading="saving" prepend-icon="mdi-content-save">
-          Einstellungen speichern
-        </v-btn>
+      <div class="settings-save-bar d-flex flex-column flex-sm-row align-sm-center ga-3 mt-6">
+        <div class="flex-grow-1" :class="dirty ? 'text-warning' : 'text-medium-emphasis'">
+          <v-icon :icon="dirty ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'" class="mr-1" />
+          {{ dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}
+        </div>
+        <v-btn variant="text" :disabled="!dirty || saving" @click="discardChanges">Verwerfen</v-btn>
+        <v-btn color="primary" size="large" type="submit" :loading="saving" :disabled="!dirty" prepend-icon="mdi-content-save">Einstellungen speichern</v-btn>
       </div>
     </v-form>
   </v-container>
@@ -617,4 +667,6 @@ async function testIntegration(kind: IntegrationKind) {
 <style scoped>
 .settings-container { max-width: 1100px; }
 h1 { font-size: clamp(1.8rem, 4vw, 2.25rem); }
+.settings-save-bar { position: sticky; z-index: 10; bottom: 0; padding: .75rem 1rem; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px 12px 0 0; background: rgb(var(--v-theme-surface)); box-shadow: 0 -4px 18px rgba(0, 0, 0, .14); }
+.token-url { display: block; overflow-wrap: anywhere; margin-top: .2rem; }
 </style>

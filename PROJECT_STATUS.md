@@ -1,15 +1,15 @@
 # DocOfHome – Projektstatus
 
-Stand: 26. August 2026
+Stand: 27. August 2026
 
-Release: 1.7.7
+Release: 1.7.8
 
 Alembic-Head: `0052`
 
-DocOfHome 1.7.7 ergänzt 1.7.6 um ein strukturiertes Kochbuch, eine zentrale getrennte
-Modul-/Hauptmenüsteuerung, PWA-Installierbarkeit sowie die integrierte MCP-/SWAG-
-Betriebsdokumentation. Migration `0052` ergänzt Rezepte und Hauptmenü-Sichtbarkeit.
-Alle Fach- und MCP-Funktionen aus 1.7.6 bleiben erhalten.
+DocOfHome 1.7.8 ergänzt 1.7.7 um MCP-Token-URLs, eine robuste zentrale Kopierfunktion,
+lesbarere Markdown-/Codefenster und Schutz vor ungespeicherten Einstellungen. Es ist keine
+Migration erforderlich; `0052` bleibt aktuell. Alle Fach- und MCP-Funktionen aus 1.7.7
+bleiben erhalten.
 
 ## Verbindliche Elektro-Logik
 

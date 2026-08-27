@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.8 – 2026-08-27
+
+- MCP zusätzlich über `/mcp/<token>`; `/mcp` mit Bearer-Header bleibt unverändert.
+- Zentrale Clipboard-Hilfe mit sicherem Fallback.
+- Lesbarere Markdown-Absätze, Listen, Inline-Code und einklappbare Codefenster mit Kopierbutton.
+- Sticky Speicherleiste sowie Warnungen vor dem Verlassen ungespeicherter Einstellungen.
+- Keine Datenbankmigration; Alembic-Head bleibt `0052`.
+
 ## 1.7.7 – 2026-08-26
 
 ### Kochbuch und Navigation

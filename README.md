@@ -1,11 +1,17 @@
 # DocOfHome
 
-DocOfHome 1.7.7 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.8 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.8
+
+- MCP per Bearer unter `/mcp` oder per Token-URL unter `/mcp/<token>`
+- robuste zentrale Kopierfunktion, lesbarere Codefenster und Inline-Code
+- sticky Speicherleiste und Verlassen-Warnungen bei ungespeicherten Einstellungen
 
 ## Neu in 1.7.7
 

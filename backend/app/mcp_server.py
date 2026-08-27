@@ -504,7 +504,10 @@ class McpBearerAuthMiddleware:
 
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         raw_header = headers.get(b"authorization", b"").decode("latin-1")
-        token = raw_header[7:].strip() if raw_header.lower().startswith("bearer ") else ""
+        bearer_token = raw_header[7:].strip() if raw_header.lower().startswith("bearer ") else ""
+        path = scope.get("path", "")
+        path_token = path.removeprefix("/mcp/") if path.startswith("/mcp/") else ""
+        token = bearer_token or path_token
         with Session(engine) as session:
             mcp_settings = McpSettingsService(session)
             current = mcp_settings.read()
@@ -521,6 +524,11 @@ class McpBearerAuthMiddleware:
                 await response(scope, receive, send)
                 return
 
+        # The MCP SDK is intentionally configured for one canonical endpoint.
+        # Token-in-path requests are authenticated above, then dispatched to the
+        # exact same /mcp ASGI application as bearer requests.
+        if path_token:
+            scope = {**scope, "path": "/mcp", "raw_path": b"/mcp"}
         await self.app(scope, receive, send)
 
 

@@ -46,6 +46,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.include_router(api_router)
 app.include_router(electrical_layout.router, prefix="/api/v1")
 app.add_route("/mcp", mcp_http_app, methods=["GET", "POST", "DELETE"], name="mcp")
+app.add_route("/mcp/{token}", mcp_http_app, methods=["GET", "POST", "DELETE"], name="mcp-token")
 
 static_dir = settings.static_dir
 assets_dir = static_dir / "assets"

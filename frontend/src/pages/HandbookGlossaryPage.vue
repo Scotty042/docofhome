@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import SafeMarkdown from '../components/SafeMarkdown.vue'
 
 import {
   categoryTitle,
@@ -274,7 +275,7 @@ onMounted(() => applyHash(route.hash))
                     <v-chip size="small" variant="tonal">{{ categoryTitle(entry.category) }}</v-chip>
                   </div>
                   <p class="font-weight-medium mt-3 mb-2">{{ entry.summary }}</p>
-                  <p class="mb-0">{{ entry.details }}</p>
+                  <SafeMarkdown :source="entry.details" />
                   <v-alert v-if="entry.example" type="info" variant="tonal" density="compact" class="mt-3">
                     <strong>Beispiel:</strong> {{ entry.example }}
                   </v-alert>
