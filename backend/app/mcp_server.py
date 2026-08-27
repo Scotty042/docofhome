@@ -501,17 +501,32 @@ def delete_subject(subject_id: str) -> dict[str, str]:
 
 # Knowledge and cookbook
 @mcp_server.tool()
-def search_recipes(query: str = "", category: str = "", tag: str = "") -> list[dict[str, Any]]:
-    """Sucht Rezepte nach Titel/Zutat sowie optional Kategorie und Tag."""
+def search_recipes(
+    query: str | None = None,
+    category: str | None = None,
+    tag: str | None = None,
+) -> dict[str, Any]:
+    """Sucht Rezepte zur Dublettenprüfung und liefert immer items sowie count."""
+    normalized_query = (query or "").strip()
+    normalized_category = (category or "").strip()
+    normalized_tag = (tag or "").strip()
     with Session(engine) as session:
         _permission(session, McpPermission.READ)
         statement = select(Recipe)
-        if query.strip():
-            needle = f"%{query.strip()}%"
+        if normalized_query:
+            needle = f"%{normalized_query}%"
             statement = statement.where(or_(Recipe.title.ilike(needle), Recipe.ingredients_json.ilike(needle)))
-        if category.strip(): statement = statement.where(Recipe.category == category.strip())
-        if tag.strip(): statement = statement.where(Recipe.tags_json.ilike(f'%"{tag.strip()}"%'))
-        return [read_recipe(row).model_dump(mode="json") for row in session.exec(statement.order_by(Recipe.favorite.desc(), Recipe.title)).all()[:100]]
+        if normalized_category:
+            statement = statement.where(Recipe.category == normalized_category)
+        if normalized_tag:
+            statement = statement.where(Recipe.tags_json.ilike(f'%"{normalized_tag}"%'))
+        items = [
+            read_recipe(row).model_dump(mode="json")
+            for row in session.exec(
+                statement.order_by(Recipe.favorite.desc(), Recipe.title)
+            ).all()[:100]
+        ]
+        return {"items": items, "count": len(items)}
 
 
 @mcp_server.tool()

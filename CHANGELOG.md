@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.11 – 2026-08-27
+
+- `search_recipes` akzeptiert fehlende und explizit als `null` gesendete Filter.
+- Stabile Suchantwort mit `items` und `count`, auch bei leerem Kochbuch.
+- Regressionstest für den MCP-Rezeptsuchvertrag ergänzt.
+
 ## 1.7.10 – 2026-08-27
 
 - TypeScript-Syntax des MCP-Handbucheintrags korrigiert.
