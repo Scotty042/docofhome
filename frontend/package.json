@@ -1,7 +1,7 @@
 {
   "name": "jarvis-frontend",
   "private": true,
-  "version": "1.7.13.2",
+  "version": "1.7.13.3",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

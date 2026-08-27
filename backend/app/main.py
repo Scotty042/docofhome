@@ -22,6 +22,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "uploads" / "product-images").mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "uploads" / "recipe-images").mkdir(parents=True, exist_ok=True)
     scheduler_task = asyncio.create_task(backup_scheduler_loop())
     quality_task = asyncio.create_task(quality_scheduler_loop())
     try:

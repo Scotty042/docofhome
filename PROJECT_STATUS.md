@@ -2,9 +2,11 @@
 
 Stand: 27. August 2026
 
-Release: 1.7.13.2
+Release: 1.7.13.3
 
 Alembic-Head: `0052`
+
+DocOfHome 1.7.13.3 korrigiert die Rezeptbildpflege: Kamera/Datei und Immich stehen direkt im Editor zur Verfügung, Bilder werden lokal gespeichert. Zusätzlich ist der Abstand zwischen Mengen-/Einheitenangabe und Zutatenname in der Darstellung abgesichert. Keine Datenbankmigration erforderlich.
 
 DocOfHome 1.7.13.1 überarbeitet die Kochbuch-Oberfläche für Desktop und iPad. Lesemodus,
 Editor und ein ablenkungsfreier Vollbild-Kochmodus sind nun klar getrennt; Zutaten und

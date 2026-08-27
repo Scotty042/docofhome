@@ -6,3 +6,5 @@ export interface Recipe {
   notes: string; source_url: string | null; attachments: string[]; created_at: string; updated_at: string
 }
 export type RecipeWrite = Omit<Recipe, 'id' | 'created_at' | 'updated_at'>
+
+export interface RecipeImageUpload { image_url: string; image_reference: string }

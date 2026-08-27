@@ -36,7 +36,7 @@ ignore_errors = true
 
 [project]
 name = "docofhome-backend"
-version = "1.7.13.2"
+version = "1.7.13.3"
 requires-python = ">=3.13"
 
 [tool.pytest.ini_options]

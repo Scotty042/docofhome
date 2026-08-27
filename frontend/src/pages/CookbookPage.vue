@@ -332,8 +332,7 @@ onBeforeUnmount(() => {
       <h2>Zutaten</h2>
       <ul>
         <li v-for="(item, index) in printIngredients" :key="index">
-          <strong v-if="item.amount !== null || item.unit">{{ formatAmount(item.amount) }} {{ item.unit }}</strong>
-          {{ item.name }}<span v-if="item.note"> – {{ item.note }}</span>
+          <strong v-if="item.amount !== null || item.unit" class="print-ingredient-quantity">{{ formatAmount(item.amount) }}{{ item.amount !== null && item.unit ? ' ' : '' }}{{ item.unit }}</strong>{{ item.name }}<span v-if="item.note"> – {{ item.note }}</span>
         </li>
       </ul>
       <h2>Zubereitung</h2>
@@ -358,6 +357,7 @@ onBeforeUnmount(() => {
 .recipe-card-meta span { display: flex; align-items: center; gap: 6px; }
 .print-recipe { display: none; }
 .print-notes { margin-top: 22px; white-space: pre-wrap; }
+.print-ingredient-quantity { margin-right: .35em; }
 
 @media (max-width: 600px) {
   .cookbook { padding-left: 12px !important; padding-right: 12px !important; }

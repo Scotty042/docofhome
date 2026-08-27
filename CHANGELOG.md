@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.13.3 – 2026-08-27
+
+- Rezeptbilder direkt per Kamera oder Dateiauswahl hochladen und lokal speichern.
+- Rezeptbild aus Immich auswählen und lokal nach DocOfHome übernehmen.
+- Manuelle Bild-URL nur noch unter „Erweitert“.
+- Fehlendes Leerzeichen zwischen Mengen-/Einheitenangabe und Zutatenname behoben.
+
 ## 1.7.13.2 – 2026-08-27
 
 - „Kochbuch“ aus dem aufgeklappten Wiki-Untermenü entfernt.

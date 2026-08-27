@@ -85,7 +85,7 @@ function adjustPortions(delta: number) {
               <v-list-item v-for="(ingredient, index) in scaledIngredients" :key="`${ingredient.name}-${index}`" class="px-0">
                 <template #prepend><v-icon size="18" color="primary">mdi-circle-small</v-icon></template>
                 <v-list-item-title>
-                  <strong v-if="ingredient.amount !== null || ingredient.unit">{{ formatAmount(ingredient.amount) }}{{ ingredient.amount !== null && ingredient.unit ? ' ' : '' }}{{ ingredient.unit }} </strong>{{ ingredient.name }}
+                  <strong v-if="ingredient.amount !== null || ingredient.unit" class="ingredient-quantity">{{ formatAmount(ingredient.amount) }}{{ ingredient.amount !== null && ingredient.unit ? ' ' : '' }}{{ ingredient.unit }}</strong>{{ ingredient.name }}
                 </v-list-item-title>
                 <v-list-item-subtitle v-if="ingredient.note">{{ ingredient.note }}</v-list-item-subtitle>
               </v-list-item>
@@ -147,6 +147,7 @@ function adjustPortions(delta: number) {
 .detail-portion-stepper { display: flex; align-items: center; gap: 3px; min-height: 42px; padding: 2px 4px; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px; }
 .detail-portion-stepper strong { min-width: 32px; text-align: center; }
 .ingredient-detail-list { padding: 0; }
+.ingredient-quantity { margin-right: .35em; }
 .detail-steps { display: grid; gap: 10px; }
 .detail-step { border-radius: 14px; }
 .detail-step .v-card-text { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px; }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import RecipeImageField from './RecipeImageField.vue'
 import type { Recipe, RecipeWrite } from '../types/recipe'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -83,7 +84,7 @@ function moveStep(index: number, delta: number) {
             <v-col cols="12" sm="4"><v-text-field v-model.number="form.preparation_minutes" type="number" min="0" label="Vorbereitung (Min.)" /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model.number="form.cooking_minutes" type="number" min="0" label="Zubereitung (Min.)" /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model.number="form.servings" type="number" min="0.1" step="0.5" label="Portionen" /></v-col>
-            <v-col cols="12"><v-text-field v-model="form.image_url" label="Bild-URL (optional)" prepend-inner-icon="mdi-image-outline" /></v-col>
+            <v-col cols="12"><RecipeImageField v-model="form.image_url" /></v-col>
           </v-row>
         </section>
 
@@ -160,8 +161,8 @@ function moveStep(index: number, delta: number) {
         <section class="editor-section">
           <div class="editor-section-title"><v-icon color="primary">mdi-note-text-outline</v-icon><div><h2>Weitere Angaben</h2><p>Notizen, Quelle und Anhänge</p></div></div>
           <v-textarea v-model="form.notes" label="Notizen" auto-grow rows="3" />
-          <v-text-field v-model="form.source_url" label="Quelle / URL (optional)" prepend-inner-icon="mdi-link-variant" />
-          <v-combobox v-model="form.attachments" label="Bilder / Anhänge (URLs)" multiple chips closable-chips prepend-inner-icon="mdi-paperclip" />
+          <v-text-field v-model="form.source_url" label="Rezeptquelle / URL (optional)" prepend-inner-icon="mdi-link-variant" />
+          <v-combobox v-model="form.attachments" label="Weitere Anhänge (URLs, optional)" multiple chips closable-chips prepend-inner-icon="mdi-paperclip" />
         </section>
       </v-card-text>
 

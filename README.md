@@ -1,11 +1,18 @@
 # DocOfHome
 
-DocOfHome 1.7.13.2 ist ein lokaler digitaler Zwilling für die technische
+DocOfHome 1.7.13.3 ist ein lokaler digitaler Zwilling für die technische
 Hausdokumentation. Die Anwendung verwaltet Assets, Orte, Elektroinstallation,
 Netzwerk, Verbrauch, Wartungen, Wiki, Bilder, Dokumente und optionale
 Integrationen wie Home Assistant, Immich und Nextcloud.
 
 
+
+## Neu in 1.7.13.3
+
+- Rezeptbilder direkt mit Kamera/iPhone/iPad aufnehmen oder vom Gerät auswählen
+- vorhandene Immich-Bilder im Rezepteditor auswählen und lokal in DocOfHome übernehmen
+- manuelle Bild-URL nur noch im erweiterten Bereich
+- korrekte Trennung von Mengenangabe und Zutatenname, z. B. `130 g Salatgurke`
 
 ## Neu in 1.7.13.2
 

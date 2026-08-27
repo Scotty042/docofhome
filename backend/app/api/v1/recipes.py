@@ -1,14 +1,55 @@
 import json
 from datetime import UTC, datetime
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.models.recipe import Recipe
-from app.schemas.recipe import RecipeRead, RecipeWrite
+from app.services.immich import (
+    ImmichConfigurationError,
+    ImmichImageNotFoundError,
+    ImmichService,
+    ImmichUnavailableError,
+)
+from app.services.recipe_images import RecipeImageService, RecipeImageValidationError
+from app.schemas.recipe import RecipeImageUploadRead, RecipeRead, RecipeWrite
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
+
+@router.post("/images/upload", response_model=RecipeImageUploadRead, status_code=status.HTTP_201_CREATED)
+async def upload_recipe_image(image: UploadFile = File(...)) -> RecipeImageUploadRead:
+    try:
+        image_url, reference = await RecipeImageService().upload(image)
+    except RecipeImageValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RecipeImageUploadRead(image_url=image_url, image_reference=reference)
+
+
+@router.post("/images/immich/{immich_asset_id}", response_model=RecipeImageUploadRead, status_code=status.HTTP_201_CREATED)
+def import_recipe_image_from_immich(
+    immich_asset_id: UUID,
+    session: Session = Depends(get_session),
+) -> RecipeImageUploadRead:
+    try:
+        thumbnail = ImmichService(session).thumbnail(immich_asset_id)
+        image_url, reference = RecipeImageService().store(thumbnail.content)
+    except (ImmichConfigurationError, ImmichImageNotFoundError, ImmichUnavailableError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except RecipeImageValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RecipeImageUploadRead(image_url=image_url, image_reference=reference)
+
+
+@router.get("/images/{reference}", response_class=FileResponse)
+def recipe_image(reference: str) -> FileResponse:
+    try:
+        path = RecipeImageService().resolve(reference)
+    except RecipeImageValidationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=86400"})
+
 
 def read_model(row: Recipe) -> RecipeRead:
     return RecipeRead(id=row.id, title=row.title, category=row.category,
