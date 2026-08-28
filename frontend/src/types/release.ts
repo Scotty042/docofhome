@@ -130,6 +130,41 @@ export interface ServiceWorkloadWrite {
 export interface ServiceWorkload extends ServiceWorkloadWrite {
   id: string
   host_name: string
+  docker_container_id: string | null
+  docker_status_text: string | null
+  docker_networks: string[]
+  docker_mounts: string[]
+  docker_last_seen_at: string | null
+  docker_managed: boolean
   created_at: string
   updated_at: string
+}
+
+export interface DockerSyncSettingWrite {
+  enabled: boolean
+  socket_path: string
+  host_asset_id: string | null
+  refresh_interval_seconds: 0 | 30 | 60 | 300 | 900 | 1800
+}
+
+export interface DockerSyncSetting extends DockerSyncSettingWrite {
+  host_name: string | null
+  last_attempt_at: string | null
+  last_success_at: string | null
+  last_error: string | null
+}
+
+export interface DockerSyncResult {
+  imported: number
+  updated: number
+  missing: number
+  total: number
+  docker_version: string | null
+  synchronized_at: string
+}
+
+export interface DockerConnectionTest {
+  success: boolean
+  message: string
+  docker_version: string | null
 }

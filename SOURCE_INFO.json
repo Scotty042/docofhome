@@ -1,11 +1,11 @@
 {
   "name": "DocOfHome",
-  "version": "1.7.13.4",
-  "base_version": "1.7.13",
+  "version": "1.7.14",
+  "base_version": "1.7.13.4",
   "repository": "https://github.com/Scotty042/docofhome",
   "releases": "https://github.com/Scotty042/docofhome/releases",
   "issues": "https://github.com/Scotty042/docofhome/issues",
-  "release_notes": "RELEASE_NOTES_1.7.13.4.md",
-  "alembic_head": "0053",
-  "built_on": "2026-08-27"
+  "release_notes": "PROJECT_HISTORY.md",
+  "alembic_head": "0054",
+  "built_on": "2026-08-28"
 }

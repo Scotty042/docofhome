@@ -12,4 +12,4 @@ Stand: 24. Juli 2026
 - Sprint 0039 bleibt ein nicht freigegebener Planungsentwurf.
 
 Der konkret gemeldete TypeScript-Fehler in `immichGallery.test.ts` ist in 1.2.3
-korrigiert. Details stehen in `VALIDATION_REPORT_1.2.3.md`.
+korrigiert. Details stehen in `PROJECT_HISTORY.md`.

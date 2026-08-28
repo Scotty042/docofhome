@@ -45,7 +45,8 @@ def main() -> int:
     assert "effective_asset_module_width(self.session, device_asset)" in repository
     assert "ElectricalEndpointKind.ASSET" in topology
     assert "_phase_rail_phases_for_asset" in topology
-    assert "0045_phase_rail_all_din_contacts.py" in read("scripts/check-release-1.6.3.5.py")
+    migration = read("backend/migrations/versions/0045_phase_rail_all_din_contacts.py")
+    assert "revision" in migration and "0045" in migration
 
     print("Laufzeitvertrag: Kammschiene erzeugt Kontakte zu allen DIN-Geräten.")
     return 0

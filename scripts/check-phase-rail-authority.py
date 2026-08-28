@@ -41,7 +41,7 @@ def main() -> int:
     assert "_phase_rail_phases_for_device" in topology_service
     assert "Sammelschiene (allgemeiner Verteiler)" in layout_page
     assert "Phasenschiene / Kammschiene (Sicherungsreihe)" in layout_page
-    assert "every subsequent save stores the calculated" in topology_service
+    assert "every active phase rail is matched against its" in topology_service
     auto_service = read("backend/app/services/phase_rail_connections.py")
     assert "class PhaseRailConnectionService" in auto_service
     assert "sync_distribution" in auto_service

@@ -39,24 +39,35 @@ const originalCards = ref<DashboardCardSetting[]>([])
 
 const installationName = computed(() => settings.configuration?.installation_name ?? APP_NAME)
 const visibleCards = computed(() => cards.value.filter((item) => item.visible))
-const criticalItems = computed(() => [
-  ...upcomingWork.value.map((item) => ({
-    id: `work-${item.id}`,
-    title: item.title,
-    subtitle: item.due_at ? formatDate(item.due_at) : 'Ohne Termin',
-    days: item.days_remaining,
-    status: item.due_status,
-    to: '/maintenance'
-  })),
-  ...reminders.value.map((item) => ({
-    id: `meter-${item.meter_id}`,
-    title: `${item.meter_name} ablesen`,
-    subtitle: formatDate(item.due_at),
-    days: item.days_remaining,
-    status: item.status,
-    to: `/consumption?read=${item.meter_id}`
-  }))
-])
+const criticalItems = computed(() => {
+  const rows = [
+    ...upcomingWork.value
+      .filter((item) => !item.automation_key?.startsWith('meter-reading:'))
+      .map((item) => ({
+        id: `work-${item.id}`,
+        title: item.title,
+        subtitle: item.due_at ? formatDate(item.due_at) : 'Ohne Termin',
+        days: item.days_remaining,
+        status: item.due_status,
+        to: '/maintenance'
+      })),
+    ...reminders.value.map((item) => ({
+      id: `meter-${item.meter_id}`,
+      title: `${item.meter_name} ablesen`,
+      subtitle: formatDate(item.due_at),
+      days: item.days_remaining,
+      status: item.status,
+      to: `/consumption?read=${item.meter_id}`
+    }))
+  ]
+  const unique = new Map<string, (typeof rows)[number]>()
+  for (const row of rows) {
+    const key = `${row.title.trim().toLocaleLowerCase()}|${row.subtitle}`
+    if (!unique.has(key)) unique.set(key, row)
+  }
+  return [...unique.values()].sort((left, right) => (left.days ?? 9999) - (right.days ?? 9999))
+})
+const visibleCriticalItems = computed(() => criticalItems.value.slice(0, 8))
 
 const defaultDashboardCards: DashboardCardSetting[] = [
   { id: 'documentation', visible: true },
@@ -259,25 +270,32 @@ onMounted(async () => {
       v-if="criticalItems.length"
       title="Fälligkeiten und Erinnerungen"
       prepend-icon="mdi-alert-circle-outline"
-      class="mb-5"
+      class="mb-5 compact-due-card"
       color="warning"
       variant="tonal"
     >
-      <v-list bg-color="transparent" lines="two">
+      <v-list bg-color="transparent" density="compact" lines="one">
         <v-list-item
-          v-for="item in criticalItems"
+          v-for="item in visibleCriticalItems"
           :key="item.id"
-          :title="item.title"
-          :subtitle="item.subtitle"
           :to="item.to"
+          class="compact-due-item"
         >
+          <v-list-item-title class="text-body-2">
+            <strong>{{ item.title }}</strong>
+            <span class="text-medium-emphasis"> · {{ item.subtitle }}</span>
+          </v-list-item-title>
           <template #append>
-            <v-chip :color="item.status === 'overdue' ? 'error' : item.status === 'today' ? 'warning' : 'info'">
+            <v-chip size="small" :color="item.status === 'overdue' ? 'error' : item.status === 'today' ? 'warning' : 'info'">
               {{ dueLabel(item.days) }}
             </v-chip>
           </template>
         </v-list-item>
       </v-list>
+      <v-card-actions v-if="criticalItems.length > visibleCriticalItems.length" class="pt-0">
+        <v-spacer />
+        <v-btn variant="text" size="small" to="/maintenance">Alle Fälligkeiten anzeigen</v-btn>
+      </v-card-actions>
     </v-card>
 
     <v-card v-if="editMode && mdAndUp" class="mb-5" title="Dashboard konfigurieren">
@@ -478,6 +496,16 @@ onMounted(async () => {
   padding: 0.75rem;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 12px;
+}
+
+.compact-due-card :deep(.v-card-title) {
+  min-height: 44px;
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+.compact-due-item {
+  min-height: 38px;
 }
 
 @media (max-width: 600px) {

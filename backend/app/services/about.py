@@ -28,8 +28,7 @@ from app.schemas.about import (
     ReleaseNoteRead,
 )
 
-_RELEASE_FILE = re.compile(r"^RELEASE_NOTES_(\d+\.\d+\.\d+(?:\.\d+)?)\.md$")
-_CHANGELOG_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+(?:\.\d+)?)\s+[–-]\s+(\d{4}-\d{2}-\d{2})\s*$")
+_HISTORY_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+(?:\.\d+)?)\s+[–-]\s+(\d{4}-\d{2}-\d{2})\s*$")
 _RATE_WINDOW = timedelta(minutes=10)
 _RATE_LIMIT = 5
 _MAX_FEEDBACK_ZIP_BYTES = 256 * 1024
@@ -123,39 +122,56 @@ class AboutService:
 
     @classmethod
     def _release_notes(cls) -> list[ReleaseNoteRead]:
-        roots = cls._content_roots()
-        dates = cls._changelog_dates(roots)
         entries: dict[str, ReleaseNoteRead] = {}
-        for root in roots:
-            if not root.is_dir():
+        for root in cls._content_roots():
+            path = root / "PROJECT_HISTORY.md"
+            if not path.is_file():
                 continue
-            for path in root.glob("RELEASE_NOTES_*.md"):
-                match = _RELEASE_FILE.match(path.name)
-                if match is None or match.group(1) in entries:
-                    continue
-                markdown = path.read_text(encoding="utf-8").strip()
-                version = match.group(1)
-                title = markdown.splitlines()[0].lstrip("# ").strip() if markdown else version
-                entries[version] = ReleaseNoteRead(
-                    version=version,
-                    title=title,
-                    release_date=dates.get(version),
-                    markdown=markdown,
-                    current=version == settings.app_version,
+            current_version: str | None = None
+            current_date: date | None = None
+            body: list[str] = []
+
+            def flush() -> None:
+                nonlocal current_version, current_date, body
+                if current_version is None or current_version in entries:
+                    body = []
+                    return
+                markdown_body = "\n".join(body).strip()
+                entries[current_version] = ReleaseNoteRead(
+                    version=current_version,
+                    title=f"DocOfHome {current_version}",
+                    release_date=current_date,
+                    markdown=(
+                        f"# DocOfHome {current_version}\n\n{markdown_body}"
+                        if markdown_body
+                        else f"# DocOfHome {current_version}"
+                    ),
+                    current=current_version == settings.app_version,
                 )
+                body = []
+
+            for line in path.read_text(encoding="utf-8").splitlines():
+                match = _HISTORY_HEADING.match(line)
+                if match:
+                    flush()
+                    current_version = match.group(1)
+                    current_date = date.fromisoformat(match.group(2))
+                    continue
+                if current_version is not None:
+                    body.append(line)
+            flush()
+            if entries:
+                break
+
         if settings.app_version not in entries:
             entries[settings.app_version] = ReleaseNoteRead(
                 version=settings.app_version,
                 title=f"DocOfHome {settings.app_version}",
-                release_date=dates.get(settings.app_version),
+                release_date=None,
                 markdown=f"# DocOfHome {settings.app_version}\n\nAktuell installierte Version.",
                 current=True,
             )
-        return sorted(
-            entries.values(),
-            key=lambda item: cls._version_key(item.version),
-            reverse=True,
-        )
+        return sorted(entries.values(), key=lambda item: cls._version_key(item.version), reverse=True)
 
     @staticmethod
     def _content_roots() -> list[Path]:
@@ -172,19 +188,6 @@ class AboutService:
                 result.append(candidate)
         return result
 
-    @staticmethod
-    def _changelog_dates(roots: list[Path]) -> dict[str, date]:
-        for root in roots:
-            path = root / "CHANGELOG.md"
-            if not path.is_file():
-                continue
-            values: dict[str, date] = {}
-            for line in path.read_text(encoding="utf-8").splitlines():
-                match = _CHANGELOG_HEADING.match(line)
-                if match:
-                    values[match.group(1)] = date.fromisoformat(match.group(2))
-            return values
-        return {}
 
     @staticmethod
     def _version_key(value: str) -> tuple[int, int, int, int]:

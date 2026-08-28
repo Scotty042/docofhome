@@ -35,7 +35,7 @@ COPY backend/app ./app
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/migrations ./migrations
 COPY VERSION ./VERSION
-COPY CHANGELOG.md RELEASE_NOTES_*.md ./release-notes/
+COPY PROJECT_HISTORY.md ./release-notes/PROJECT_HISTORY.md
 COPY --from=frontend-build /frontend/dist ./static
 
 RUN mkdir -p /data/database /data/backups /data/cache /data/logs /data/restore

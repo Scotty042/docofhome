@@ -147,8 +147,60 @@ class ServiceWorkloadWrite(BaseModel):
 class ServiceWorkloadRead(ServiceWorkloadWrite):
     id: UUID
     host_name: str
+    docker_container_id: str | None = None
+    docker_status_text: str | None = None
+    docker_networks: list[str] = Field(default_factory=list)
+    docker_mounts: list[str] = Field(default_factory=list)
+    docker_last_seen_at: datetime | None = None
+    docker_managed: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class DockerSyncSettingWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    socket_path: str = Field(default="/var/run/docker.sock", min_length=1, max_length=500)
+    host_asset_id: UUID | None = None
+    refresh_interval_seconds: int = Field(default=300)
+
+    @field_validator("socket_path")
+    @classmethod
+    def normalize_socket_path(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized.startswith("/"):
+            raise ValueError("Der Docker-Socket muss als absoluter Pfad angegeben werden")
+        return normalized
+
+    @field_validator("refresh_interval_seconds")
+    @classmethod
+    def validate_interval(cls, value: int) -> int:
+        if value not in {0, 30, 60, 300, 900, 1800}:
+            raise ValueError("Ungültiges Docker-Aktualisierungsintervall")
+        return value
+
+
+class DockerSyncSettingRead(DockerSyncSettingWrite):
+    host_name: str | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+
+
+class DockerSyncResultRead(BaseModel):
+    imported: int = Field(ge=0)
+    updated: int = Field(ge=0)
+    missing: int = Field(ge=0)
+    total: int = Field(ge=0)
+    docker_version: str | None = None
+    synchronized_at: datetime
+
+
+class DockerConnectionTestRead(BaseModel):
+    success: bool
+    message: str
+    docker_version: str | None = None
 
 
 class ExportManifestRead(BaseModel):

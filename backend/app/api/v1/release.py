@@ -12,6 +12,10 @@ from app.schemas.release import (
     AuditEventRead,
     DashboardSettingRead,
     DashboardSettingWrite,
+    DockerConnectionTestRead,
+    DockerSyncResultRead,
+    DockerSyncSettingRead,
+    DockerSyncSettingWrite,
     FritzBoxDeviceRead,
     GuidedSetupApplyRead,
     GuidedSetupDraftRead,
@@ -39,6 +43,7 @@ from app.services.release import (
 )
 
 from app.services.network import NetworkService
+from app.services.docker_sync import DockerSyncError, DockerSyncService
 
 router = APIRouter()
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -158,6 +163,35 @@ def archive_workload(workload_id: UUID, session: SessionDependency) -> Response:
     except ReleaseFeatureError as exc:
         raise _http_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/workloads/docker/settings", response_model=DockerSyncSettingRead)
+def docker_sync_settings(session: SessionDependency) -> DockerSyncSettingRead:
+    return DockerSyncService(session).get_settings()
+
+
+@router.put("/workloads/docker/settings", response_model=DockerSyncSettingRead)
+def update_docker_sync_settings(
+    payload: DockerSyncSettingWrite,
+    session: SessionDependency,
+) -> DockerSyncSettingRead:
+    try:
+        return DockerSyncService(session).update_settings(payload)
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/workloads/docker/test", response_model=DockerConnectionTestRead)
+def test_docker_connection(session: SessionDependency) -> DockerConnectionTestRead:
+    return DockerSyncService(session).test_connection()
+
+
+@router.post("/workloads/docker/sync", response_model=DockerSyncResultRead)
+def sync_docker_containers(session: SessionDependency) -> DockerSyncResultRead:
+    try:
+        return DockerSyncService(session).sync()
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/portability/export")

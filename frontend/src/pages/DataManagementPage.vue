@@ -30,7 +30,7 @@ const objectTypeLabels: Record<string, string> = {
   work_item_events: 'Aufgabenereignis', wiki_pages: 'Wiki-Seite', domain_notes: 'Notiz',
   document_links: 'Dokumentverknüpfung', immich_asset_links: 'Bildverknüpfung',
   home_assistant_asset_links: 'Home-Assistant-Verknüpfung', service_workloads: 'Dienst oder Container',
-  dashboard_settings: 'Dashboard-Einstellung', system_settings: 'Systemeinstellung',
+  docker_sync_settings: 'Docker-Synchronisierung', dashboard_settings: 'Dashboard-Einstellung', system_settings: 'Systemeinstellung',
   application_settings: 'Anwendungseinstellung', quality_runs: 'Qualitätsprüfung', quality_issues: 'Qualitätshinweis'
 }
 

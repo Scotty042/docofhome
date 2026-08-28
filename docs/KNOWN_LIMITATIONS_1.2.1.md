@@ -18,4 +18,4 @@ Die funktionalen Grenzen entsprechen 1.2.0:
 
 Zusätzlich bleibt für 1.2.x die vollständige abhängigkeitsbasierte Backend-,
 Frontend-, Docker- und reale HA-Lastprüfung als Zielsystem-/CI-Abnahme offen.
-Details stehen in `VALIDATION_REPORT_1.2.1.md`.
+Details stehen in `PROJECT_HISTORY.md`.

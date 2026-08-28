@@ -320,3 +320,53 @@ def test_release_1_7_ip_reconciliation_keeps_documented_address(network_session:
     refreshed = service.list_ip_overview(device_id=device.id)[0]
     assert refreshed.status == NetworkIpStatus.MATCH
     assert refreshed.documented_address == "192.168.178.1"
+
+
+def test_ip_overview_relinks_stale_observation_by_normalized_mac(network_session: Session) -> None:
+    """A previously unassigned FRITZ!Box row must merge with a later documented interface."""
+    from app.models.integration_setting import IntegrationSetting
+    from app.models.network import NetworkObservedAddress
+    from app.schemas.network import NetworkIpStatus
+
+    service = NetworkService(network_session)
+    record = asset(network_session, "UGREEN NAS tars", "NET-TARS")
+    device = service.create_device(
+        NetworkDeviceWrite(asset_id=record.id, role=NetworkRole.SERVER, hostname="tars")
+    )
+    interface = service.create_interface(
+        NetworkInterfaceWrite(
+            network_device_id=device.id,
+            name="LAN1",
+            mac_address="6C:1F:F7:0C:7B:71",
+        )
+    )
+    service.create_address(
+        NetworkAddressWrite(
+            interface_id=interface.id,
+            address="192.168.178.42",
+            assignment_type=NetworkAssignmentType.RESERVATION,
+            is_primary=True,
+        )
+    )
+    network_session.add(IntegrationSetting(kind="fritzbox", enabled=True))
+    observed = NetworkObservedAddress(
+        interface_id=None,
+        mac_address="6c-1f-f7-0c-7b-71",
+        address="192.168.178.42",
+        hostname="tars",
+        assignment_type="dhcp",
+        source="fritzbox",
+        active=True,
+    )
+    network_session.add(observed)
+    network_session.commit()
+
+    rows = service.list_ip_overview()
+    matching = [row for row in rows if row.device_id == device.id]
+
+    assert len(matching) == 1
+    assert matching[0].status == NetworkIpStatus.MATCH
+    assert matching[0].documented_address == "192.168.178.42"
+    assert matching[0].observed_address == "192.168.178.42"
+    network_session.refresh(observed)
+    assert observed.interface_id == interface.id

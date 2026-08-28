@@ -513,10 +513,30 @@ class NetworkService:
                 IntegrationSetting.enabled == True,  # noqa: E712
             )
         ).first() is not None
+        interface_by_mac = {
+            self._normalized_mac(item.mac_address): item
+            for item in interfaces
+            if self._normalized_mac(item.mac_address)
+        }
         observed_by_interface: dict[UUID, list[NetworkObservedAddress]] = {}
+        relinked = False
         for item in observed:
-            if item.interface_id is not None:
-                observed_by_interface.setdefault(item.interface_id, []).append(item)
+            resolved_interface_id = item.interface_id
+            if resolved_interface_id is None and item.mac_address:
+                matched = interface_by_mac.get(self._normalized_mac(item.mac_address))
+                if matched is not None:
+                    resolved_interface_id = matched.id
+                    # Reconcile stale discovery rows as soon as a matching MAC is documented.
+                    # This prevents one physical device from appearing as both
+                    # “Nur erkannt” and “Nicht erkannt” until the next FRITZ!Box scan.
+                    item.interface_id = matched.id
+                    item.updated_at = datetime.now(UTC)
+                    self.session.add(item)
+                    relinked = True
+            if resolved_interface_id is not None:
+                observed_by_interface.setdefault(resolved_interface_id, []).append(item)
+        if relinked:
+            self._commit()
         conflicting_addresses = {
             address for address in {item.address for item in all_observed}
             if len({item.mac_address for item in all_observed if item.address == address and item.mac_address}) > 1

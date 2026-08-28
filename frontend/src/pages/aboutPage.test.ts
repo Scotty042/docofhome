@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('about page and mobile reading shortcut', () => {
   it('shows central versions, source-controlled links and active ZIP feedback', () => {
-    expect(source).toContain('Versionen & Changelog')
+    expect(source).toContain('Versionen')
     expect(source).toContain('information.version')
     expect(source).not.toContain('Impressum')
     expect(source).toContain('öffentlichen DocOfHome-File-Drop')

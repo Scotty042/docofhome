@@ -1,9 +1,0 @@
-{
-  "name": "DocOfHome",
-  "version": "1.7.9",
-  "base_version": "1.7.8",
-  "built_on": "2026-08-27",
-  "alembic_head": "0052",
-  "database_migration_required": false,
-  "mcp_domains": ["cookbook", "wiki", "notes", "assets", "locations", "master_data", "consumption", "network"]
-}

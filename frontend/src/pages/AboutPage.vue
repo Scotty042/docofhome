@@ -35,7 +35,7 @@ const categoryItems: Array<{ title: string; value: FeedbackCategory }> = [
 
 const tabs = computed(() => [
   { value: 'project', title: 'Projekt', icon: 'mdi-home-heart' },
-  { value: 'versions', title: 'Versionen & Changelog', icon: 'mdi-history' },
+  { value: 'versions', title: 'Versionen', icon: 'mdi-history' },
   { value: 'feedback', title: 'Feedback', icon: 'mdi-message-text-outline' }
 ])
 
@@ -165,9 +165,9 @@ onMounted(async () => {
         </v-window-item>
 
         <v-window-item value="versions">
-          <v-card title="Versionen & Changelog" prepend-icon="mdi-history">
+          <v-card title="Versionen" prepend-icon="mdi-history">
             <v-card-text class="pb-0">
-              Die Inhalte werden direkt aus den mit dem Release ausgelieferten Release Notes gelesen.
+              Die Versionshistorie wird aus der zentralen Projekt-Historie gelesen.
             </v-card-text>
             <v-expansion-panels v-model="openReleases" multiple variant="accordion" class="pa-4">
               <v-expansion-panel

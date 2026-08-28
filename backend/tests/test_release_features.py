@@ -181,3 +181,81 @@ def test_audit_events_expose_readable_object_context(session: Session) -> None:
     assert matching.object_route == f"/assets/{asset.id}"
     assert matching.display_change is not None
     assert matching.display_change["asset_type_id"]["to"] == "Typ Lesbarer Verlauf"
+
+
+def test_docker_sync_imports_and_updates_without_duplicates(session: Session, monkeypatch) -> None:
+    from app.schemas.release import DockerSyncSettingWrite
+    from app.services.docker_sync import DockerSyncService
+
+    asset = host_asset(session, name="UGREEN NAS")
+    snapshots = [
+        [{
+            "Id": "abc123",
+            "Names": ["/paperless"],
+            "Image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+            "State": "running",
+            "Status": "Up 2 hours (healthy)",
+            "Labels": {"com.docker.compose.project": "paperless"},
+            "HostConfig": {"NetworkMode": "paperless_default"},
+            "Ports": [{"PrivatePort": 8000, "PublicPort": 8180, "Type": "tcp"}],
+            "NetworkSettings": {"Networks": {"paperless_default": {"IPAddress": "172.20.0.3"}}},
+            "Mounts": [{"Source": "/volume2/docker/paperless/data", "Destination": "/usr/src/paperless/data"}],
+        }],
+        [{
+            "Id": "abc123",
+            "Names": ["/paperless"],
+            "Image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+            "State": "exited",
+            "Status": "Exited (0) 2 seconds ago",
+            "Labels": {"com.docker.compose.project": "paperless"},
+            "HostConfig": {"NetworkMode": "paperless_default"},
+            "Ports": [{"PrivatePort": 8000, "PublicPort": 8180, "Type": "tcp"}],
+            "NetworkSettings": {"Networks": {"paperless_default": {"IPAddress": ""}}},
+            "Mounts": [],
+        }],
+    ]
+
+    class FakeConnector:
+        def __init__(self, _socket_path: str) -> None:
+            pass
+
+        def version(self) -> str:
+            return "28.3.3"
+
+        def containers(self, *, all_containers: bool = True):
+            assert all_containers is True
+            return snapshots.pop(0)
+
+    monkeypatch.setattr("app.services.docker_sync.DockerEngineConnector", FakeConnector)
+    service = DockerSyncService(session)
+    service.update_settings(DockerSyncSettingWrite(
+        enabled=True,
+        socket_path="/var/run/docker.sock",
+        host_asset_id=asset.id,
+        refresh_interval_seconds=300,
+    ))
+
+    first = service.sync()
+    assert first.imported == 1
+    assert first.total == 1
+    records = WorkloadService(session).list(host_asset_id=asset.id)
+    assert len(records) == 1
+    assert records[0].docker_container_id == "abc123"
+    assert records[0].status == "running"
+    assert records[0].ports[0].host_port == 8180
+    assert records[0].docker_networks == ["paperless_default"]
+
+    editable = ServiceWorkloadWrite(**{
+        key: getattr(records[0], key)
+        for key in ServiceWorkloadWrite.model_fields
+    })
+    editable.notes = "manuell gepflegt"
+    WorkloadService(session).update(records[0].id, editable)
+
+    second = service.sync()
+    assert second.imported == 0
+    assert second.updated == 1
+    records = WorkloadService(session).list(host_asset_id=asset.id)
+    assert len(records) == 1
+    assert records[0].status == "stopped"
+    assert records[0].notes == "manuell gepflegt"

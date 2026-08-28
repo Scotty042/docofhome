@@ -14,6 +14,7 @@ from app.core.settings import settings
 from app.mcp_server import mcp_http_app, mcp_server
 from app.services.backup_schedule import backup_scheduler_loop
 from app.services.quality_schedule import quality_scheduler_loop
+from app.services.docker_sync_schedule import docker_sync_scheduler_loop
 
 
 @asynccontextmanager
@@ -25,16 +26,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     (settings.data_dir / "uploads" / "recipe-images").mkdir(parents=True, exist_ok=True)
     scheduler_task = asyncio.create_task(backup_scheduler_loop())
     quality_task = asyncio.create_task(quality_scheduler_loop())
+    docker_task = asyncio.create_task(docker_sync_scheduler_loop())
     try:
         async with mcp_server.session_manager.run():
             yield
     finally:
         scheduler_task.cancel()
         quality_task.cancel()
+        docker_task.cancel()
         with suppress(asyncio.CancelledError):
             await scheduler_task
         with suppress(asyncio.CancelledError):
             await quality_task
+        with suppress(asyncio.CancelledError):
+            await docker_task
 
 
 app = FastAPI(

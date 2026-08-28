@@ -1,9 +1,0 @@
-{
-  "name": "DocOfHome",
-  "version": "1.7.12",
-  "base_version": "1.7.11",
-  "built_on": "2026-08-27",
-  "alembic_head": "0052",
-  "database_migration_required": false,
-  "release_reason": "Explicit typed MCP schema for recipe saving"
-}

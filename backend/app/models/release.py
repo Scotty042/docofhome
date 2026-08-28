@@ -61,10 +61,36 @@ class ServiceWorkload(SQLModel, table=True):
     reverse_proxy: str | None = Field(default=None, max_length=500)
     dependencies_json: str = Field(default="[]", sa_type=Text)
     status: str = Field(default="unknown", index=True, max_length=20)
+    docker_container_id: str | None = Field(default=None, index=True, max_length=128)
+    docker_status_text: str | None = Field(default=None, max_length=500)
+    docker_networks_json: str = Field(default="[]", sa_type=Text)
+    docker_mounts_json: str = Field(default="[]", sa_type=Text)
+    docker_last_seen_at: datetime | None = Field(default=None, index=True)
     notes: str | None = Field(default=None, sa_type=Text)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None, index=True)
+
+
+class DockerSyncSetting(SQLModel, table=True):
+    __tablename__ = "docker_sync_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "refresh_interval_seconds IN (0, 30, 60, 300, 900, 1800)",
+            name="ck_docker_sync_settings_interval",
+        ),
+    )
+
+    id: int = Field(default=1, primary_key=True)
+    enabled: bool = False
+    socket_path: str = Field(default="/var/run/docker.sock", max_length=500)
+    host_asset_id: UUID | None = Field(default=None, foreign_key="assets.id", index=True)
+    refresh_interval_seconds: int = Field(default=300)
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = Field(default=None, sa_type=Text)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AuditEvent(SQLModel, table=True):
@@ -120,6 +146,11 @@ _SENSITIVE_FIELDS = {
     "username",
 }
 
+# Runtime refresh timestamps and Docker discovery metadata change frequently and
+# would otherwise flood the immutable audit history on every automatic sync.
+_AUDIT_IGNORED_FIELDS = {"created_at", "updated_at"}
+_DOCKER_SETTING_RUNTIME_FIELDS = {"last_attempt_at", "last_success_at", "last_error"}
+
 
 def _safe_change(value: object) -> object:
     if value is None or isinstance(value, bool | int | float):
@@ -158,6 +189,12 @@ def record_audit_events(
             if not attribute.history.has_changes():
                 continue
             key = attribute.key
+            if key in _AUDIT_IGNORED_FIELDS:
+                continue
+            if isinstance(record, DockerSyncSetting) and key in _DOCKER_SETTING_RUNTIME_FIELDS:
+                continue
+            if isinstance(record, ServiceWorkload) and key.startswith("docker_"):
+                continue
             if key.casefold() in _SENSITIVE_FIELDS or any(
                 marker in key.casefold() for marker in ("secret", "password", "token")
             ):

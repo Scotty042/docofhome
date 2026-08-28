@@ -1,9 +1,0 @@
-{
-  "name": "DocOfHome",
-  "version": "1.7.11",
-  "base_version": "1.7.10",
-  "built_on": "2026-08-27",
-  "alembic_head": "0052",
-  "database_migration_required": false,
-  "release_reason": "Robust MCP recipe search for empty data and null filters"
-}

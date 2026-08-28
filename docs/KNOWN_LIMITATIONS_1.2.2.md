@@ -19,4 +19,4 @@ Die funktionalen Grenzen entsprechen 1.2.1 beziehungsweise 1.2.0:
 Die vollständige abhängigkeitsbasierte Backend-, Frontend-, Docker- und reale
 HA-Lastprüfung bleibt als Zielsystem-/CI-Abnahme offen. Der konkret gemeldete
 MDI-Buildfehler ist mit 1.2.2 behoben. Details stehen in
-`VALIDATION_REPORT_1.2.2.md`.
+`PROJECT_HISTORY.md`.

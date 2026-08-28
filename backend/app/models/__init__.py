@@ -56,6 +56,7 @@ from app.models.recipe import Recipe
 from app.models.release import (
     AuditEvent,
     DashboardSetting,
+    DockerSyncSetting,
     GuidedSetupDraft,
     ServiceWorkload,
 )
@@ -92,6 +93,7 @@ __all__ = [
     "ConsumptionSetting",
     "DocumentLink",
     "DashboardSetting",
+    "DockerSyncSetting",
     "Recipe",
     "DomainNote",
     "HomeAssistantAssetLink",

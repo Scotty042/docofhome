@@ -1,6 +1,10 @@
 import type {
   AuditEvent,
   DashboardSetting,
+  DockerConnectionTest,
+  DockerSyncResult,
+  DockerSyncSetting,
+  DockerSyncSettingWrite,
   FritzBoxDevice,
   GuidedSetupApply,
   GuidedSetupDraft,
@@ -66,6 +70,12 @@ export const releaseApi = {
     `/workloads/${id}`, { method: 'PUT', body: JSON.stringify(payload) }
   ),
   archiveWorkload: (id: string) => request<void>(`/workloads/${id}`, { method: 'DELETE' }),
+  dockerSyncSettings: () => request<DockerSyncSetting>('/workloads/docker/settings'),
+  updateDockerSyncSettings: (payload: DockerSyncSettingWrite) => request<DockerSyncSetting>(
+    '/workloads/docker/settings', { method: 'PUT', body: JSON.stringify(payload) }
+  ),
+  testDockerConnection: () => request<DockerConnectionTest>('/workloads/docker/test', { method: 'POST' }),
+  syncDocker: () => request<DockerSyncResult>('/workloads/docker/sync', { method: 'POST' }),
   exportUrl: '/api/v1/portability/export',
   csvExportUrl: (module: string) => `/api/v1/portability/export/${encodeURIComponent(module)}.csv`,
   previewImport: (file: File) => request<ImportPreview>(

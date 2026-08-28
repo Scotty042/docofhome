@@ -11,10 +11,6 @@ CENTRAL_DOCS = [
     ROOT / "README.md",
     ROOT / "PROJECT_STATUS.md",
     ROOT / "ROADMAP.md",
-    ROOT / "CHANGELOG.md",
-    ROOT / "RELEASE_NOTES_1.0.0.md",
-    ROOT / "docs" / "MIGRATION_GUIDE_1.0.0.md",
-    ROOT / "docs" / "KNOWN_LIMITATIONS_1.0.0.md",
 ]
 
 

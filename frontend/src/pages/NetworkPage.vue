@@ -41,6 +41,9 @@ const ipStatusFilter = ref<NetworkIpStatus | ''>('')
 const ipAssignmentFilter = ref<'static' | 'dhcp' | ''>('')
 const ipSourceFilter = ref('')
 const ipSearch = ref('')
+type IpSortKey = 'status' | 'device' | 'documented' | 'mac' | 'assignment' | 'observed' | 'source'
+const ipSortKey = ref<IpSortKey>('documented')
+const ipSortDirection = ref<'asc' | 'desc'>('asc')
 const fritzBoxDevices = ref<FritzBoxDevice[]>([])
 const fritzBoxLoading = ref(false)
 const fritzBoxError = ref<string | null>(null)
@@ -137,7 +140,7 @@ const ipSourceItems = computed(() => Array.from(new Set(
 )).sort((left, right) => left.localeCompare(right, 'de')).map((value) => ({ value, title: value })))
 const filteredIpAddresses = computed(() => {
   const query = ipSearch.value.trim().toLocaleLowerCase()
-  return ipAddresses.value.filter((item) => {
+  const rows = ipAddresses.value.filter((item) => {
     const matchesStatus = !ipStatusFilter.value || item.status === ipStatusFilter.value
     const matchesSource = !ipSourceFilter.value || item.source === ipSourceFilter.value
     const matchesAssignment = !ipAssignmentFilter.value || (
@@ -151,7 +154,45 @@ const filteredIpAddresses = computed(() => {
     ].filter(Boolean).join(' ').toLocaleLowerCase()
     return matchesStatus && matchesSource && matchesAssignment && (!query || haystack.includes(query))
   })
+  const direction = ipSortDirection.value === 'asc' ? 1 : -1
+  const statusOrder: Record<NetworkIpStatus, number> = {
+    conflict: 0, mismatch: 1, not_detected: 2, observed_only: 3, match: 4, no_integration: 5
+  }
+  const ipNumber = (value: string | null) => {
+    if (!value) return Number.MAX_SAFE_INTEGER
+    const parts = value.split('.').map(Number)
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return Number.MAX_SAFE_INTEGER
+    return (((parts[0] ?? 0) * 256 + (parts[1] ?? 0)) * 256 + (parts[2] ?? 0)) * 256 + (parts[3] ?? 0)
+  }
+  return [...rows].sort((left, right) => {
+    let result = 0
+    if (ipSortKey.value === 'status') result = statusOrder[left.status] - statusOrder[right.status]
+    else if (ipSortKey.value === 'device') result = left.device_name.localeCompare(right.device_name, 'de', { sensitivity: 'base', numeric: true })
+    else if (ipSortKey.value === 'documented') result = ipNumber(left.documented_address) - ipNumber(right.documented_address)
+    else if (ipSortKey.value === 'mac') result = (left.mac_address ?? '').localeCompare(right.mac_address ?? '', 'de')
+    else if (ipSortKey.value === 'assignment') result = left.assignment_type.localeCompare(right.assignment_type, 'de')
+    else if (ipSortKey.value === 'observed') result = ipNumber(left.observed_address) - ipNumber(right.observed_address)
+    else if (ipSortKey.value === 'source') {
+      result = (left.source ?? '').localeCompare(right.source ?? '', 'de', { sensitivity: 'base' })
+      if (result === 0) result = new Date(left.last_seen_at ?? 0).getTime() - new Date(right.last_seen_at ?? 0).getTime()
+    }
+    if (result === 0) result = left.device_name.localeCompare(right.device_name, 'de', { sensitivity: 'base', numeric: true })
+    return result * direction
+  })
 })
+
+function sortIpTable(key: IpSortKey) {
+  if (ipSortKey.value === key) ipSortDirection.value = ipSortDirection.value === 'asc' ? 'desc' : 'asc'
+  else {
+    ipSortKey.value = key
+    ipSortDirection.value = 'asc'
+  }
+}
+function ipSortIcon(key: IpSortKey) {
+  if (ipSortKey.value !== key) return 'mdi-unfold-more-horizontal'
+  return ipSortDirection.value === 'asc' ? 'mdi-arrow-up' : 'mdi-arrow-down'
+}
+
 const interfaceItems = computed(() => interfaces.value.map((item) => ({
   value: item.id,
   title: `${item.device_name} · ${item.name}`,
@@ -613,7 +654,16 @@ onMounted(() => void loadAll())
               Der Abgleich erfolgt über die normalisierte MAC-Adresse. Ausgelesene Werte überschreiben dokumentierte Adressen nur nach bewusster Übernahme.
             </v-alert>
             <v-table v-if="filteredIpAddresses.length" density="compact">
-              <thead><tr><th>Status</th><th>Gerät / Schnittstelle</th><th>Dokumentierte IP</th><th>MAC-Adresse</th><th>Zuweisung</th><th>Ausgelesene IP</th><th>Quelle / zuletzt erkannt</th><th class="text-right">Aktionen</th></tr></thead>
+              <thead><tr>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('status')" @click="sortIpTable('status')">Status</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('device')" @click="sortIpTable('device')">Gerät / Schnittstelle</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('documented')" @click="sortIpTable('documented')">Dokumentierte IP</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('mac')" @click="sortIpTable('mac')">MAC-Adresse</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('assignment')" @click="sortIpTable('assignment')">Zuweisung</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('observed')" @click="sortIpTable('observed')">Ausgelesene IP</v-btn></th>
+                <th><v-btn variant="text" size="small" :prepend-icon="ipSortIcon('source')" @click="sortIpTable('source')">Quelle / zuletzt erkannt</v-btn></th>
+                <th class="text-right">Aktionen</th>
+              </tr></thead>
               <tbody>
                 <tr v-for="item in filteredIpAddresses" :key="item.key">
                   <td><v-chip size="small" :color="ipStatusColors[item.status]" variant="tonal">{{ ipStatusLabels[item.status] }}</v-chip><div v-if="item.ignored" class="text-caption">bewusst ignoriert</div></td>
