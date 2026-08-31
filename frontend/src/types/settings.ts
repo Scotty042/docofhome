@@ -38,6 +38,7 @@ export interface IntegrationRead {
   kind: IntegrationKind
   enabled: boolean
   base_url: string | null
+  browser_url?: string | null
   account: string | null
   secret_configured: boolean
   selected_album_id: string | null
@@ -48,6 +49,7 @@ export interface IntegrationWrite {
   kind: IntegrationKind
   enabled: boolean
   base_url: string | null
+  browser_url?: string | null
   account: string | null
   secret?: string
   selected_album_id: string | null
@@ -131,6 +133,7 @@ export function createDefaultConfiguration(): ConfigurationWrite {
       kind,
       enabled: false,
       base_url: null,
+      browser_url: null,
       account: null,
       selected_album_id: null,
       document_root: kind === 'nextcloud' ? 'docofhome/Documents' : null,
@@ -156,6 +159,7 @@ export function editableConfiguration(configuration: ConfigurationRead): Configu
         kind,
         enabled: stored?.enabled ?? false,
         base_url: stored?.base_url ?? null,
+        browser_url: stored?.browser_url ?? null,
         account: stored?.account ?? null,
         selected_album_id: stored?.selected_album_id ?? null,
         document_root: kind === 'nextcloud'

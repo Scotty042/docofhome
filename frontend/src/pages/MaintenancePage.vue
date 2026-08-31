@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 
 import { consumptionApi } from '../services/consumptionApi'
 import { paperlessApi } from '../services/paperlessApi'
@@ -26,6 +27,7 @@ import type {
 
 const route = useRoute()
 const router = useRouter()
+const { smAndDown } = useDisplay()
 const items = ref<WorkItemRead[]>([])
 const subjects = ref<WorkSubjectRead[]>([])
 const readingReminders = ref<ConsumptionReadingReminder[]>([])
@@ -871,8 +873,14 @@ onMounted(() => void load())
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="subjectTimelineDialog" max-width="1050">
-      <v-card :title="`Lebenslauf · ${subjectTimeline?.subject.name ?? 'Bezugsobjekt'}`" prepend-icon="mdi-timeline-clock-outline">
+    <v-dialog v-model="subjectTimelineDialog" max-width="1050" scrollable :fullscreen="smAndDown">
+      <v-card class="timeline-dialog-card">
+        <v-card-title class="timeline-dialog-header d-flex align-center ga-2">
+          <v-icon icon="mdi-timeline-clock-outline" />
+          <span class="text-truncate">Lebenslauf · {{ subjectTimeline?.subject.name ?? 'Bezugsobjekt' }}</span>
+          <v-spacer />
+          <v-btn icon="mdi-close" variant="text" aria-label="Lebenslauf schließen" @click="subjectTimelineDialog = false" />
+        </v-card-title>
         <v-progress-linear v-if="subjectTimelineLoading" indeterminate />
         <v-card-text v-if="subjectTimeline">
           <div class="d-flex flex-wrap ga-2 mb-4">
@@ -951,4 +959,9 @@ onMounted(() => void load())
 .maintenance-page { max-width: 1500px; }
 .metric { font-size: 2rem; font-weight: 700; }
 .history-summary { color: rgb(var(--v-theme-on-surface-variant)); font-size: .95rem; }
+.timeline-dialog-header { flex: 0 0 auto; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+@media (max-width: 960px) {
+  .timeline-dialog-card { height: 100%; }
+  .timeline-dialog-header { position: sticky; top: 0; z-index: 2; background: rgb(var(--v-theme-surface)); }
+}
 </style>

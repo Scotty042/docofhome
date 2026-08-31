@@ -2,6 +2,36 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.7.17 – 2026-08-31
+
+### Kurzüberblick
+
+- Der mobile Lebenslauf besitzt eine dauerhaft erreichbare Kopfzeile mit Schließen-Schaltfläche und verwendet auf kleinen Displays die Vollbildansicht.
+- Zählerstände und Zählerwechsel werden mit der aktuellen lokalen Uhrzeit statt mit UTC vorbelegt.
+- Horizontale Gesten in Verbrauchsdiagrammen scrollen das Diagramm, ohne den Statistik-Reiter zu wechseln.
+- Integrationen können nun getrennte interne Server- und Browser-URLs verwenden. DocOfHome greift intern auf Container-Adressen zu, während Paperless-Dokumente und Immich-Fotos über die vom Endgerät erreichbare Adresse geöffnet werden.
+- Die GitHub-Projektbeschreibung wurde grundlegend überarbeitet und um fünf aktuelle Screenshots ergänzt.
+
+### Technische Umsetzung
+
+- Alembic-Migration `0056` ergänzt `integration_settings.browser_url`; ohne Browser-URL bleibt die bestehende Server-URL der kompatible Fallback.
+- Paperless erzeugt Dokumentlinks anhand der Browser-URL, führt API-Anfragen aber weiterhin über die interne Server-URL aus.
+- Immich liefert für verknüpfte Fotos zusätzlich einen extern öffnbaren Link; Vorschaubilder bleiben über DocOfHome bereitgestellt.
+
+### Release-Manifest
+
+```json
+{
+  "name": "DocOfHome",
+  "version": "1.7.17",
+  "base_version": "1.7.16",
+  "built_on": "2026-08-31",
+  "alembic_head": "0056",
+  "database_migration_required": true,
+  "release_reason": "Mobile usability, integration browser URLs and GitHub presentation"
+}
+```
+
 ## 1.7.16 – 2026-08-31
 
 ### Kurzüberblick

@@ -41,6 +41,9 @@ class PaperlessService:
 
     def search(self, query: str, page_size: int = 25) -> list[PaperlessDocumentRead]:
         connector = self._connector()
+        setting = self.settings.get_integration("paperless")
+        configured_url = setting.browser_url or setting.base_url if setting else None
+        browser_url = configured_url.rstrip("/") if configured_url else connector.base_url
         try:
             documents = connector.search(query, page_size=page_size)
         except PaperlessConnectorError as exc:
@@ -52,7 +55,7 @@ class PaperlessService:
                 created=document.created,
                 added=document.added,
                 original_file_name=document.original_file_name,
-                source_url=connector.document_url(document.document_id),
+                source_url=f"{browser_url}/documents/{document.document_id}/details",
             )
             for document in documents
         ]
@@ -113,9 +116,10 @@ class PaperlessService:
 
     def _read(self, record: WorkItemEventPaperlessLink) -> WorkPaperlessLinkRead:
         setting = self.settings.get_integration("paperless")
+        configured_url = setting.browser_url or setting.base_url if setting else None
         source_url = (
-            f"{setting.base_url.rstrip('/')}/documents/{record.document_id}/details"
-            if setting and setting.base_url
+            f"{configured_url.rstrip('/')}/documents/{record.document_id}/details"
+            if configured_url
             else None
         )
         return WorkPaperlessLinkRead(

@@ -51,6 +51,7 @@ class ImmichLinkRead(BaseModel):
     height: int | None = Field(default=None, gt=0)
     is_favorite: bool
     thumbnail_url: str
+    source_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

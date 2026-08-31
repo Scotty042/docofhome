@@ -54,6 +54,7 @@ function serializable(configuration: ConfigurationWrite): ConfigurationWrite {
       kind: integration.kind,
       enabled: integration.enabled,
       base_url: integration.base_url || null,
+      browser_url: integration.browser_url || null,
       account: integration.account?.trim() || null,
       selected_album_id: integration.kind === 'immich'
         ? integration.selected_album_id || null

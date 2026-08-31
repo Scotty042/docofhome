@@ -142,6 +142,7 @@ _SENSITIVE_FIELDS = {
     "token",
     "api_key",
     "base_url",
+    "browser_url",
     "account",
     "username",
 }

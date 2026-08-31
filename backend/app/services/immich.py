@@ -217,8 +217,10 @@ class ImmichService:
             thumbnail_url=cls._thumbnail_url(image.immich_asset_id),
         )
 
-    @classmethod
-    def _link_read(cls, link: ImmichAssetLink) -> ImmichLinkRead:
+    def _link_read(self, link: ImmichAssetLink) -> ImmichLinkRead:
+        setting = self.settings_repository.get_integration("immich")
+        configured_url = setting.browser_url or setting.base_url if setting else None
+        browser_url = configured_url.rstrip("/") if configured_url else None
         return ImmichLinkRead(
             id=link.id,
             asset_id=link.asset_id,
@@ -228,7 +230,8 @@ class ImmichService:
             width=link.width,
             height=link.height,
             is_favorite=link.is_favorite,
-            thumbnail_url=cls._thumbnail_url(link.immich_asset_id),
+            thumbnail_url=self._thumbnail_url(link.immich_asset_id),
+            source_url=f"{browser_url}/photos/{link.immich_asset_id}" if browser_url else None,
             created_at=link.created_at,
             updated_at=link.updated_at,
         )

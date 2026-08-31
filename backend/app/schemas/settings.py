@@ -57,12 +57,13 @@ class IntegrationWrite(BaseModel):
     kind: IntegrationKind
     enabled: bool = False
     base_url: str | None = None
+    browser_url: str | None = None
     account: str | None = Field(default=None, max_length=255)
     secret: SecretStr | None = None
     selected_album_id: UUID | None = None
     document_root: str | None = Field(default=None, max_length=500)
 
-    @field_validator("base_url")
+    @field_validator("base_url", "browser_url")
     @classmethod
     def validate_base_url(cls, value: str | None) -> str | None:
         if value is None or not value.strip():
@@ -142,7 +143,10 @@ class ConfigurationWrite(BaseModel):
         default_factory=default_enabled_modules,
         max_length=len(ModuleKey),
     )
-    integrations: list[IntegrationWrite] = Field(default_factory=list, max_length=len(IntegrationKind))
+    integrations: list[IntegrationWrite] = Field(
+        default_factory=list,
+        max_length=len(IntegrationKind),
+    )
 
     @model_validator(mode="after")
     def image_search_has_a_provider(self) -> "ConfigurationWrite":
@@ -191,6 +195,7 @@ class IntegrationRead(BaseModel):
     kind: IntegrationKind
     enabled: bool
     base_url: str | None
+    browser_url: str | None = None
     account: str | None
     secret_configured: bool
     selected_album_id: UUID | None

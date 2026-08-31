@@ -38,6 +38,7 @@ python scripts/check-migration-0052.py
 python scripts/check-migration-0053.py
 python scripts/check-migration-0054.py
 python scripts/check-migration-0055.py
+python scripts/check-migration-0056.py
 
 cd "$ROOT_DIR/backend"
 ruff check app tests

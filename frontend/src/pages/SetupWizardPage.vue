@@ -165,6 +165,7 @@ function skipIntegration() {
   if (currentIntegration.value) {
     currentIntegration.value.enabled = false
     currentIntegration.value.base_url = null
+    currentIntegration.value.browser_url = null
     currentIntegration.value.account = null
     currentIntegration.value.secret = ''
     integrationTestResult.value = null
@@ -404,10 +405,21 @@ async function completeSetup() {
                 <div v-if="currentIntegration.enabled">
                   <v-text-field
                     v-model="currentIntegration.base_url"
-                    label="Server-URL"
+                    label="Interne Server-URL"
                     placeholder="https://dienst.example.test"
                     prepend-inner-icon="mdi-web"
                     :rules="[urlRule]"
+                    class="mb-2"
+                  />
+                  <v-text-field
+                    v-if="currentIntegration.kind === 'immich' || currentIntegration.kind === 'nextcloud'"
+                    v-model="currentIntegration.browser_url"
+                    label="Browser-URL (optional)"
+                    placeholder="https://dienst.example.test"
+                    prepend-inner-icon="mdi-open-in-new"
+                    :rules="[(value) => !value || urlRule(value)]"
+                    hint="Von Handy und Rechner erreichbare Adresse; leer = interne URL"
+                    persistent-hint
                     class="mb-2"
                   />
                   <v-text-field

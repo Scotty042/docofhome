@@ -122,6 +122,7 @@ class SettingsService:
             stored = self.repository.get_integration(kind.value)
             enabled = data.enabled if data is not None else False
             base_url = data.base_url if data is not None else None
+            browser_url = data.browser_url if data is not None else None
             account = data.account if data is not None else None
             selected_album_id = data.selected_album_id if data is not None else None
             document_root = data.document_root if data is not None else None
@@ -146,6 +147,7 @@ class SettingsService:
                 self.repository.add_integration(stored)
             stored.enabled = enabled
             stored.base_url = base_url
+            stored.browser_url = browser_url
             stored.account = account
             stored.selected_album_id = (
                 str(selected_album_id)
@@ -179,6 +181,7 @@ class SettingsService:
                     kind=kind,
                     enabled=integration.enabled if integration else False,
                     base_url=integration.base_url if integration else None,
+                    browser_url=integration.browser_url if integration else None,
                     account=integration.account if integration else None,
                     secret_configured=bool(integration and integration.secret),
                     selected_album_id=(

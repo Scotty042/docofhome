@@ -13,6 +13,7 @@ class IntegrationSetting(SQLModel, table=True):
     kind: str = Field(index=True, unique=True, max_length=50)
     enabled: bool = False
     base_url: str | None = Field(default=None, max_length=2048)
+    browser_url: str | None = Field(default=None, max_length=2048)
     account: str | None = Field(default=None, max_length=255)
     secret: str | None = None
     selected_album_id: str | None = Field(default=None, max_length=36)

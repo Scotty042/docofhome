@@ -35,6 +35,7 @@ export type ImmichAssetLink = ImmichImage & {
   asset_id: string
   created_at: string
   updated_at: string
+  source_url?: string | null
 }
 
 export type ImmichAssetLinkList = {

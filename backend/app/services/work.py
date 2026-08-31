@@ -813,7 +813,8 @@ class WorkService:
         setting = self.session.exec(
             select(IntegrationSetting).where(IntegrationSetting.kind == "paperless")
         ).first()
-        base_url = setting.base_url.rstrip("/") if setting and setting.base_url else None
+        configured_url = setting.browser_url or setting.base_url if setting else None
+        base_url = configured_url.rstrip("/") if configured_url else None
         return [
             WorkPaperlessLinkRead(
                 id=record.id,

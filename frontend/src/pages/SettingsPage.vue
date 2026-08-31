@@ -397,10 +397,22 @@ async function testIntegration(kind: IntegrationKind) {
               <v-col cols="12" md="6">
                 <v-text-field
                   v-model="integration.base_url"
-                  label="Server-URL"
+                  label="Interne Server-URL"
                   prepend-inner-icon="mdi-web"
                   :rules="[(value) => validateIntegrationUrl(value, integration.enabled)]"
+                  hint="Adresse, die der DocOfHome-Container für API-Zugriffe verwendet"
+                  persistent-hint
                   @update:model-value="clearTestResult(integration.kind)"
+                />
+              </v-col>
+              <v-col v-if="integration.kind === 'immich' || integration.kind === 'paperless' || integration.kind === 'nextcloud'" cols="12" md="6">
+                <v-text-field
+                  v-model="integration.browser_url"
+                  label="Browser-URL"
+                  prepend-inner-icon="mdi-open-in-new"
+                  :rules="[(value) => !value || validateIntegrationUrl(value, false)]"
+                  hint="Von Handy und Rechner erreichbare Adresse für geöffnete Bilder und Dokumente; leer = interne URL"
+                  persistent-hint
                 />
               </v-col>
               <v-col v-if="integration.kind === 'nextcloud' || integration.kind === 'fritzbox'" cols="12" md="6">

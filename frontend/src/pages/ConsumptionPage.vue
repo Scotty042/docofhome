@@ -73,7 +73,7 @@ const readingForm = ref<ConsumptionReadingWrite>(emptyReading())
 const replacementDialog = ref(false)
 const replacementMeter = ref<ConsumptionMeter | null>(null)
 const replacementForm = ref<ConsumptionMeterReplacementWrite>({
-  replaced_at: new Date().toISOString().slice(0, 16),
+  replaced_at: currentLocalDateTime(),
   old_final_value: 0,
   new_serial_number: '',
   new_start_value: 0,
@@ -159,9 +159,13 @@ function emptyMeter(): ConsumptionMeterWrite {
 }
 function emptyReading(): ConsumptionReadingWrite {
   return {
-    meter_id: selectedMeterId.value ?? '', measured_at: new Date().toISOString().slice(0, 16), value: 0,
+    meter_id: selectedMeterId.value ?? '', measured_at: currentLocalDateTime(), value: 0,
     note: null, source: 'manual', is_reset: false, immich_asset_id: null, immich_original_file_name: null
   }
+}
+function currentLocalDateTime(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 function formatDate(value: string | null | undefined) {
   return value ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '–'
@@ -311,7 +315,7 @@ function openReading(reading?: ConsumptionReading, meterId?: string) {
 function openReplacement(meter: ConsumptionMeter) {
   replacementMeter.value = meter
   replacementForm.value = {
-    replaced_at: new Date().toISOString().slice(0, 16),
+    replaced_at: currentLocalDateTime(),
     old_final_value: meter.latest_value ?? 0,
     new_serial_number: '',
     new_start_value: 0,
@@ -428,7 +432,7 @@ onMounted(async () => {
       <v-tab value="settings">Einstellungen</v-tab>
     </v-tabs>
 
-    <v-window v-model="tab">
+    <v-window v-model="tab" :touch="false">
       <v-window-item value="overview">
         <v-row>
           <v-col v-for="item in [
@@ -711,7 +715,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.chart-scroll { overflow-x: auto; }
+.chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
 .bar-chart { min-width: 680px; height: 205px; display: flex; align-items: flex-end; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
 .bar-column { width: 58px; min-width: 58px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .bar-column:focus-visible { outline: 3px solid rgb(var(--v-theme-primary)); outline-offset: 3px; border-radius: 4px; }

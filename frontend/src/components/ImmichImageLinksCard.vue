@@ -239,7 +239,11 @@ watch(() => props.assetId, loadLinks)
           <span v-if="previewLink.width && previewLink.height"> · {{ previewLink.width }} × {{ previewLink.height }} px</span>
         </div>
       </v-card-text>
-      <v-card-actions><v-spacer /><v-btn @click="previewDialog = false">Schließen</v-btn></v-card-actions>
+      <v-card-actions>
+        <v-btn v-if="previewLink.source_url" :href="previewLink.source_url" target="_blank" rel="noopener" prepend-icon="mdi-open-in-new" variant="text">In Immich öffnen</v-btn>
+        <v-spacer />
+        <v-btn @click="previewDialog = false">Schließen</v-btn>
+      </v-card-actions>
     </v-card>
   </v-dialog>
 
