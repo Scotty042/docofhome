@@ -65,6 +65,7 @@ async function saveItem() {
   error.value = null
   const payload: WorkItemWrite = {
     item_type: form.value.item_type,
+    activity_kind: form.value.item_type === 'maintenance' ? 'maintenance' : 'general',
     title: form.value.title.trim(),
     description: form.value.description.trim() || null,
     target_type: props.targetType,

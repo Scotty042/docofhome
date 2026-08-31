@@ -2,6 +2,28 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.7.16 – 2026-08-31
+
+### Kurzüberblick
+
+- Patch-Release für die kompakte Wartungskarte: Neue Wartungen erhalten nun
+  `activity_kind=maintenance`, allgemeine Aufgaben `activity_kind=general`.
+- Der vollständige Frontend-Produktionsbuild ist wieder erfolgreich.
+
+### Release-Manifest
+
+```json
+{
+  "name": "DocOfHome",
+  "version": "1.7.16",
+  "base_version": "1.7.15",
+  "built_on": "2026-08-31",
+  "alembic_head": "0055",
+  "database_migration_required": false,
+  "release_reason": "MaintenanceCard activity kind build fix"
+}
+```
+
 ## Historische Implementierungsnotizen
 
 Stand: 23. Juli 2026
@@ -295,6 +317,8 @@ Setup-Integrationen, FRITZ!Box TR-064, Gebäudestruktur-Assistent, Home-Assistan
 
 ### Validierung
 
+- Korrigierter Release-Stand: Die kompakte Wartungskarte setzt beim Erzeugen eines
+  Eintrags nun konsistent `maintenance` für Wartungen und `general` für Aufgaben.
 - Versions-, Release- und Migrationsverträge auf `1.7.15`/`0055` erweitert.
 - Python-Syntaxprüfung für Backend, Migration und neue Tests sowie dependency-freie TypeScript-/Vue-Syntaxprüfung vorgesehen.
 - Regressionstests für Bezugsobjekt-Lebenslauf, Fahrzeugprofil und Paperless-Referenzen ergänzt.
@@ -7605,4 +7629,3 @@ Die Datenbankstruktur und die Produktversion bleiben unverändert.
   Berechtigungs-/Adminfrage ist daher vor einer Umsetzung erneut zu prüfen.
 - Umsetzung bewusst auf eine zukünftige Version verschoben. Technische Details:
   `docs/backlog/ugreen-ugos-docker-api.md`.
-
