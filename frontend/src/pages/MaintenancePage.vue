@@ -3,10 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { consumptionApi } from '../services/consumptionApi'
+import { paperlessApi } from '../services/paperlessApi'
 import { workItemsApi } from '../services/workItemsApi'
 import type { ConsumptionReadingReminder } from '../types/consumption'
+import type { PaperlessDocument } from '../types/paperless'
 import type {
   RecurrenceMode,
+  WorkActivityKind,
   WorkHistory,
   WorkHistoryEntryWrite,
   WorkItemEvent,
@@ -16,6 +19,7 @@ import type {
   WorkPriority,
   WorkStatus,
   WorkSubjectRead,
+  WorkSubjectTimeline,
   WorkSubjectType,
   WorkSummary
 } from '../types/work'
@@ -41,7 +45,11 @@ const form = ref(emptyWorkForm())
 
 const subjectDialog = ref(false)
 const editingSubject = ref<WorkSubjectRead | null>(null)
-const subjectForm = ref({ name: '', subject_type: 'general' as WorkSubjectType, description: '' })
+const subjectForm = ref(emptySubjectForm())
+
+const subjectTimelineDialog = ref(false)
+const subjectTimelineLoading = ref(false)
+const subjectTimeline = ref<WorkSubjectTimeline | null>(null)
 
 const completionDialog = ref(false)
 const completionItem = ref<WorkItemRead | null>(null)
@@ -59,9 +67,17 @@ const attachmentDialog = ref(false)
 const attachmentEvent = ref<WorkItemEvent | null>(null)
 const attachmentFiles = ref<File[]>([])
 
+const paperlessDialog = ref(false)
+const paperlessEvent = ref<WorkItemEvent | null>(null)
+const paperlessQuery = ref('')
+const paperlessResults = ref<PaperlessDocument[]>([])
+const paperlessLoading = ref(false)
+const paperlessLinkingId = ref<number | null>(null)
+
 function emptyWorkForm() {
   return {
     item_type: 'task' as WorkItemType,
+    activity_kind: 'general' as WorkActivityKind,
     title: '',
     description: '',
     subject_id: null as string | null,
@@ -77,6 +93,59 @@ function emptyWorkForm() {
     priority: 'normal' as WorkPriority
   }
 }
+
+function emptySubjectForm() {
+  return {
+    name: '',
+    subject_type: 'general' as WorkSubjectType,
+    description: '',
+    profile: {} as Record<string, string | number | boolean | null>
+  }
+}
+
+type SubjectProfileField = { key: string; label: string; type?: 'text' | 'number' | 'date'; suffix?: string }
+
+function subjectProfileFields(type: WorkSubjectType): SubjectProfileField[] {
+  if (type === 'vehicle') return [
+    { key: 'vehicle_kind', label: 'Fahrzeugart (PKW, Motorrad …)' },
+    { key: 'manufacturer', label: 'Hersteller' },
+    { key: 'model', label: 'Modell / Typ' },
+    { key: 'license_plate', label: 'Kennzeichen' },
+    { key: 'vin', label: 'FIN / Fahrzeug-Identifizierungsnummer' },
+    { key: 'hsn', label: 'HSN (2.1)' },
+    { key: 'tsn', label: 'TSN (2.2)' },
+    { key: 'first_registration', label: 'Erstzulassung', type: 'date' },
+    { key: 'fuel_type', label: 'Kraftstoff / Antriebsart' },
+    { key: 'power_kw', label: 'Leistung', type: 'number', suffix: 'kW' },
+    { key: 'displacement_cc', label: 'Hubraum', type: 'number', suffix: 'cm³' },
+    { key: 'odometer_km', label: 'Aktueller Kilometerstand', type: 'number', suffix: 'km' }
+  ]
+  if (type === 'animal') return [
+    { key: 'species', label: 'Tierart' },
+    { key: 'breed', label: 'Rasse' },
+    { key: 'birth_date', label: 'Geburtsdatum', type: 'date' },
+    { key: 'chip_number', label: 'Chipnummer' },
+    { key: 'insurance', label: 'Versicherung' },
+    { key: 'weight_kg', label: 'Aktuelles Gewicht', type: 'number', suffix: 'kg' }
+  ]
+  if (type === 'installation') return [
+    { key: 'manufacturer', label: 'Hersteller' },
+    { key: 'model', label: 'Modell / Typ' },
+    { key: 'serial_number', label: 'Seriennummer' },
+    { key: 'installation_date', label: 'Einbau / Inbetriebnahme', type: 'date' },
+    { key: 'energy_source', label: 'Energieträger / Betriebsart' },
+    { key: 'location_notes', label: 'Standort / ergänzende Angaben' }
+  ]
+  if (type === 'device') return [
+    { key: 'manufacturer', label: 'Hersteller' },
+    { key: 'model', label: 'Modell / Typ' },
+    { key: 'serial_number', label: 'Seriennummer' },
+    { key: 'purchase_date', label: 'Kaufdatum', type: 'date' }
+  ]
+  return []
+}
+
+const activeSubjectProfileFields = computed(() => subjectProfileFields(subjectForm.value.subject_type))
 
 function emptyHistoryForm(requireDate: boolean) {
   const now = new Date()
@@ -182,6 +251,7 @@ function startEdit(item: WorkItemRead) {
   editing.value = item
   form.value = {
     item_type: item.item_type,
+    activity_kind: item.activity_kind,
     title: item.title,
     description: item.description ?? '',
     subject_id: item.subject_id,
@@ -208,6 +278,7 @@ async function save() {
   error.value = null
   const payload: WorkItemWrite = {
     item_type: form.value.item_type,
+    activity_kind: form.value.activity_kind,
     title: form.value.title.trim(),
     description: form.value.description.trim() || null,
     target_type: editing.value?.target_type ?? null,
@@ -295,7 +366,7 @@ async function act(item: WorkItemRead, action: 'cancel' | 'reopen' | 'delete') {
 
 function startSubjectCreate() {
   editingSubject.value = null
-  subjectForm.value = { name: '', subject_type: 'general', description: '' }
+  subjectForm.value = emptySubjectForm()
   subjectDialog.value = true
 }
 
@@ -304,7 +375,8 @@ function startSubjectEdit(subject: WorkSubjectRead) {
   subjectForm.value = {
     name: subject.name,
     subject_type: subject.subject_type,
-    description: subject.description ?? ''
+    description: subject.description ?? '',
+    profile: { ...subject.profile }
   }
   subjectDialog.value = true
 }
@@ -317,7 +389,10 @@ async function saveSubject() {
     const payload = {
       name: subjectForm.value.name.trim(),
       subject_type: subjectForm.value.subject_type,
-      description: subjectForm.value.description.trim() || null
+      description: subjectForm.value.description.trim() || null,
+      profile: Object.fromEntries(
+        Object.entries(subjectForm.value.profile).filter(([, value]) => value !== '' && value !== null)
+      )
     }
     if (editingSubject.value) await workItemsApi.updateSubject(editingSubject.value.id, payload)
     else await workItemsApi.createSubject(payload)
@@ -339,6 +414,29 @@ async function deleteSubject(subject: WorkSubjectRead) {
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Bezugsobjekt konnte nicht gelöscht werden.'
   }
+}
+
+async function openSubjectTimeline(subject: WorkSubjectRead) {
+  subjectTimelineDialog.value = true
+  subjectTimelineLoading.value = true
+  error.value = null
+  try {
+    subjectTimeline.value = await workItemsApi.subjectTimeline(subject.id)
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'Zeitstrahl konnte nicht geladen werden.'
+  } finally {
+    subjectTimelineLoading.value = false
+  }
+}
+
+function profileValueLabel(value: string | number | boolean | null): string {
+  if (value === null || value === '') return '–'
+  if (typeof value === 'boolean') return value ? 'Ja' : 'Nein'
+  return String(value)
+}
+
+function profileKeyLabel(subject: WorkSubjectRead, key: string): string {
+  return subjectProfileFields(subject.subject_type).find((field) => field.key === key)?.label ?? key
 }
 
 async function openHistory(item: WorkItemRead) {
@@ -440,6 +538,70 @@ async function deleteAttachment(event: WorkItemEvent, attachmentId: string) {
   }
 }
 
+function startPaperlessLink(event: WorkItemEvent) {
+  paperlessEvent.value = event
+  paperlessQuery.value = ''
+  paperlessResults.value = []
+  paperlessDialog.value = true
+  void searchPaperless()
+}
+
+async function searchPaperless() {
+  paperlessLoading.value = true
+  error.value = null
+  try {
+    paperlessResults.value = await paperlessApi.search(paperlessQuery.value, 30)
+  } catch (reason) {
+    paperlessResults.value = []
+    error.value = reason instanceof Error ? reason.message : 'Paperless-Dokumente konnten nicht geladen werden.'
+  } finally {
+    paperlessLoading.value = false
+  }
+}
+
+async function linkPaperless(document: PaperlessDocument) {
+  if (!paperlessEvent.value || !historyItem.value) return
+  paperlessLinkingId.value = document.document_id
+  error.value = null
+  try {
+    await paperlessApi.link(paperlessEvent.value.id, document.document_id)
+    paperlessDialog.value = false
+    await openHistory(historyItem.value)
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'Paperless-Dokument konnte nicht verknüpft werden.'
+  } finally {
+    paperlessLinkingId.value = null
+  }
+}
+
+async function unlinkPaperless(event: WorkItemEvent, linkId: string) {
+  if (!historyItem.value) return
+  error.value = null
+  try {
+    await paperlessApi.unlink(event.id, linkId)
+    await openHistory(historyItem.value)
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'Paperless-Verknüpfung konnte nicht entfernt werden.'
+  }
+}
+
+function activityKindLabel(kind: WorkActivityKind): string {
+  return {
+    general: 'Allgemein', maintenance: 'Wartung', inspection: 'Inspektion', repair: 'Reparatur',
+    measurement: 'Messung', vaccination: 'Impfung', appointment: 'Termin',
+    official_inspection: 'Prüfung / TÜV', chimney_sweep: 'Schornsteinfeger', service: 'Service', other: 'Sonstiges'
+  }[kind]
+}
+
+function timelineIcon(kind: WorkActivityKind, entryType: string): string {
+  if (entryType === 'due') return 'mdi-calendar-clock'
+  return {
+    general: 'mdi-history', maintenance: 'mdi-wrench', inspection: 'mdi-clipboard-check-outline', repair: 'mdi-tools',
+    measurement: 'mdi-chart-line', vaccination: 'mdi-needle', appointment: 'mdi-calendar-account-outline',
+    official_inspection: 'mdi-car-wrench', chimney_sweep: 'mdi-fireplace', service: 'mdi-wrench', other: 'mdi-circle-outline'
+  }[kind]
+}
+
 function statusLabel(status: WorkStatus): string {
   return { open: 'Offen', completed: 'Erledigt', cancelled: 'Abgebrochen' }[status]
 }
@@ -509,6 +671,7 @@ onMounted(() => void load())
               <v-btn v-bind="props" icon="mdi-dots-vertical" size="x-small" variant="text" :aria-label="`${subject.name} verwalten`" />
             </template>
             <v-list density="compact">
+              <v-list-item prepend-icon="mdi-timeline-clock-outline" title="Zeitstrahl & Profil" @click="openSubjectTimeline(subject)" />
               <v-list-item prepend-icon="mdi-plus" title="Tätigkeit hinzufügen" @click="startCreate(subject.id)" />
               <v-list-item prepend-icon="mdi-pencil" title="Bearbeiten" @click="startSubjectEdit(subject)" />
               <v-list-item prepend-icon="mdi-delete-outline" title="Löschen" @click="deleteSubject(subject)" />
@@ -548,6 +711,7 @@ onMounted(() => void load())
           <v-list-item-title class="d-flex flex-wrap align-center ga-2">
             <span>{{ item.title }}</span>
             <v-chip size="x-small" variant="tonal">{{ typeLabel(item.item_type) }}</v-chip>
+            <v-chip v-if="item.activity_kind !== 'general'" size="x-small" color="primary" variant="tonal">{{ activityKindLabel(item.activity_kind) }}</v-chip>
             <v-chip v-if="item.generated" size="x-small" color="info" variant="tonal">Automatisch</v-chip>
             <v-chip size="x-small" :color="item.overdue ? 'error' : undefined" variant="tonal">{{ statusLabel(item.status) }}</v-chip>
           </v-list-item-title>
@@ -582,6 +746,14 @@ onMounted(() => void load())
       <v-card :title="editing ? 'Eintrag bearbeiten' : 'Eintrag anlegen'" prepend-icon="mdi-format-list-checks">
         <v-card-text>
           <v-select v-model="form.item_type" :items="[{ title: 'Aufgabe', value: 'task' }, { title: 'Wartung / wiederkehrende Tätigkeit', value: 'maintenance' }]" label="Typ" />
+          <v-select v-model="form.activity_kind" :items="[
+            { title: 'Allgemein', value: 'general' }, { title: 'Wartung', value: 'maintenance' },
+            { title: 'Inspektion', value: 'inspection' }, { title: 'Reparatur', value: 'repair' },
+            { title: 'Messung / Gewicht / Zählerstand', value: 'measurement' }, { title: 'Impfung', value: 'vaccination' },
+            { title: 'Termin / Arzttermin', value: 'appointment' }, { title: 'Prüfung / TÜV', value: 'official_inspection' },
+            { title: 'Schornsteinfeger', value: 'chimney_sweep' }, { title: 'Service', value: 'service' },
+            { title: 'Sonstiges', value: 'other' }
+          ]" label="Art der Tätigkeit" hint="Bestimmt die Darstellung im Zeitstrahl des Bezugsobjekts." persistent-hint />
           <v-text-field v-model="form.title" label="Tätigkeit / Titel" maxlength="200" counter autofocus :error-messages="fieldErrors.title" />
           <v-autocomplete v-if="!editing?.target_id" v-model="form.subject_id" :items="subjectOptions" label="Bezugsobjekt (optional)" clearable hint="z. B. Penny, Kühlschrank, Auto, Badezimmer" persistent-hint />
           <v-alert v-else type="info" variant="tonal" density="compact" class="mb-3">Dieser bestehende Eintrag bleibt mit {{ editing.target_label }} verknüpft.</v-alert>
@@ -603,6 +775,17 @@ onMounted(() => void load())
         <v-card-text>
           <v-text-field v-model="subjectForm.name" label="Name" placeholder="z. B. Penny" autofocus />
           <v-select v-model="subjectForm.subject_type" :items="[{ title: 'Gerät', value: 'device' }, { title: 'Tier', value: 'animal' }, { title: 'Fahrzeug', value: 'vehicle' }, { title: 'Gebäude', value: 'building' }, { title: 'Raum', value: 'room' }, { title: 'Anlage / Installation', value: 'installation' }, { title: 'Allgemein', value: 'general' }, { title: 'Sonstiges', value: 'other' }]" label="Art" />
+          <v-alert v-if="activeSubjectProfileFields.length" type="info" variant="tonal" density="compact" class="mb-3">Die zusätzlichen Stammdaten gehören zum Bezugsobjekt und erscheinen in seiner Lebenslaufakte.</v-alert>
+          <v-row v-if="activeSubjectProfileFields.length">
+            <v-col v-for="field in activeSubjectProfileFields" :key="field.key" cols="12" md="6">
+              <v-text-field
+                v-model="subjectForm.profile[field.key]"
+                :label="field.label"
+                :type="field.type ?? 'text'"
+                :suffix="field.suffix"
+              />
+            </v-col>
+          </v-row>
           <v-textarea v-model="subjectForm.description" label="Beschreibung (optional)" rows="3" />
         </v-card-text>
         <v-card-actions><v-spacer /><v-btn @click="subjectDialog = false">Abbrechen</v-btn><v-btn color="primary" :disabled="!subjectForm.name.trim()" :loading="saving" @click="saveSubject">Speichern</v-btn></v-card-actions>
@@ -645,9 +828,25 @@ onMounted(() => void load())
                       <v-icon v-if="!historyItem?.generated" end icon="mdi-close" @click.prevent.stop="deleteAttachment(event, attachment.id)" />
                     </v-chip>
                   </div>
+                  <div v-if="event.paperless_links.length" class="d-flex flex-wrap ga-1 mt-2">
+                    <v-chip
+                      v-for="link in event.paperless_links"
+                      :key="link.id"
+                      size="small"
+                      prepend-icon="mdi-file-document-outline"
+                      :href="link.source_url ?? undefined"
+                      target="_blank"
+                      color="info"
+                      variant="tonal"
+                    >
+                      {{ link.title }}
+                      <v-icon v-if="!historyItem?.generated" end icon="mdi-close" @click.prevent.stop="unlinkPaperless(event, link.id)" />
+                    </v-chip>
+                  </div>
                 </div>
                 <div v-if="!historyItem?.generated" class="d-flex ga-1">
-                  <v-btn icon="mdi-paperclip" size="x-small" variant="text" aria-label="Anhang hinzufügen" @click="startAttachment(event)" />
+                  <v-btn icon="mdi-paperclip" size="x-small" variant="text" aria-label="Lokalen Anhang hinzufügen" @click="startAttachment(event)" />
+                  <v-btn icon="mdi-file-link-outline" size="x-small" variant="text" aria-label="Paperless-Dokument verknüpfen" @click="startPaperlessLink(event)" />
                   <v-btn icon="mdi-pencil" size="x-small" variant="text" aria-label="Historieneintrag bearbeiten" @click="startHistoryEdit(event)" />
                   <v-btn icon="mdi-delete-outline" size="x-small" color="error" variant="text" aria-label="Historieneintrag löschen" @click="deleteHistory(event)" />
                 </div>
@@ -669,6 +868,73 @@ onMounted(() => void load())
           <v-row><v-col cols="8"><v-text-field v-model.number="historyForm.reading_value" type="number" label="Mess-/Zählerwert (optional)" /></v-col><v-col cols="4"><v-text-field v-model="historyForm.reading_unit" label="Einheit" /></v-col></v-row>
         </v-card-text>
         <v-card-actions><v-spacer /><v-btn @click="historyEntryDialog = false">Abbrechen</v-btn><v-btn color="primary" :disabled="!historyForm.occurred_at" :loading="saving" @click="saveHistory">Speichern</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="subjectTimelineDialog" max-width="1050">
+      <v-card :title="`Lebenslauf · ${subjectTimeline?.subject.name ?? 'Bezugsobjekt'}`" prepend-icon="mdi-timeline-clock-outline">
+        <v-progress-linear v-if="subjectTimelineLoading" indeterminate />
+        <v-card-text v-if="subjectTimeline">
+          <div class="d-flex flex-wrap ga-2 mb-4">
+            <v-chip variant="tonal">{{ subjectTypeLabel(subjectTimeline.subject.subject_type) }}</v-chip>
+            <v-chip v-for="(value, key) in subjectTimeline.subject.profile" :key="key" size="small" variant="outlined">{{ profileKeyLabel(subjectTimeline.subject, String(key)) }}: {{ profileValueLabel(value) }}</v-chip>
+          </div>
+          <p v-if="subjectTimeline.subject.description" class="text-medium-emphasis mb-5">{{ subjectTimeline.subject.description }}</p>
+          <v-timeline v-if="subjectTimeline.entries.length" side="end" density="compact">
+            <v-timeline-item
+              v-for="entry in subjectTimeline.entries"
+              :key="entry.id"
+              :icon="timelineIcon(entry.activity_kind, entry.entry_type)"
+              :dot-color="entry.entry_type === 'due' ? 'warning' : 'primary'"
+              size="small"
+            >
+              <div class="d-flex flex-wrap align-center ga-2">
+                <strong>{{ formatDate(entry.at) }}</strong>
+                <v-chip size="x-small" :color="entry.entry_type === 'due' ? 'warning' : 'primary'" variant="tonal">{{ entry.entry_type === 'due' ? 'Fällig' : activityKindLabel(entry.activity_kind) }}</v-chip>
+              </div>
+              <div class="font-weight-medium mt-1">{{ entry.title }}</div>
+              <div v-if="entry.note" class="mt-1">{{ entry.note }}</div>
+              <div v-if="entry.reading_value != null" class="text-medium-emphasis">Messwert: {{ entry.reading_value }} {{ entry.reading_unit ?? '' }}</div>
+              <div v-if="entry.cost_amount != null" class="text-medium-emphasis">Kosten: {{ entry.cost_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} {{ entry.cost_currency ?? 'EUR' }}</div>
+              <div v-if="entry.paperless_links.length" class="d-flex flex-wrap ga-1 mt-2">
+                <v-chip v-for="link in entry.paperless_links" :key="link.id" size="small" prepend-icon="mdi-file-document-outline" color="info" variant="tonal" :href="link.source_url ?? undefined" target="_blank">{{ link.title }}</v-chip>
+              </div>
+            </v-timeline-item>
+          </v-timeline>
+          <v-alert v-else type="info" variant="tonal">Noch keine historischen Einträge oder zukünftigen Fälligkeiten vorhanden.</v-alert>
+        </v-card-text>
+        <v-card-actions><v-spacer /><v-btn @click="subjectTimelineDialog = false">Schließen</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="paperlessDialog" max-width="900">
+      <v-card title="Paperless-Dokument verknüpfen" prepend-icon="mdi-file-link-outline">
+        <v-card-text>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">DocOfHome speichert nur die Verknüpfung zum bestehenden Paperless-Dokument, keine PDF-Kopie.</v-alert>
+          <div class="d-flex flex-column flex-sm-row ga-2 mb-4">
+            <v-text-field
+              v-model="paperlessQuery"
+              label="Paperless durchsuchen"
+              placeholder="z. B. Werkstatt, Tierarzt oder Schornsteinfeger"
+              hint="Paperless-Volltextsuche in Dokumenttitel und -inhalt."
+              persistent-hint
+              clearable
+              @keyup.enter="searchPaperless"
+            />
+            <v-btn color="primary" prepend-icon="mdi-magnify" :loading="paperlessLoading" @click="searchPaperless">Suchen</v-btn>
+          </div>
+          <v-list v-if="paperlessResults.length" lines="two" border rounded>
+            <v-list-item v-for="document in paperlessResults" :key="document.document_id">
+              <v-list-item-title>{{ document.title }}</v-list-item-title>
+              <v-list-item-subtitle>{{ formatDate(document.created) }}<span v-if="document.original_file_name"> · {{ document.original_file_name }}</span></v-list-item-subtitle>
+              <template #append>
+                <v-btn variant="tonal" color="primary" :loading="paperlessLinkingId === document.document_id" @click="linkPaperless(document)">Verknüpfen</v-btn>
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-alert v-else-if="!paperlessLoading" type="info" variant="tonal">Keine Dokumente gefunden. Wenn Paperless noch nicht eingerichtet ist, hinterlege unter Einstellungen die Server-URL und einen API-Token.</v-alert>
+        </v-card-text>
+        <v-card-actions><v-spacer /><v-btn @click="paperlessDialog = false">Schließen</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
 

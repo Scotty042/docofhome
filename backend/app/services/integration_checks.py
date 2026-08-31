@@ -75,7 +75,7 @@ class IntegrationCheckService:
                         setting.account or "",
                         secret,
                     )
-                else:
+                elif kind is IntegrationKind.FRITZBOX:
                     devices = FritzBoxConnector(
                         base_url=setting.base_url,
                         account=setting.account or "",
@@ -84,6 +84,15 @@ class IntegrationCheckService:
                     ).devices()
                     message = f"FRITZ!Box ist read-only erreichbar ({len(devices)} Geräte)."
                     version = None
+                elif kind is IntegrationKind.PAPERLESS:
+                    message, version = self._check_paperless(client, setting.base_url, secret)
+                else:
+                    return self._result(
+                        kind,
+                        started,
+                        False,
+                        "Für diese Integration ist kein Verbindungstest implementiert.",
+                    )
         except httpx.TimeoutException:
             return self._result(
                 kind,
@@ -167,6 +176,26 @@ class IntegrationCheckService:
         )
         IntegrationCheckService._require_status(response, {207})
         return "Nextcloud-WebDAV ist erreichbar und die Anmeldung war erfolgreich.", None
+
+
+    @staticmethod
+    def _check_paperless(
+        client: httpx.Client,
+        base_url: str,
+        secret: str,
+    ) -> tuple[str, str | None]:
+        endpoint = f"{base_url.rstrip('/')}/api/documents/?page_size=1"
+        response = client.get(
+            endpoint,
+            headers={
+                "Authorization": f"Token {secret}",
+                "Accept": "application/json; version=10",
+            },
+        )
+        IntegrationCheckService._require_status(response, {200})
+        IntegrationCheckService._json_object(response)
+        version = response.headers.get("X-Version")
+        return "Paperless ist erreichbar und der API-Token ist gültig.", version
 
     @staticmethod
     def _immich_api_base(base_url: str) -> str:

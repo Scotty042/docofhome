@@ -5,11 +5,14 @@ export type WorkStatus = 'open' | 'completed' | 'cancelled'
 export type WorkPriority = 'low' | 'normal' | 'high'
 export type RecurrenceMode = 'none' | 'interval' | 'calendar'
 export type WorkSubjectType = 'device' | 'animal' | 'vehicle' | 'building' | 'room' | 'installation' | 'general' | 'other'
+export type WorkActivityKind = 'general' | 'maintenance' | 'inspection' | 'repair' | 'measurement' | 'vaccination' | 'appointment' | 'official_inspection' | 'chimney_sweep' | 'service' | 'other'
+export type WorkSubjectProfile = Record<string, string | number | boolean | null>
 
 export interface WorkSubjectWrite {
   name: string
   subject_type: WorkSubjectType
   description: string | null
+  profile: WorkSubjectProfile
 }
 
 export interface WorkSubjectRead extends WorkSubjectWrite {
@@ -21,6 +24,7 @@ export interface WorkSubjectRead extends WorkSubjectWrite {
 
 export interface WorkItemWrite {
   item_type: WorkItemType
+  activity_kind: WorkActivityKind
   title: string
   description: string | null
   target_type: KnowledgeTargetType | null
@@ -64,6 +68,17 @@ export interface WorkEventAttachment {
   created_at: string
 }
 
+export interface WorkPaperlessLink {
+  id: string
+  event_id: string
+  document_id: number
+  title: string
+  created_date: string | null
+  original_file_name: string | null
+  source_url: string | null
+  created_at: string
+}
+
 export interface WorkItemEvent {
   id: string
   work_item_id: string
@@ -78,6 +93,7 @@ export interface WorkItemEvent {
   reading_unit: string | null
   interval_days: number | null
   attachments: WorkEventAttachment[]
+  paperless_links: WorkPaperlessLink[]
   created_at: string
 }
 
@@ -113,6 +129,28 @@ export interface WorkHistory {
   item_id: string
   stats: WorkHistoryStats
   entries: WorkItemEvent[]
+}
+
+export interface WorkSubjectTimelineEntry {
+  id: string
+  entry_type: 'history' | 'due'
+  work_item_id: string
+  title: string
+  item_type: WorkItemType
+  activity_kind: WorkActivityKind
+  at: string
+  note: string | null
+  cost_amount: number | null
+  cost_currency: string | null
+  reading_value: number | null
+  reading_unit: string | null
+  status: WorkStatus | null
+  paperless_links: WorkPaperlessLink[]
+}
+
+export interface WorkSubjectTimeline {
+  subject: WorkSubjectRead
+  entries: WorkSubjectTimelineEntry[]
 }
 
 export interface WorkSummary {

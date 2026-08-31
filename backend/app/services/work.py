@@ -19,10 +19,18 @@ from app.models.electrical import (
     ElectricalProtectiveDevice,
 )
 from app.models.electrical_circuit import ElectricalCircuit
-from app.models.work import WorkItem, WorkItemEvent, WorkItemEventAttachment, WorkSubject
+from app.models.integration_setting import IntegrationSetting
+from app.models.work import (
+    WorkItem,
+    WorkItemEvent,
+    WorkItemEventAttachment,
+    WorkItemEventPaperlessLink,
+    WorkSubject,
+)
 from app.schemas.knowledge import KnowledgeTargetType
 from app.schemas.work import (
     RecurrenceMode,
+    WorkActivityKind,
     WorkCompletionWrite,
     WorkEventAttachmentRead,
     WorkHistoryEntryWrite,
@@ -32,9 +40,12 @@ from app.schemas.work import (
     WorkItemRead,
     WorkItemType,
     WorkItemWrite,
+    WorkPaperlessLinkRead,
     WorkPriority,
     WorkStatus,
     WorkSubjectRead,
+    WorkSubjectTimelineEntryRead,
+    WorkSubjectTimelineRead,
     WorkSubjectWrite,
     WorkSubjectType,
     WorkSummaryRead,
@@ -111,6 +122,7 @@ class WorkService:
         self._validate_subject(payload.subject_id)
         record = WorkItem(
             item_type=payload.item_type.value,
+            activity_kind=payload.activity_kind.value,
             title=payload.title,
             description=payload.description,
             target_type=payload.target_type.value if payload.target_type else None,
@@ -154,6 +166,7 @@ class WorkService:
         same_subject = record.subject_id == payload.subject_id
         self._validate_subject(payload.subject_id, include_deleted=same_subject)
         record.item_type = payload.item_type.value
+        record.activity_kind = payload.activity_kind.value
         record.title = payload.title
         record.description = payload.description
         record.target_type = payload.target_type.value if payload.target_type else None
@@ -347,6 +360,13 @@ class WorkService:
         ).all()
         for attachment in attachments:
             self.session.delete(attachment)
+        paperless_links = self.session.exec(
+            select(WorkItemEventPaperlessLink).where(
+                WorkItemEventPaperlessLink.event_id == event.id
+            )
+        ).all()
+        for link in paperless_links:
+            self.session.delete(link)
         self.session.delete(event)
         self.session.commit()
 
@@ -413,6 +433,7 @@ class WorkService:
             name=payload.name,
             subject_type=payload.subject_type.value,
             description=payload.description,
+            profile_json=json.dumps(payload.profile, ensure_ascii=False),
         )
         self.session.add(subject)
         self.session.commit()
@@ -433,6 +454,7 @@ class WorkService:
         subject.name = payload.name
         subject.subject_type = payload.subject_type.value
         subject.description = payload.description
+        subject.profile_json = json.dumps(payload.profile, ensure_ascii=False)
         subject.updated_at = datetime.now(UTC)
         self.session.add(subject)
         self.session.commit()
@@ -708,6 +730,7 @@ class WorkService:
             name=subject.name,
             subject_type=WorkSubjectType(subject.subject_type),
             description=subject.description,
+            profile=self._subject_profile(subject),
             created_at=self._aware(subject.created_at),
             updated_at=self._aware(subject.updated_at),
             activity_count=activity_count,
@@ -725,6 +748,7 @@ class WorkService:
             .where(WorkItemEventAttachment.event_id == event.id)
             .order_by(WorkItemEventAttachment.created_at)
         ).all()
+        paperless_links = self._paperless_links(event.id)
         return WorkItemEventRead(
             id=event.id,
             work_item_id=event.work_item_id,
@@ -739,6 +763,7 @@ class WorkService:
             reading_unit=event.reading_unit,
             interval_days=interval_days,
             attachments=[self._attachment_read(attachment) for attachment in attachments],
+            paperless_links=paperless_links,
             created_at=self._aware(event.created_at),
         )
 
@@ -769,6 +794,96 @@ class WorkService:
             .where(WorkItemEvent.event_type == "completed")
         ).all())
         return self._interval_map(events).get(event.id)
+
+
+    @staticmethod
+    def _subject_profile(subject: WorkSubject) -> dict[str, str | int | float | bool | None]:
+        try:
+            value = json.loads(subject.profile_json or "{}")
+            return value if isinstance(value, dict) else {}
+        except (TypeError, json.JSONDecodeError):
+            return {}
+
+    def _paperless_links(self, event_id: UUID) -> list[WorkPaperlessLinkRead]:
+        records = self.session.exec(
+            select(WorkItemEventPaperlessLink)
+            .where(WorkItemEventPaperlessLink.event_id == event_id)
+            .order_by(WorkItemEventPaperlessLink.created_at)
+        ).all()
+        setting = self.session.exec(
+            select(IntegrationSetting).where(IntegrationSetting.kind == "paperless")
+        ).first()
+        base_url = setting.base_url.rstrip("/") if setting and setting.base_url else None
+        return [
+            WorkPaperlessLinkRead(
+                id=record.id,
+                event_id=record.event_id,
+                document_id=record.document_id,
+                title=record.title,
+                created_date=record.created_date,
+                original_file_name=record.original_file_name,
+                source_url=(
+                    f"{base_url}/documents/{record.document_id}/details"
+                    if base_url
+                    else None
+                ),
+                created_at=self._aware(record.created_at),
+            )
+            for record in records
+        ]
+
+    def subject_timeline(self, subject_id: UUID) -> WorkSubjectTimelineRead:
+        subject = self._require_subject(subject_id)
+        items = list(
+            self.session.exec(
+                select(WorkItem)
+                .where(WorkItem.subject_id == subject_id)
+                .where(WorkItem.deleted_at.is_(None))
+            ).all()
+        )
+        entries: list[WorkSubjectTimelineEntryRead] = []
+        for item in items:
+            events = self.session.exec(
+                select(WorkItemEvent)
+                .where(WorkItemEvent.work_item_id == item.id)
+                .where(WorkItemEvent.event_type == "completed")
+            ).all()
+            for event in events:
+                event_read = self._event_read(event)
+                entries.append(
+                    WorkSubjectTimelineEntryRead(
+                        id=f"event:{event.id}",
+                        entry_type="history",
+                        work_item_id=item.id,
+                        title=item.title,
+                        item_type=WorkItemType(item.item_type),
+                        activity_kind=WorkActivityKind(item.activity_kind),
+                        at=self._aware(event.occurred_at),
+                        note=event.note,
+                        cost_amount=event.cost_amount,
+                        cost_currency=event.cost_currency,
+                        reading_value=event.reading_value,
+                        reading_unit=event.reading_unit,
+                        status=WorkStatus.COMPLETED,
+                        paperless_links=event_read.paperless_links,
+                    )
+                )
+            if item.status == WorkStatus.OPEN.value and item.due_at is not None:
+                entries.append(
+                    WorkSubjectTimelineEntryRead(
+                        id=f"due:{item.id}",
+                        entry_type="due",
+                        work_item_id=item.id,
+                        title=item.title,
+                        item_type=WorkItemType(item.item_type),
+                        activity_kind=WorkActivityKind(item.activity_kind),
+                        at=self._aware(item.due_at),
+                        note=item.description,
+                        status=WorkStatus.OPEN,
+                    )
+                )
+        entries.sort(key=lambda entry: entry.at, reverse=True)
+        return WorkSubjectTimelineRead(subject=self._subject_read(subject), entries=entries)
 
     def _validate_target(
         self,
@@ -835,6 +950,7 @@ class WorkService:
         return WorkItemRead(
             id=record.id,
             item_type=WorkItemType(record.item_type),
+            activity_kind=WorkActivityKind(record.activity_kind),
             title=record.title,
             description=record.description,
             target_type=target_type,

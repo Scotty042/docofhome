@@ -12,8 +12,8 @@ describe('first-run defaults', () => {
     const configuration = createDefaultConfiguration()
 
     expect(configuration.theme).toBe('dark')
-    expect(configuration.integrations).toHaveLength(4)
-    expect(configuration.integrations.map((integration) => integration.kind)).toContain('fritzbox')
+    expect(configuration.integrations).toHaveLength(5)
+    expect(configuration.integrations.map((integration) => integration.kind)).toEqual(expect.arrayContaining(['fritzbox', 'paperless']))
     expect(configuration.integrations.every((integration) => !integration.enabled)).toBe(true)
     expect(configuration.enabled_modules).toEqual(expect.arrayContaining(['images', 'documents', 'workloads']))
     expect(configuration.main_menu_modules).toEqual(expect.arrayContaining(['images', 'documents', 'workloads']))

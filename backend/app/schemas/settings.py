@@ -19,6 +19,7 @@ class IntegrationKind(StrEnum):
     IMMICH = "immich"
     NEXTCLOUD = "nextcloud"
     FRITZBOX = "fritzbox"
+    PAPERLESS = "paperless"
 
 
 class ModuleKey(StrEnum):
@@ -141,7 +142,7 @@ class ConfigurationWrite(BaseModel):
         default_factory=default_enabled_modules,
         max_length=len(ModuleKey),
     )
-    integrations: list[IntegrationWrite] = Field(default_factory=list, max_length=4)
+    integrations: list[IntegrationWrite] = Field(default_factory=list, max_length=len(IntegrationKind))
 
     @model_validator(mode="after")
     def image_search_has_a_provider(self) -> "ConfigurationWrite":

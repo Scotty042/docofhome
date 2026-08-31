@@ -18,6 +18,7 @@ from app.api.v1 import (
     knowledge,
     mcp_settings,
     network,
+    paperless,
     quality,
     recipes,
     release,
@@ -40,6 +41,7 @@ api_router.include_router(document_links.router)
 api_router.include_router(consumption.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(network.router)
+api_router.include_router(paperless.router)
 api_router.include_router(work.router)
 api_router.include_router(quality.router)
 api_router.include_router(recipes.router)

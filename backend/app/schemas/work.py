@@ -30,6 +30,20 @@ class RecurrenceMode(StrEnum):
     CALENDAR = "calendar"
 
 
+class WorkActivityKind(StrEnum):
+    GENERAL = "general"
+    MAINTENANCE = "maintenance"
+    INSPECTION = "inspection"
+    REPAIR = "repair"
+    MEASUREMENT = "measurement"
+    VACCINATION = "vaccination"
+    APPOINTMENT = "appointment"
+    OFFICIAL_INSPECTION = "official_inspection"
+    CHIMNEY_SWEEP = "chimney_sweep"
+    SERVICE = "service"
+    OTHER = "other"
+
+
 class WorkSubjectType(StrEnum):
     DEVICE = "device"
     ANIMAL = "animal"
@@ -47,6 +61,7 @@ class WorkSubjectWrite(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     subject_type: WorkSubjectType = WorkSubjectType.GENERAL
     description: str | None = Field(default=None, max_length=20000)
+    profile: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -75,6 +90,7 @@ class WorkItemWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     item_type: WorkItemType
+    activity_kind: WorkActivityKind = WorkActivityKind.GENERAL
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=20000)
     target_type: KnowledgeTargetType | None = None
@@ -149,6 +165,7 @@ class WorkItemRead(BaseModel):
 
     id: UUID
     item_type: WorkItemType
+    activity_kind: WorkActivityKind = WorkActivityKind.GENERAL
     title: str
     description: str | None
     target_type: KnowledgeTargetType | None
@@ -190,6 +207,45 @@ class WorkEventAttachmentRead(BaseModel):
     created_at: datetime
 
 
+class WorkPaperlessLinkRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    event_id: UUID
+    document_id: int
+    title: str
+    created_date: str | None
+    original_file_name: str | None
+    source_url: str | None = None
+    created_at: datetime
+
+
+class WorkSubjectTimelineEntryRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    entry_type: str
+    work_item_id: UUID
+    title: str
+    item_type: WorkItemType
+    activity_kind: WorkActivityKind
+    at: datetime
+    note: str | None = None
+    cost_amount: float | None = None
+    cost_currency: str | None = None
+    reading_value: float | None = None
+    reading_unit: str | None = None
+    status: WorkStatus | None = None
+    paperless_links: list[WorkPaperlessLinkRead] = Field(default_factory=list)
+
+
+class WorkSubjectTimelineRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: WorkSubjectRead
+    entries: list[WorkSubjectTimelineEntryRead]
+
+
 class WorkItemEventRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -206,6 +262,7 @@ class WorkItemEventRead(BaseModel):
     reading_unit: str | None
     interval_days: int | None = None
     attachments: list[WorkEventAttachmentRead] = Field(default_factory=list)
+    paperless_links: list[WorkPaperlessLinkRead] = Field(default_factory=list)
     created_at: datetime
 
 

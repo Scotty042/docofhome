@@ -85,6 +85,12 @@ const integrationMeta: Record<IntegrationKind, {
     icon: 'mdi-router-wireless',
     description: 'Optional zum rein lesenden Import erkannter Netzwerkgeräte.',
     secretLabel: 'FRITZ!Box-Kennwort'
+  },
+  paperless: {
+    name: 'Paperless-ngx',
+    icon: 'mdi-file-document-multiple-outline',
+    description: 'Optional zum manuellen Verknüpfen vorhandener Paperless-Dokumente mit Wartungsereignissen.',
+    secretLabel: 'API-Token'
   }
 }
 

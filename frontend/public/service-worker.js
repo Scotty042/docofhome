@@ -1,4 +1,4 @@
-const CACHE_NAME = 'docofhome-shell-1.7.14'
+const CACHE_NAME = 'docofhome-shell-1.7.15'
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(
   caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))

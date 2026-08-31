@@ -250,6 +250,57 @@ Setup-Integrationen, FRITZ!Box TR-064, Gebäudestruktur-Assistent, Home-Assistan
 - vollständige npm-, Backend- und Dockerläufe bleiben mangels verfügbarer
   Abhängigkeiten beziehungsweise Docker ein Zielsystem-Gate.
 
+## 1.7.15 – 2026-08-28
+
+### Kurzüberblick
+
+- Wartung & Aufgaben um strukturierte Bezugsobjekt-Profile und einen gemeinsamen Lebenslauf/Zeitstrahl erweitert.
+- Fahrzeuge können unter anderem mit Fahrzeugart, Hersteller, Modell, Kennzeichen, FIN, HSN/TSN, Erstzulassung, Antrieb, Leistung, Hubraum und Kilometerstand dokumentiert werden.
+- Tier-, Anlagen- und Geräteprofile erhalten passende Stammdaten, sodass beispielsweise Penny, Heizung und Fahrzeuge ohne eigene Spezialmodule dokumentiert werden können.
+- Tätigkeiten sind zusätzlich als Wartung, Inspektion, Reparatur, Messung, Impfung, Termin, TÜV/Prüfung, Schornsteinfeger, Service oder sonstige Aktivität klassifizierbar.
+- Der Lebenslauf eines Bezugsobjekts kombiniert abgeschlossene Durchführungen und zukünftige offene Fälligkeiten in einem Zeitstrahl.
+- Paperless-ngx als neue optionale Integration ergänzt: Server-URL und API-Token werden unter Einstellungen gepflegt und können dort getestet werden.
+- Bestehende Paperless-Dokumente lassen sich manuell an konkrete Historieneinträge verknüpfen; eine automatische Zuordnung ist bewusst nicht Bestandteil der Version.
+
+### Paperless- und Dokumentenmodell
+
+- DocOfHome verwendet für Paperless ausschließlich lesende REST-Aufrufe zur Dokumentensuche und zum Abruf ausgewählter Dokumentmetadaten.
+- Verknüpft werden nur Paperless-Dokument-ID, Titel, Dokumentdatum und ursprünglicher Dateiname; PDF-Dateien werden nicht kopiert oder in DocOfHome dupliziert.
+- Das Entfernen einer Verknüpfung verändert ausschließlich die lokale DocOfHome-Zuordnung und löscht kein Dokument in Paperless.
+- Paperless bleibt damit die zentrale Dokumentenablage, während DocOfHome den fachlichen Zusammenhang zu Impfung, Tierarzttermin, Heizungswartung, Schornsteinfeger, Fahrzeuginspektion und weiteren Ereignissen abbildet.
+- Die Integration nutzt Paperless Token-Authentifizierung und die versionierte REST-API; der Browser kommuniziert nicht direkt mit Paperless.
+
+### Technische Umsetzung
+
+- `WorkSubject.profile_json` ergänzt flexible, typabhängige Stammdaten an Bezugsobjekten.
+- `WorkItem.activity_kind` ergänzt die fachliche Klassifikation einer Aufgabe/Wartung.
+- Neuer API-Endpunkt `/api/v1/work-items/subjects/{subject_id}/timeline` liefert die objektbezogene Lebenslaufakte.
+- Neue Tabelle `work_item_event_paperless_links` speichert ausschließlich lokale Dokumentreferenzen.
+- Neue Paperless-Endpunkte unter `/api/v1/paperless` unterstützen Suche, Verknüpfung und lokales Entfernen der Zuordnung.
+- Alembic-Migration `0055` ergänzt die neuen Profil-, Tätigkeits- und Dokumentverknüpfungsdaten.
+
+### Release-Manifest
+
+```json
+{
+  "name": "DocOfHome",
+  "version": "1.7.15",
+  "base_version": "1.7.14",
+  "built_on": "2026-08-28",
+  "alembic_head": "0055",
+  "database_migration_required": true,
+  "release_reason": "Object lifecycle timelines and manual Paperless document links"
+}
+```
+
+### Validierung
+
+- Versions-, Release- und Migrationsverträge auf `1.7.15`/`0055` erweitert.
+- Python-Syntaxprüfung für Backend, Migration und neue Tests sowie dependency-freie TypeScript-/Vue-Syntaxprüfung vorgesehen.
+- Regressionstests für Bezugsobjekt-Lebenslauf, Fahrzeugprofil und Paperless-Referenzen ergänzt.
+- Connector-Test prüft Paperless Token-Header und Dokumentensuche; Integrationstest prüft die Verbindungskontrolle.
+- Vollständige Pytest-/Ruff-/mypy- sowie Vitest-/vue-tsc-/Vite-Läufe bleiben in isolierten Buildumgebungen ohne installierte Projektabhängigkeiten ein Zielsystem-Gate.
+
 ## 1.7.14 – 2026-08-28
 
 ### Kurzüberblick
@@ -7535,3 +7586,23 @@ Dieser weiterhin als Version 1.0.0 geführte Stand ergänzt Verbindungstests dir
 Der zweite 1.0.0-Fixstand verbessert Bedienbarkeit und Nachvollziehbarkeit: Gebäudestrukturen lassen sich nach dem Erst-Setup weitergeführt bearbeiten, die globale Suche erhält einen zuverlässigen Fokus und das alternative Kürzel `/`, Dashboard-Kacheln werden direkt per Drag-and-Drop sortiert, FRITZ!Box-Geräte erscheinen im Netzwerkmodul, die Änderungshistorie zeigt verständliche Vorher-/Nachher-Werte und bestehende Assets werden im Assistenten über eine Suchliste ausgewählt.
 
 Die Datenbankstruktur und die Produktversion bleiben unverändert.
+
+## 2026-08-28 – Recherche: UGREEN UGOS Docker-API (zurückgestellt)
+
+- Direkte read-only Docker-Abfragen über die interne UGOS-HTTPS-API mit realen
+  NAS-Antworten untersucht.
+- `GetProjectListV3`, `ShowContainerDetailListV2`, `ShowLocalContainer`,
+  `ShowOfflineContainer` und `GetUpdateContainerCount` fachlich eingeordnet.
+- Container-ID als stabile Verknüpfung zwischen Projekt-, Live- und Detaildaten
+  vorgesehen.
+- Sicherheitsanforderung festgelegt: Environment-Variablen/Secrets niemals
+  speichern oder protokollieren; keine Docker-Schreibaktionen in einer ersten
+  Umsetzung.
+- Docker Socket ist auf dem getesteten UGOS-System nicht praktikabel; SSH wird
+  aus Sicherheitsgründen nicht bevorzugt; Home Assistant stellt über die
+  vorhandene UGREEN-Integration keine Containerdaten bereit.
+- Ein Nicht-Admin-UGOS-Testbenutzer hatte keinen Zugriff auf die Docker-App. Die
+  Berechtigungs-/Adminfrage ist daher vor einer Umsetzung erneut zu prüfen.
+- Umsetzung bewusst auf eine zukünftige Version verschoben. Technische Details:
+  `docs/backlog/ugreen-ugos-docker-api.md`.
+

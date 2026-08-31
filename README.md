@@ -47,7 +47,7 @@ In **Dienste & Container** anschließend:
 
 ## Optionale Integrationen
 
-DocOfHome unterstützt unter anderem Home Assistant, Immich, Nextcloud und FRITZ!Box. Integrationen lassen sich einzeln aktivieren und testen. Zugangsdaten werden nicht in Exporten oder Diagnoseinformationen aufgenommen.
+DocOfHome unterstützt unter anderem Home Assistant, Immich, Nextcloud, Paperless-ngx und FRITZ!Box. Integrationen lassen sich einzeln aktivieren und testen. Paperless dient dabei als externe Dokumentenablage: Wartungs- und Historieneinträge können manuell mit vorhandenen Dokumenten verknüpft werden, ohne PDFs in DocOfHome zu duplizieren. Zugangsdaten werden nicht in Exporten oder Diagnoseinformationen aufgenommen.
 
 ## Entwicklung
 

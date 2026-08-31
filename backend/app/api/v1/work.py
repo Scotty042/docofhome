@@ -17,6 +17,7 @@ from app.schemas.work import (
     WorkItemWrite,
     WorkStatus,
     WorkSubjectRead,
+    WorkSubjectTimelineRead,
     WorkSubjectWrite,
     WorkSummaryRead,
 )
@@ -70,6 +71,14 @@ def list_work_items(
 def list_work_subjects(session: SessionDependency) -> list[WorkSubjectRead]:
     try:
         return WorkService(session).list_subjects()
+    except WorkError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/subjects/{subject_id}/timeline", response_model=WorkSubjectTimelineRead)
+def work_subject_timeline(subject_id: UUID, session: SessionDependency) -> WorkSubjectTimelineRead:
+    try:
+        return WorkService(session).subject_timeline(subject_id)
     except WorkError as exc:
         raise _http_error(exc) from exc
 

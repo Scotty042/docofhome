@@ -8,6 +8,7 @@ import type {
   WorkItemWrite,
   WorkListFilters,
   WorkSubjectRead,
+  WorkSubjectTimeline,
   WorkSubjectWrite,
   WorkSummary
 } from '../types/work'
@@ -111,6 +112,9 @@ export const workItemsApi = {
   },
   subjects() {
     return request<WorkSubjectRead[]>('/subjects')
+  },
+  subjectTimeline(id: string) {
+    return request<WorkSubjectTimeline>(`/subjects/${encodeURIComponent(id)}/timeline`)
   },
   createSubject(payload: WorkSubjectWrite) {
     return request<WorkSubjectRead>('/subjects', { method: 'POST', body: JSON.stringify(payload) })

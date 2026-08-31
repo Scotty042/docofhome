@@ -65,7 +65,13 @@ from app.models.smart_meter import (
     SmartMeterMeasurementPoint,
 )
 from app.models.system_setting import SystemSetting
-from app.models.work import WorkItem, WorkItemEvent, WorkItemEventAttachment, WorkSubject
+from app.models.work import (
+    WorkItem,
+    WorkItemEvent,
+    WorkItemEventAttachment,
+    WorkItemEventPaperlessLink,
+    WorkSubject,
+)
 
 __all__ = [
     "ApplicationSetting",
@@ -123,5 +129,6 @@ __all__ = [
     "WorkItem",
     "WorkItemEvent",
     "WorkItemEventAttachment",
+    "WorkItemEventPaperlessLink",
     "WorkSubject",
 ]

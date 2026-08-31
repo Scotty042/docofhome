@@ -139,3 +139,30 @@ def test_disabled_and_incomplete_integrations_do_not_open_connections() -> None:
     assert "deaktiviert" in disabled.message
     assert missing_account.success is False
     assert "Konto" in missing_account.message
+
+
+def test_paperless_check_uses_token_and_reports_server_version() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/documents/"
+        assert request.headers["authorization"] == "Token paperless-secret"
+        return httpx.Response(
+            200,
+            json={"count": 0, "results": []},
+            headers={"X-Version": "3.1.0", "X-Api-Version": "10"},
+        )
+
+    service = service_with_setting(
+        IntegrationSetting(
+            kind="paperless",
+            enabled=True,
+            base_url="https://paperless.local",
+            secret="paperless-secret",
+        ),
+        handler,
+    )
+
+    result = service.check(IntegrationKind.PAPERLESS)
+
+    assert result.success is True
+    assert result.service_version == "3.1.0"
+    assert "paperless-secret" not in result.model_dump_json()

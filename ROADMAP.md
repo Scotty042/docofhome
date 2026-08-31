@@ -133,6 +133,21 @@ Noch nicht nummeriert und nicht priorisiert:
 - getrennte Messung von Speicher-Lade-/Entladeflüssen und Leistungskurven;
 - erweiterte Druck- und Berichtsvorlagen;
 - zusätzliche versionierte Importadapter für Fremdformate.
+- UGREEN-UGOS-Docker-API-Anbindung als read-only Integrationskandidat; die
+  bereits verifizierten Endpunkte, Datenfelder, Sicherheitsanforderungen und
+  offenen Berechtigungsfragen sind unter
+  [`docs/backlog/ugreen-ugos-docker-api.md`](docs/backlog/ugreen-ugos-docker-api.md)
+  dokumentiert. Die Umsetzung ist bewusst zurückgestellt.
+
+## Umgesetzt mit 1.7.15 – Lebenslaufakten und Paperless-Verknüpfung
+
+- strukturierte Profile für Bezugsobjekte, insbesondere Fahrzeuge, Tiere, Anlagen und Geräte;
+- Tätigkeitstypen für Wartung, Inspektion, Reparatur, Messung, Impfung, Termin, TÜV/Prüfung, Schornsteinfeger und Service;
+- gemeinsamer Zeitstrahl je Bezugsobjekt mit vergangenen Durchführungen und offenen zukünftigen Fälligkeiten;
+- Paperless-ngx als optionale, serverseitige Read-only-Integration mit URL und API-Token;
+- manuelle Suche und Verknüpfung bestehender Paperless-Dokumente an Historieneinträge;
+- ausschließlich Referenz/Metadaten in DocOfHome, keine PDF-Kopie und keine automatische Dokumentzuordnung;
+- Migration `0055`.
 
 ## Planungsregel
 

@@ -90,6 +90,12 @@ const integrationMeta: Record<IntegrationKind, {
     icon: 'mdi-router-network',
     secretLabel: 'Kennwort',
     description: 'Liest Geräte ausschließlich über lokalen TR-064-Zugriff; es werden keine Einstellungen verändert.'
+  },
+  paperless: {
+    name: 'Paperless-ngx',
+    icon: 'mdi-file-document-multiple-outline',
+    secretLabel: 'API-Token',
+    description: 'Ermöglicht die manuelle Suche und Verknüpfung bestehender Paperless-Dokumente mit Wartungs- und Historieneinträgen. DocOfHome speichert keine PDF-Kopie.'
   }
 }
 
@@ -476,6 +482,9 @@ async function testIntegration(kind: IntegrationKind) {
                 </v-alert>
               </v-col>
             </v-row>
+            <v-alert v-if="integration.kind === 'paperless'" type="info" variant="tonal" density="compact" icon="mdi-information-outline" class="mb-4">
+              Verwende einen Paperless API-Token aus deinem Benutzerprofil. DocOfHome greift nur lesend auf Dokumente zu und speichert bei einer Verknüpfung ausschließlich Dokument-ID und Metadaten, keine PDF-Kopie.
+            </v-alert>
             <v-alert type="info" variant="tonal" density="compact" icon="mdi-eye-off-outline" class="mb-4">
               Gespeicherte Secrets werden nicht angezeigt. Ein leerer Wert behält das vorhandene Secret bei.
             </v-alert>

@@ -1,7 +1,15 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, Column, Index, LargeBinary, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Index,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 
@@ -33,6 +41,7 @@ class WorkSubject(SQLModel, table=True):
     name: str = Field(index=True, max_length=200)
     subject_type: str = Field(default="general", index=True, max_length=30)
     description: str | None = Field(default=None, sa_type=Text)
+    profile_json: str = Field(default="{}", sa_type=Text)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None, index=True)
@@ -44,6 +53,12 @@ class WorkItem(SQLModel, table=True):
         CheckConstraint(
             "item_type IN ('task', 'maintenance')",
             name="ck_work_items_item_type",
+        ),
+        CheckConstraint(
+            "activity_kind IN ('general', 'maintenance', 'inspection', 'repair', "
+            "'measurement', 'vaccination', 'appointment', 'official_inspection', "
+            "'chimney_sweep', 'service', 'other')",
+            name="ck_work_items_activity_kind",
         ),
         CheckConstraint(
             "status IN ('open', 'completed', 'cancelled')",
@@ -103,6 +118,7 @@ class WorkItem(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     item_type: str = Field(index=True, max_length=20)
+    activity_kind: str = Field(default="general", index=True, max_length=30)
     title: str = Field(index=True, max_length=200)
     description: str | None = Field(default=None, sa_type=Text)
     target_type: str | None = Field(default=None, index=True, max_length=30)
@@ -160,4 +176,21 @@ class WorkItemEventAttachment(SQLModel, table=True):
     content_type: str = Field(max_length=120)
     size_bytes: int = Field(ge=0)
     content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+
+
+class WorkItemEventPaperlessLink(SQLModel, table=True):
+    """Read-only reference from a work history event to a Paperless document."""
+
+    __tablename__ = "work_item_event_paperless_links"
+    __table_args__ = (
+        UniqueConstraint("event_id", "document_id", name="uq_work_event_paperless_document"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    event_id: UUID = Field(foreign_key="work_item_events.id", index=True)
+    document_id: int = Field(index=True, ge=1)
+    title: str = Field(max_length=500)
+    created_date: str | None = Field(default=None, max_length=40)
+    original_file_name: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
