@@ -1,12 +1,15 @@
 from datetime import datetime
 from uuid import UUID
+
 from pydantic import BaseModel, Field, HttpUrl, field_validator
+
 
 class Ingredient(BaseModel):
     amount: float | None = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=30)
     name: str = Field(min_length=1, max_length=200)
     note: str = Field(default="", max_length=300)
+
 
 class RecipeWrite(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -23,10 +26,10 @@ class RecipeWrite(BaseModel):
     source_url: HttpUrl | None = None
     attachments: list[str] = Field(default_factory=list, max_length=100)
 
-    @field_validator("title", "category")
+    @field_validator("title", "category", mode="before")
     @classmethod
-    def strip_text(cls, value: str) -> str:
-        return value.strip()
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("image_url")
     @classmethod
@@ -42,11 +45,11 @@ class RecipeWrite(BaseModel):
             return normalized
         raise ValueError("Bild muss eine HTTP(S)-URL oder ein lokaler Pfad sein.")
 
+
 class RecipeRead(RecipeWrite):
     id: UUID
     created_at: datetime
     updated_at: datetime
-
 
 
 class RecipeImageUploadRead(BaseModel):

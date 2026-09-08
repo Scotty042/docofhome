@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import json
@@ -32,14 +33,18 @@ from app.models.consumption import (
 )
 from app.models.document_link import DocumentLink
 from app.models.electrical import (
+    ElectricalAssetPlacement,
+    ElectricalCabinetComponent,
     ElectricalComponent,
     ElectricalDistribution,
     ElectricalDistributionArea,
     ElectricalDistributionSection,
+    ElectricalMeterPlacement,
     ElectricalProtectiveDevice,
 )
 from app.models.electrical_circuit import ElectricalCircuit, ElectricalCircuitAssetLink
 from app.models.electrical_topology import ElectricalConnection
+from app.models.energy import EnergyComponent, EnergyConfiguration
 from app.models.home_assistant import (
     HomeAssistantAssetLink,
     HomeAssistantEntitySelection,
@@ -49,12 +54,15 @@ from app.models.immich import ImmichAssetLink
 from app.models.knowledge import DomainNote, WikiPage
 from app.models.network import (
     NetworkAddress,
+    NetworkAddressChange,
     NetworkConnection,
     NetworkDevice,
     NetworkInterface,
+    NetworkObservedAddress,
     NetworkSegment,
 )
 from app.models.quality import QualityIssue, QualityRun
+from app.models.recipe import Recipe
 from app.models.release import (
     DEFAULT_DASHBOARD_LAYOUT,
     AuditEvent,
@@ -63,8 +71,15 @@ from app.models.release import (
     GuidedSetupDraft,
     ServiceWorkload,
 )
+from app.models.smart_meter import SmartMeterMeasurementEntity, SmartMeterMeasurementPoint
 from app.models.system_setting import SystemSetting
-from app.models.work import WorkItem, WorkItemEvent, WorkSubject
+from app.models.work import (
+    WorkItem,
+    WorkItemEvent,
+    WorkItemEventAttachment,
+    WorkItemEventPaperlessLink,
+    WorkSubject,
+)
 from app.repositories.asset_engine import AssetRepository
 from app.repositories.network import NetworkRepository
 from app.schemas.asset_engine import AssetWrite
@@ -492,7 +507,9 @@ class WorkloadService:
                 "docker_status_text": record.docker_status_text,
                 "docker_networks": json.loads(record.docker_networks_json or "[]"),
                 "docker_mounts": json.loads(record.docker_mounts_json or "[]"),
-                "docker_last_seen_at": self._aware(record.docker_last_seen_at) if record.docker_last_seen_at else None,
+                "docker_last_seen_at": self._aware(record.docker_last_seen_at)
+                if record.docker_last_seen_at
+                else None,
                 "docker_managed": bool(record.docker_container_id),
                 "notes": record.notes,
                 "created_at": self._aware(record.created_at),
@@ -548,12 +565,25 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("consumption_notes", ConsumptionNote, True),
     ("dashboard_settings", DashboardSetting, True),
     ("service_workloads", ServiceWorkload, True),
+    ("recipes", Recipe, True),
+    ("electrical_asset_placements", ElectricalAssetPlacement, True),
+    ("electrical_cabinet_components", ElectricalCabinetComponent, True),
+    ("electrical_meter_placements", ElectricalMeterPlacement, True),
+    ("energy_configurations", EnergyConfiguration, True),
+    ("energy_components", EnergyComponent, True),
+    ("smart_meter_measurement_points", SmartMeterMeasurementPoint, True),
+    ("smart_meter_measurement_entities", SmartMeterMeasurementEntity, True),
+    ("work_item_event_attachments", WorkItemEventAttachment, True),
+    ("work_item_event_paperless_links", WorkItemEventPaperlessLink, True),
+    ("guided_setup_drafts", GuidedSetupDraft, True),
+    ("network_address_changes", NetworkAddressChange, True),
+    ("network_observed_addresses", NetworkObservedAddress, True),
     ("audit_events", AuditEvent, False),
 )
 
 
 class PortabilityService:
-    export_version = "1.0"
+    export_version = "1.1"
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -659,6 +689,11 @@ class PortabilityService:
                     if not isinstance(raw, dict):
                         raise ReleaseValidationError(f"{module}: ungültiger Datensatz")
                     row = cast(dict[str, object], raw)
+                    if module == "work_item_event_attachments" and "content_base64" in row:
+                        row = dict(row)
+                        row["content"] = base64.b64decode(
+                            str(row.pop("content_base64")), validate=True
+                        )
                     if module == "work_item_events" and not row.get("occurred_at"):
                         row = dict(row)
                         row["occurred_at"] = row.get("created_at")
@@ -731,12 +766,8 @@ class PortabilityService:
         for field, raw in change.items():
             if isinstance(raw, dict) and ("from" in raw or "to" in raw):
                 result[field] = {
-                    "from": self._audit_display_value(
-                        object_type, field, raw.get("from"), change
-                    ),
-                    "to": self._audit_display_value(
-                        object_type, field, raw.get("to"), change
-                    ),
+                    "from": self._audit_display_value(object_type, field, raw.get("from"), change),
+                    "to": self._audit_display_value(object_type, field, raw.get("to"), change),
                 }
             else:
                 result[field] = self._audit_display_value(object_type, field, raw, change)
@@ -752,10 +783,7 @@ class PortabilityService:
         if value is None or value == "[redacted]":
             return value
         if isinstance(value, list):
-            return [
-                self._audit_display_value(object_type, field, item, change)
-                for item in value
-            ]
+            return [self._audit_display_value(object_type, field, item, change) for item in value]
         if not isinstance(value, str):
             return value
 
@@ -893,9 +921,18 @@ class PortabilityService:
         return label, route
 
     def _dump_rows(self, model: type[ModelT]) -> list[dict[str, Any]]:
+        if model is WorkItemEventAttachment:
+            return [
+                {
+                    **item.model_dump(mode="json", exclude={"content"}),
+                    "content_base64": base64.b64encode(item.content).decode("ascii"),
+                }
+                for item in self.session.exec(select(WorkItemEventAttachment)).all()
+            ]
         return [
             cast(dict[str, Any], item.model_dump(mode="json"))
             for item in self.session.exec(select(model)).all()
+            if not (isinstance(item, SystemSetting) and item.is_secret)
         ]
 
     def _safe_integrations(self) -> list[dict[str, object]]:

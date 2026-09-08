@@ -13,7 +13,8 @@ def test_recipe_search_accepts_null_filters_and_returns_envelope() -> None:
     assert '(query or "").strip()' in body
     assert '(category or "").strip()' in body
     assert '(tag or "").strip()' in body
-    assert 'return {"items": items, "count": len(items)}' in body
+    assert '"total": total' in body
+    assert '"next_offset"' in body
 
 
 def test_recipe_save_exposes_typed_fields_instead_of_generic_payload() -> None:

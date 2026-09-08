@@ -1,5 +1,20 @@
 # DocOfHome MCP einrichten (Verweis)
 
+## Ergänzungen in 1.7.18
+
+Die Rezeptsuche akzeptiert `offset` (ab 0) und `limit` (1 bis 100, Standard 100).
+Neben `items` und `count` werden `total`, `has_more` und `next_offset` geliefert.
+Solange `has_more` wahr ist, mit `offset=next_offset` und identischen Filtern
+weiterlesen. Eine erste Seite allein ist keine vollständige Dublettenprüfung.
+Bei parallel geändertem Bestand kann eine Offset-Suche Einträge verschieben;
+Bestandsprüfungen bei Bedarf wiederholen. Es wird keine automatische Dublette gelöscht.
+
+MCP-Änderungen von Bezugsobjekten erhalten das vorhandene `profile`, Änderungen
+von Tätigkeiten erhalten `activity_kind`. `create_activity` nimmt zusätzlich die
+Tätigkeitsart entgegen. Vorhandene Werkzeuge und Berechtigungsstufen bleiben erhalten.
+
+## Einrichtung
+
 Seit 1.7.9 umfasst MCP zusätzlich Kochbuch, Wiki, Notizen, Assets, Orte, Stammdaten,
 Verbrauch und Netzwerk. Vor dem Anlegen sollen immer die jeweiligen Suchwerkzeuge verwendet
 werden. Lesezugriffe benötigen `read`, Änderungen `write` und Lösch-/Archivieraktionen `admin`.

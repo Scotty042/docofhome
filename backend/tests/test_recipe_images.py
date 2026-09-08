@@ -20,4 +20,4 @@ def test_recipe_image_service_uses_own_directory() -> None:
     source = Path(__file__).parents[1] / "app" / "services" / "recipe_images.py"
     text = source.read_text(encoding="utf-8")
     assert '"recipe-images"' in text
-    assert '"/api/v1/recipes/images/{reference}"' not in text
+    assert 'f"/api/v1/recipes/images/{reference}"' in text

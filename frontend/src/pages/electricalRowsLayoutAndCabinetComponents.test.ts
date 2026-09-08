@@ -24,7 +24,7 @@ describe('simple electrical rows and passive cabinet components', () => {
   it('materializes N and PE areas as editable wiring endpoints', () => {
     expect(layout).toContain('cabinetComponentAreaOptions')
     expect(layout).toContain("area.area_type === 'neutral_rail'")
-    expect(layout).toContain("area.area_type === 'protective_earth_rail'")
+    expect(layout).toContain("['neutral_rail', 'protective_earth_rail'].includes(area.area_type)")
     expect(layout).toContain('Diesen Bereich als verkabelbare Schiene anlegen')
     expect(layout).toContain('Noch nicht als elektrischer Endpunkt angelegt.')
   })
@@ -48,7 +48,8 @@ describe('simple electrical rows and passive cabinet components', () => {
     expect(layout).toContain('assetPlacementsForArea(area.id).filter')
     expect(layout).toContain('Noch nicht platzierte DIN-Assets')
     expect(layout).toContain('asset.effective_module_width')
-    expect(layout).toContain('excludeDeviceId !== null || excludeAssetId !== null')
+    expect(layout).toContain('if (excludeDeviceId !== null)')
+    expect(layout).toContain('if (excludeAssetId !== null)')
   })
 
   it('renders one-TE devices with a reliable vertical compact label', () => {

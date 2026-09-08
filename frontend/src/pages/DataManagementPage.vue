@@ -233,6 +233,8 @@ onMounted(loadAudit)
             <v-alert type="info" variant="tonal" class="mb-4">
               Zugangsdaten, Tokens, API-Keys, interne Integrations-URLs und Kontonamen werden
               ausdrücklich nicht exportiert. Stabile IDs und Beziehungen bleiben erhalten.
+              Lokale Bilddateien sind nicht Bestandteil des JSON-Exports; verwende dafür
+              zusätzlich ein Backup. Historienanhänge sind im Export enthalten.
             </v-alert>
             <v-btn
               color="primary"

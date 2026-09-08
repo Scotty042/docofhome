@@ -13,6 +13,7 @@ from xml.etree import ElementTree
 import httpx
 from sqlmodel import Session
 
+from app.core.backup_files import MAX_BACKUP_BYTES, validate_archive
 from app.core.settings import settings
 from app.repositories.settings import SettingsRepository
 from app.schemas.backups import BackupRecord, RemoteBackupRecord
@@ -73,13 +74,15 @@ class BackupService:
             snapshot_path = Path(temp_dir) / "database.sqlite3"
             self._snapshot_database(snapshot_path)
             database_sha = self._sha256(snapshot_path)
+            file_manifest: dict[str, dict[str, int | str]] = {}
             manifest = {
-                "format_version": 1,
+                "format_version": 2,
                 "created_at": created_at.isoformat(),
                 "app_version": settings.app_version,
                 "database_filename": "database.sqlite3",
                 "database_size_bytes": snapshot_path.stat().st_size,
                 "database_sha256": database_sha,
+                "files": file_manifest,
             }
             temp_archive = Path(temp_dir) / filename
             with zipfile.ZipFile(
@@ -88,6 +91,26 @@ class BackupService:
                 compression=zipfile.ZIP_DEFLATED,
             ) as archive:
                 archive.write(snapshot_path, "database.sqlite3")
+                candidates = list((settings.data_dir / "uploads").rglob("*"))
+                config = self.backup_dir / "config.json"
+                if config.is_file():
+                    candidates.append(config)
+                total_size = snapshot_path.stat().st_size
+                for source in sorted(candidates):
+                    if source.is_symlink() or not source.is_file():
+                        continue
+                    if settings.data_dir.resolve() not in source.resolve().parents:
+                        raise BackupError("Backup file is outside the data directory")
+                    name = source.relative_to(settings.data_dir).as_posix()
+                    snapshot = Path(temp_dir) / "files" / name
+                    snapshot.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, snapshot)
+                    size = snapshot.stat().st_size
+                    total_size += size
+                    if total_size > MAX_BACKUP_BYTES - 8 * 1024 * 1024:
+                        raise BackupError("Backup exceeds the 512 MB uncompressed limit")
+                    file_manifest[name] = {"size_bytes": size, "sha256": self._sha256(snapshot)}
+                    archive.write(snapshot, name)
                 archive.writestr(
                     "manifest.json",
                     json.dumps(manifest, ensure_ascii=False, indent=2),
@@ -146,6 +169,8 @@ class BackupService:
         archive_path = self._safe_archive_path(filename)
         pending_database = self.restore_dir / "pending.sqlite3"
         pending_marker = self.restore_dir / "pending.json"
+        pending_bundle = self.restore_dir / f"bundle-{record.sha256}.zip"
+        shutil.copy2(archive_path, pending_bundle)
         with tempfile.TemporaryDirectory(dir=self.restore_dir) as temp_dir:
             extracted = Path(temp_dir) / "database.sqlite3"
             with zipfile.ZipFile(archive_path) as archive:
@@ -156,6 +181,7 @@ class BackupService:
                 {
                     "filename": record.filename,
                     "sha256": record.sha256,
+                    "bundle": pending_bundle.name,
                     "scheduled_at": datetime.now(UTC).isoformat(),
                 },
                 indent=2,
@@ -333,9 +359,7 @@ class BackupService:
             with tempfile.TemporaryDirectory(dir=self.restore_dir) as temp_dir:
                 database_path = Path(temp_dir) / "database.sqlite3"
                 with zipfile.ZipFile(path) as archive:
-                    names = set(archive.namelist())
-                    if names != {"database.sqlite3", "manifest.json"}:
-                        raise BackupError("Backup archive contains unexpected files")
+                    validate_archive(archive)
                     archive.extract("database.sqlite3", temp_dir)
                 self._assert_integrity(database_path)
                 extracted_size = database_path.stat().st_size
@@ -347,15 +371,9 @@ class BackupService:
     def _record_from_archive(self, path: Path) -> BackupRecord:
         with zipfile.ZipFile(path) as archive:
             try:
-                manifest = json.loads(archive.read("manifest.json"))
-                database_bytes = archive.read("database.sqlite3")
-            except KeyError as exc:
+                manifest = validate_archive(archive)
+            except (KeyError, ValueError, TypeError, AttributeError) as exc:
                 raise BackupError("Backup archive is incomplete") from exc
-        if manifest.get("format_version") != 1:
-            raise BackupError("Backup format version is not supported")
-        database_sha = hashlib.sha256(database_bytes).hexdigest()
-        if database_sha != manifest.get("database_sha256"):
-            raise BackupError("Database checksum does not match the manifest")
         return BackupRecord(
             filename=path.name,
             created_at=datetime.fromisoformat(manifest["created_at"]),

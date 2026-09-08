@@ -7,23 +7,49 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app.api.v1.recipes import apply as apply_recipe
+from app.api.v1.recipes import read_model as read_recipe
 from app.core.settings import settings
 from app.db.session import engine
 from app.models.application_setting import ApplicationSetting
 from app.models.recipe import Recipe
-from app.schemas.asset_engine import AssetTypeWrite, AssetWrite, LabelWrite, LocationWrite, ProductWrite, SortOrder
-from app.schemas.consumption import ConsumptionMeterWrite, ConsumptionNoteWrite, ConsumptionReadingWrite
-from app.schemas.knowledge import KnowledgeTargetType, NoteCreate, NoteUpdate, WikiPageCreate, WikiPageUpdate
+from app.schemas.asset_engine import (
+    AssetTypeWrite,
+    AssetWrite,
+    LabelWrite,
+    LocationWrite,
+    ProductWrite,
+    SortOrder,
+)
+from app.schemas.consumption import (
+    ConsumptionMeterWrite,
+    ConsumptionNoteWrite,
+    ConsumptionReadingWrite,
+)
+from app.schemas.knowledge import (
+    KnowledgeTargetType,
+    NoteCreate,
+    NoteUpdate,
+    WikiPageCreate,
+    WikiPageUpdate,
+)
 from app.schemas.mcp import McpPermission
-from app.schemas.network import NetworkAddressWrite, NetworkConnectionWrite, NetworkDeviceWrite, NetworkInterfaceWrite, NetworkSegmentWrite
+from app.schemas.network import (
+    NetworkAddressWrite,
+    NetworkConnectionWrite,
+    NetworkDeviceWrite,
+    NetworkInterfaceWrite,
+    NetworkSegmentWrite,
+)
 from app.schemas.recipe import Ingredient, RecipeWrite
 from app.schemas.work import (
     RecurrenceMode,
+    WorkActivityKind,
     WorkCompletionWrite,
     WorkHistoryEntryWrite,
     WorkItemType,
@@ -33,14 +59,18 @@ from app.schemas.work import (
     WorkSubjectType,
     WorkSubjectWrite,
 )
-from app.services.mcp_settings import McpSettingsService
-from app.services.asset_engine import AssetService, AssetTypeService, LabelService, LocationService, ProductService
+from app.services.asset_engine import (
+    AssetService,
+    AssetTypeService,
+    LabelService,
+    LocationService,
+    ProductService,
+)
 from app.services.consumption import ConsumptionService
 from app.services.knowledge import NoteService, WikiService
+from app.services.mcp_settings import McpSettingsService
 from app.services.network import NetworkService
 from app.services.work import WorkConflictError, WorkService
-from app.api.v1.recipes import apply as apply_recipe, read_model as read_recipe
-
 
 mcp_server = MCPServer(
     "DocOfHome",
@@ -91,6 +121,7 @@ def _subject_summary(subject: Any) -> dict[str, Any]:
         "name": subject.name,
         "type": subject.subject_type.value,
         "description": subject.description,
+        "profile": subject.profile,
         "activity_count": subject.activity_count,
     }
 
@@ -100,6 +131,7 @@ def _activity_summary(activity: Any) -> dict[str, Any]:
         "id": str(activity.id),
         "title": activity.title,
         "type": activity.item_type.value,
+        "activity_kind": activity.activity_kind.value,
         "status": activity.status.value,
         "subject_id": str(activity.subject_id) if activity.subject_id else None,
         "subject_name": activity.subject_name,
@@ -204,6 +236,7 @@ def update_subject(
                 name=name if name is not None else current.name,
                 subject_type=parsed_type,
                 description=description if description is not None else current.description,
+                profile=current.profile,
             ),
         )
         return _subject_summary(updated)
@@ -274,6 +307,7 @@ def update_activity(
             parsed_id,
             WorkItemWrite(
                 item_type=current.item_type,
+                activity_kind=current.activity_kind,
                 title=title if title is not None else current.title,
                 description=description if description is not None else current.description,
                 target_type=current.target_type,
@@ -301,6 +335,7 @@ def create_activity(
     recurrence_unit: str = "none",
     first_due_date: str | None = None,
     priority: str = "normal",
+    activity_kind: str = "maintenance",
 ) -> dict[str, Any]:
     """Legt eine Tätigkeit für ein Bezugsobjekt an, optional wiederkehrend."""
     parsed_subject = _uuid(subject_id, "subject_id")
@@ -348,6 +383,7 @@ def create_activity(
         created = service.create(
             WorkItemWrite(
                 item_type=WorkItemType.MAINTENANCE,
+                activity_kind=WorkActivityKind(activity_kind),
                 title=title,
                 description=description,
                 subject_id=parsed_subject,
@@ -505,8 +541,15 @@ def search_recipes(
     query: str | None = None,
     category: str | None = None,
     tag: str | None = None,
+    offset: int = 0,
+    limit: int = 100,
 ) -> dict[str, Any]:
-    """Sucht Rezepte zur Dublettenprüfung und liefert immer items sowie count."""
+    """Sucht Rezepte; liefert items, count, total, has_more und next_offset.
+
+    Für vollständige Dublettenprüfungen bei has_more mit offset=next_offset weiterlesen.
+    """
+    if offset < 0 or not 1 <= limit <= 100:
+        raise ValueError("offset muss mindestens 0 und limit zwischen 1 und 100 sein")
     normalized_query = (query or "").strip()
     normalized_category = (category or "").strip()
     normalized_tag = (tag or "").strip()
@@ -515,18 +558,29 @@ def search_recipes(
         statement = select(Recipe)
         if normalized_query:
             needle = f"%{normalized_query}%"
-            statement = statement.where(or_(Recipe.title.ilike(needle), Recipe.ingredients_json.ilike(needle)))
+            statement = statement.where(
+                or_(Recipe.title.ilike(needle), Recipe.ingredients_json.ilike(needle))
+            )
         if normalized_category:
             statement = statement.where(Recipe.category == normalized_category)
         if normalized_tag:
             statement = statement.where(Recipe.tags_json.ilike(f'%"{normalized_tag}"%'))
+        total = session.exec(select(func.count()).select_from(statement.subquery())).one()
         items = [
             read_recipe(row).model_dump(mode="json")
             for row in session.exec(
-                statement.order_by(Recipe.favorite.desc(), Recipe.title)
-            ).all()[:100]
+                statement.order_by(Recipe.favorite.desc(), Recipe.title, Recipe.id)
+                .offset(offset)
+                .limit(limit)
+            ).all()
         ]
-        return {"items": items, "count": len(items)}
+        return {
+            "items": items,
+            "count": len(items),
+            "total": total,
+            "has_more": offset + len(items) < total,
+            "next_offset": offset + len(items) if offset + len(items) < total else None,
+        }
 
 
 @mcp_server.tool()
@@ -535,7 +589,8 @@ def get_recipe(recipe_id: str) -> dict[str, Any]:
     with Session(engine) as session:
         _permission(session, McpPermission.READ)
         row = session.get(Recipe, _uuid(recipe_id, "recipe_id"))
-        if row is None: raise ValueError("Rezept wurde nicht gefunden")
+        if row is None:
+            raise ValueError("Rezept wurde nicht gefunden")
         return read_recipe(row).model_dump(mode="json")
 
 
@@ -600,8 +655,11 @@ def delete_recipe(recipe_id: str) -> dict[str, str]:
     with Session(engine) as session:
         _permission(session, McpPermission.ADMIN)
         row = session.get(Recipe, _uuid(recipe_id, "recipe_id"))
-        if row is None: raise ValueError("Rezept wurde nicht gefunden")
-        session.delete(row); session.commit(); return {"status": "deleted", "recipe_id": recipe_id}
+        if row is None:
+            raise ValueError("Rezept wurde nicht gefunden")
+        session.delete(row)
+        session.commit()
+        return {"status": "deleted", "recipe_id": recipe_id}
 
 
 @mcp_server.tool()
@@ -624,8 +682,13 @@ def get_wiki_page(page_id: str) -> dict[str, Any]:
 def save_wiki_page(payload: dict[str, Any], page_id: str | None = None) -> dict[str, Any]:
     """Legt eine Wiki-Seite an oder ersetzt sie vollständig."""
     with Session(engine) as session:
-        _permission(session, McpPermission.WRITE); service = WikiService(session)
-        result = service.update(_uuid(page_id, "page_id"), WikiPageUpdate.model_validate(payload)) if page_id else service.create(WikiPageCreate.model_validate(payload))
+        _permission(session, McpPermission.WRITE)
+        service = WikiService(session)
+        result = (
+            service.update(_uuid(page_id, "page_id"), WikiPageUpdate.model_validate(payload))
+            if page_id
+            else service.create(WikiPageCreate.model_validate(payload))
+        )
         return result.model_dump(mode="json")
 
 
@@ -633,7 +696,9 @@ def save_wiki_page(payload: dict[str, Any], page_id: str | None = None) -> dict[
 def delete_wiki_page(page_id: str) -> dict[str, str]:
     """Archiviert eine Wiki-Seite ohne aktive Unterseiten. Vollzugriff erforderlich."""
     with Session(engine) as session:
-        _permission(session, McpPermission.ADMIN); WikiService(session).archive(_uuid(page_id, "page_id")); return {"status": "archived", "page_id": page_id}
+        _permission(session, McpPermission.ADMIN)
+        WikiService(session).archive(_uuid(page_id, "page_id"))
+        return {"status": "archived", "page_id": page_id}
 
 
 @mcp_server.tool()
@@ -641,18 +706,37 @@ def list_notes(target_type: str, target_id: str) -> list[dict[str, Any]]:
     """Liest Notizen eines Assets, Orts oder Elektroobjekts."""
     with Session(engine) as session:
         _permission(session, McpPermission.READ)
-        return [item.model_dump(mode="json") for item in NoteService(session).list(KnowledgeTargetType(target_type), _uuid(target_id, "target_id"))]
+        return [
+            item.model_dump(mode="json")
+            for item in NoteService(session).list(
+                KnowledgeTargetType(target_type), _uuid(target_id, "target_id")
+            )
+        ]
 
 
 @mcp_server.tool()
-def save_note(content: str, target_type: str | None = None, target_id: str | None = None, note_id: str | None = None) -> dict[str, Any]:
+def save_note(
+    content: str,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    note_id: str | None = None,
+) -> dict[str, Any]:
     """Legt eine verknüpfte Notiz an oder ändert ihren Inhalt."""
     with Session(engine) as session:
-        _permission(session, McpPermission.WRITE); service = NoteService(session)
-        if note_id: result = service.update(_uuid(note_id, "note_id"), NoteUpdate(content=content))
+        _permission(session, McpPermission.WRITE)
+        service = NoteService(session)
+        if note_id:
+            result = service.update(_uuid(note_id, "note_id"), NoteUpdate(content=content))
         else:
-            if not target_type or not target_id: raise ValueError("target_type und target_id sind beim Anlegen erforderlich")
-            result = service.create(NoteCreate(target_type=KnowledgeTargetType(target_type), target_id=_uuid(target_id, "target_id"), content=content))
+            if not target_type or not target_id:
+                raise ValueError("target_type und target_id sind beim Anlegen erforderlich")
+            result = service.create(
+                NoteCreate(
+                    target_type=KnowledgeTargetType(target_type),
+                    target_id=_uuid(target_id, "target_id"),
+                    content=content,
+                )
+            )
         return result.model_dump(mode="json")
 
 
@@ -660,13 +744,22 @@ def save_note(content: str, target_type: str | None = None, target_id: str | Non
 def delete_note(note_id: str) -> dict[str, str]:
     """Löscht eine Notiz. Vollzugriff erforderlich."""
     with Session(engine) as session:
-        _permission(session, McpPermission.ADMIN); NoteService(session).delete(_uuid(note_id, "note_id")); return {"status": "deleted", "note_id": note_id}
+        _permission(session, McpPermission.ADMIN)
+        NoteService(session).delete(_uuid(note_id, "note_id"))
+        return {"status": "deleted", "note_id": note_id}
 
 
 # Assets, locations and master data
 def _catalog_service(session: Session, domain: str) -> Any:
-    services = {"asset": AssetService, "location": LocationService, "asset_type": AssetTypeService, "product": ProductService, "label": LabelService}
-    if domain not in services: raise ValueError("domain muss asset, location, asset_type, product oder label sein")
+    services = {
+        "asset": AssetService,
+        "location": LocationService,
+        "asset_type": AssetTypeService,
+        "product": ProductService,
+        "label": LabelService,
+    }
+    if domain not in services:
+        raise ValueError("domain muss asset, location, asset_type, product oder label sein")
     return services[domain](session)
 
 
@@ -674,11 +767,22 @@ def _catalog_service(session: Session, domain: str) -> Any:
 def search_catalog(domain: str, query: str = "") -> dict[str, Any]:
     """Sucht Assets, Orte, Assettypen, Produkte oder Labels."""
     with Session(engine) as session:
-        _permission(session, McpPermission.READ); service = _catalog_service(session, domain)
-        common = dict(page=1, page_size=100, search=query or None, sort_by="name", sort_order=SortOrder.ASC, include_deleted=False)
-        if domain == "asset": page = service.list_read(**common, filters={}, label_id=None)
-        elif domain == "location": page = service.list_read(**common, parent_id=None, location_type=None)
-        else: page = service.list(**common)
+        _permission(session, McpPermission.READ)
+        service = _catalog_service(session, domain)
+        common = dict(
+            page=1,
+            page_size=100,
+            search=query or None,
+            sort_by="name",
+            sort_order=SortOrder.ASC,
+            include_deleted=False,
+        )
+        if domain == "asset":
+            page = service.list_read(**common, filters={}, label_id=None)
+        elif domain == "location":
+            page = service.list_read(**common, parent_id=None, location_type=None)
+        else:
+            page = service.list(**common)
         return page.model_dump(mode="json")
 
 
@@ -686,20 +790,40 @@ def search_catalog(domain: str, query: str = "") -> dict[str, Any]:
 def get_catalog_record(domain: str, record_id: str) -> dict[str, Any]:
     """Liest einen Datensatz aus Assets, Orten oder Stammdaten."""
     with Session(engine) as session:
-        _permission(session, McpPermission.READ); service = _catalog_service(session, domain); identifier = _uuid(record_id, "record_id")
-        result = service.get_read(identifier) if domain in {"asset", "location"} else service.get(identifier)
+        _permission(session, McpPermission.READ)
+        service = _catalog_service(session, domain)
+        identifier = _uuid(record_id, "record_id")
+        result = (
+            service.get_read(identifier)
+            if domain in {"asset", "location"}
+            else service.get(identifier)
+        )
         return result.model_dump(mode="json")
 
 
 @mcp_server.tool()
-def save_catalog_record(domain: str, payload: dict[str, Any], record_id: str | None = None) -> dict[str, Any]:
+def save_catalog_record(
+    domain: str, payload: dict[str, Any], record_id: str | None = None
+) -> dict[str, Any]:
     """Legt ein Asset, einen Ort oder Stammdatensatz an bzw. ersetzt ihn vollständig."""
-    schemas = {"asset": AssetWrite, "location": LocationWrite, "asset_type": AssetTypeWrite, "product": ProductWrite, "label": LabelWrite}
-    if domain not in schemas: raise ValueError("Unbekannter domain-Wert")
+    schemas = {
+        "asset": AssetWrite,
+        "location": LocationWrite,
+        "asset_type": AssetTypeWrite,
+        "product": ProductWrite,
+        "label": LabelWrite,
+    }
+    if domain not in schemas:
+        raise ValueError("Unbekannter domain-Wert")
     data = schemas[domain].model_validate(payload)
     with Session(engine) as session:
-        _permission(session, McpPermission.WRITE); service = _catalog_service(session, domain)
-        result = service.update(_uuid(record_id, "record_id"), data) if record_id else service.create(data)
+        _permission(session, McpPermission.WRITE)
+        service = _catalog_service(session, domain)
+        result = (
+            service.update(_uuid(record_id, "record_id"), data)
+            if record_id
+            else service.create(data)
+        )
         return result.model_dump(mode="json")
 
 
@@ -707,33 +831,79 @@ def save_catalog_record(domain: str, payload: dict[str, Any], record_id: str | N
 def delete_catalog_record(domain: str, record_id: str) -> dict[str, str]:
     """Archiviert ein Asset, einen Ort oder Stammdatensatz. Vollzugriff erforderlich."""
     with Session(engine) as session:
-        _permission(session, McpPermission.ADMIN); _catalog_service(session, domain).delete(_uuid(record_id, "record_id")); return {"status": "archived", "domain": domain, "record_id": record_id}
+        _permission(session, McpPermission.ADMIN)
+        _catalog_service(session, domain).delete(_uuid(record_id, "record_id"))
+        return {"status": "archived", "domain": domain, "record_id": record_id}
 
 
 # Consumption
 @mcp_server.tool()
-def list_consumption(kind: str, meter_id: str | None = None, query: str = "", months: int = 12, days_ahead: int = 3) -> Any:
+def list_consumption(
+    kind: str, meter_id: str | None = None, query: str = "", months: int = 12, days_ahead: int = 3
+) -> Any:
     """Liest summary, statistics, reminder, meter, reading oder note aus Verbrauch."""
     with Session(engine) as session:
-        _permission(session, McpPermission.READ); service = ConsumptionService(session)
-        if kind == "summary": return service.summary().model_dump(mode="json")
-        if kind == "statistics": return service.statistics(months=months).model_dump(mode="json")
-        if kind == "reminder": return [item.model_dump(mode="json") for item in service.reading_reminders(days_ahead=days_ahead)]
-        if kind == "meter": return [item.model_dump(mode="json") for item in service.list_meters(search=query or None)]
-        if kind == "reading": return [item.model_dump(mode="json") for item in service.list_readings(meter_id=_uuid(meter_id, "meter_id") if meter_id else None)]
-        if kind == "note": return [item.model_dump(mode="json") for item in service.list_notes()]
+        _permission(session, McpPermission.READ)
+        service = ConsumptionService(session)
+        if kind == "summary":
+            return service.summary().model_dump(mode="json")
+        if kind == "statistics":
+            return service.statistics(months=months).model_dump(mode="json")
+        if kind == "reminder":
+            return [
+                item.model_dump(mode="json")
+                for item in service.reading_reminders(days_ahead=days_ahead)
+            ]
+        if kind == "meter":
+            return [
+                item.model_dump(mode="json") for item in service.list_meters(search=query or None)
+            ]
+        if kind == "reading":
+            return [
+                item.model_dump(mode="json")
+                for item in service.list_readings(
+                    meter_id=_uuid(meter_id, "meter_id") if meter_id else None
+                )
+            ]
+        if kind == "note":
+            return [item.model_dump(mode="json") for item in service.list_notes()]
         raise ValueError("Unbekannter kind-Wert")
 
 
 @mcp_server.tool()
-def save_consumption_record(kind: str, payload: dict[str, Any], record_id: str | None = None) -> dict[str, Any]:
+def save_consumption_record(
+    kind: str, payload: dict[str, Any], record_id: str | None = None
+) -> dict[str, Any]:
     """Legt einen Zähler/eine Ablesung an oder ersetzt den Datensatz vollständig."""
     with Session(engine) as session:
-        _permission(session, McpPermission.WRITE); service = ConsumptionService(session)
-        if kind == "meter": result = service.update_meter(_uuid(record_id, "record_id"), ConsumptionMeterWrite.model_validate(payload)) if record_id else service.create_meter(ConsumptionMeterWrite.model_validate(payload))
-        elif kind == "reading": result = service.update_reading(_uuid(record_id, "record_id"), ConsumptionReadingWrite.model_validate(payload)) if record_id else service.create_reading(ConsumptionReadingWrite.model_validate(payload))
-        elif kind == "note": result = service.update_note(_uuid(record_id, "record_id"), ConsumptionNoteWrite.model_validate(payload)) if record_id else service.create_note(ConsumptionNoteWrite.model_validate(payload))
-        else: raise ValueError("kind muss meter, reading oder note sein")
+        _permission(session, McpPermission.WRITE)
+        service = ConsumptionService(session)
+        if kind == "meter":
+            result = (
+                service.update_meter(
+                    _uuid(record_id, "record_id"), ConsumptionMeterWrite.model_validate(payload)
+                )
+                if record_id
+                else service.create_meter(ConsumptionMeterWrite.model_validate(payload))
+            )
+        elif kind == "reading":
+            result = (
+                service.update_reading(
+                    _uuid(record_id, "record_id"), ConsumptionReadingWrite.model_validate(payload)
+                )
+                if record_id
+                else service.create_reading(ConsumptionReadingWrite.model_validate(payload))
+            )
+        elif kind == "note":
+            result = (
+                service.update_note(
+                    _uuid(record_id, "record_id"), ConsumptionNoteWrite.model_validate(payload)
+                )
+                if record_id
+                else service.create_note(ConsumptionNoteWrite.model_validate(payload))
+            )
+        else:
+            raise ValueError("kind muss meter, reading oder note sein")
         return result.model_dump(mode="json")
 
 
@@ -741,18 +911,31 @@ def save_consumption_record(kind: str, payload: dict[str, Any], record_id: str |
 def delete_consumption_record(kind: str, record_id: str) -> dict[str, str]:
     """Archiviert einen Zähler oder eine Ablesung. Vollzugriff erforderlich."""
     with Session(engine) as session:
-        _permission(session, McpPermission.ADMIN); service = ConsumptionService(session); identifier = _uuid(record_id, "record_id")
-        if kind == "meter": service.archive_meter(identifier)
-        elif kind == "reading": service.archive_reading(identifier)
-        elif kind == "note": service.archive_note(identifier)
-        else: raise ValueError("kind muss meter, reading oder note sein")
+        _permission(session, McpPermission.ADMIN)
+        service = ConsumptionService(session)
+        identifier = _uuid(record_id, "record_id")
+        if kind == "meter":
+            service.archive_meter(identifier)
+        elif kind == "reading":
+            service.archive_reading(identifier)
+        elif kind == "note":
+            service.archive_note(identifier)
+        else:
+            raise ValueError("kind muss meter, reading oder note sein")
         return {"status": "archived", "kind": kind, "record_id": record_id}
 
 
 # Network
 def _network_schema(kind: str) -> Any:
-    schemas = {"device": NetworkDeviceWrite, "segment": NetworkSegmentWrite, "interface": NetworkInterfaceWrite, "address": NetworkAddressWrite, "connection": NetworkConnectionWrite}
-    if kind not in schemas: raise ValueError("kind muss device, segment, interface, address oder connection sein")
+    schemas = {
+        "device": NetworkDeviceWrite,
+        "segment": NetworkSegmentWrite,
+        "interface": NetworkInterfaceWrite,
+        "address": NetworkAddressWrite,
+        "connection": NetworkConnectionWrite,
+    }
+    if kind not in schemas:
+        raise ValueError("kind muss device, segment, interface, address oder connection sein")
     return schemas[kind]
 
 
@@ -760,26 +943,52 @@ def _network_schema(kind: str) -> Any:
 def list_network(kind: str, device_id: str | None = None, query: str = "") -> list[dict[str, Any]]:
     """Liest Netzwerkgeräte, Segmente, Schnittstellen, Adressen oder Verbindungen."""
     with Session(engine) as session:
-        _permission(session, McpPermission.READ); service = NetworkService(session); device = _uuid(device_id, "device_id") if device_id else None
-        if kind == "summary": return [service.summary().model_dump(mode="json")]
-        if kind == "topology": return [service.topology().model_dump(mode="json")]
-        if kind == "device": items = service.list_devices(search=query or None)
-        elif kind == "segment": items = service.list_segments()
-        elif kind == "interface": items = service.list_interfaces(device_id=device)
-        elif kind == "address": items = service.list_addresses(device_id=device)
-        elif kind == "connection": items = service.list_connections(device_id=device)
-        else: raise ValueError("Unbekannter kind-Wert")
+        _permission(session, McpPermission.READ)
+        service = NetworkService(session)
+        device = _uuid(device_id, "device_id") if device_id else None
+        if kind == "summary":
+            return [service.summary().model_dump(mode="json")]
+        if kind == "topology":
+            return [service.topology().model_dump(mode="json")]
+        if kind == "device":
+            items = service.list_devices(search=query or None)
+        elif kind == "segment":
+            items = service.list_segments()
+        elif kind == "interface":
+            items = service.list_interfaces(device_id=device)
+        elif kind == "address":
+            items = service.list_addresses(device_id=device)
+        elif kind == "connection":
+            items = service.list_connections(device_id=device)
+        else:
+            raise ValueError("Unbekannter kind-Wert")
         return [item.model_dump(mode="json") for item in items]
 
 
 @mcp_server.tool()
-def save_network_record(kind: str, payload: dict[str, Any], record_id: str | None = None) -> dict[str, Any]:
+def save_network_record(
+    kind: str, payload: dict[str, Any], record_id: str | None = None
+) -> dict[str, Any]:
     """Legt einen Netzwerkdatensatz an oder ersetzt ihn vollständig."""
-    data = _network_schema(kind).model_validate(payload); identifier = _uuid(record_id, "record_id") if record_id else None
+    data = _network_schema(kind).model_validate(payload)
+    identifier = _uuid(record_id, "record_id") if record_id else None
     with Session(engine) as session:
-        _permission(session, McpPermission.WRITE); service = NetworkService(session)
-        create = {"device": service.create_device, "segment": service.create_segment, "interface": service.create_interface, "address": service.create_address, "connection": service.create_connection}[kind]
-        update = {"device": service.update_device, "segment": service.update_segment, "interface": service.update_interface, "address": service.update_address, "connection": service.update_connection}[kind]
+        _permission(session, McpPermission.WRITE)
+        service = NetworkService(session)
+        create = {
+            "device": service.create_device,
+            "segment": service.create_segment,
+            "interface": service.create_interface,
+            "address": service.create_address,
+            "connection": service.create_connection,
+        }[kind]
+        update = {
+            "device": service.update_device,
+            "segment": service.update_segment,
+            "interface": service.update_interface,
+            "address": service.update_address,
+            "connection": service.update_connection,
+        }[kind]
         return (update(identifier, data) if identifier else create(data)).model_dump(mode="json")
 
 
@@ -787,10 +996,19 @@ def save_network_record(kind: str, payload: dict[str, Any], record_id: str | Non
 def delete_network_record(kind: str, record_id: str) -> dict[str, str]:
     """Archiviert einen Netzwerkdatensatz. Vollzugriff erforderlich."""
     with Session(engine) as session:
-        _permission(session, McpPermission.ADMIN); service = NetworkService(session)
-        delete = {"device": service.delete_device, "segment": service.delete_segment, "interface": service.delete_interface, "address": service.delete_address, "connection": service.delete_connection}.get(kind)
-        if delete is None: raise ValueError("Unbekannter kind-Wert")
-        delete(_uuid(record_id, "record_id")); return {"status": "archived", "kind": kind, "record_id": record_id}
+        _permission(session, McpPermission.ADMIN)
+        service = NetworkService(session)
+        delete = {
+            "device": service.delete_device,
+            "segment": service.delete_segment,
+            "interface": service.delete_interface,
+            "address": service.delete_address,
+            "connection": service.delete_connection,
+        }.get(kind)
+        if delete is None:
+            raise ValueError("Unbekannter kind-Wert")
+        delete(_uuid(record_id, "record_id"))
+        return {"status": "archived", "kind": kind, "record_id": record_id}
 
 
 class McpBearerAuthMiddleware:
@@ -849,3 +1067,66 @@ _raw_mcp_app = mcp_server.streamable_http_app(
     transport_security=_transport_security,
 )
 mcp_http_app: ASGIApp = McpBearerAuthMiddleware(_raw_mcp_app)
+
+
+def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
+    """Each application lifespan owns its transport and session manager."""
+    server = MCPServer(
+        "DocOfHome",
+        instructions=(
+            "Vor dem Anlegen nach Dubletten suchen. Bei has_more die nächste Seite "
+            "mit next_offset abrufen. Datumswerte als YYYY-MM-DD übergeben."
+        ),
+    )
+    for function in (
+        docofhome_info,
+        search_subjects,
+        create_subject,
+        update_subject,
+        search_activities,
+        get_activity,
+        update_activity,
+        create_activity,
+        log_activity,
+        add_history_entry,
+        get_activity_history,
+        get_due_activities,
+        delete_history_entry,
+        delete_activity,
+        delete_subject,
+        search_recipes,
+        get_recipe,
+        save_recipe,
+        delete_recipe,
+        search_wiki,
+        get_wiki_page,
+        save_wiki_page,
+        delete_wiki_page,
+        list_notes,
+        save_note,
+        delete_note,
+        search_catalog,
+        get_catalog_record,
+        save_catalog_record,
+        delete_catalog_record,
+        list_consumption,
+        save_consumption_record,
+        delete_consumption_record,
+        list_network,
+        save_network_record,
+        delete_network_record,
+    ):
+        server.add_tool(function)
+    transport = server.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        transport_security=_transport_security,
+    )
+    return server, McpBearerAuthMiddleware(transport)
+
+
+class McpHttpDispatcher:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        transport = scope.get("state", {}).get("mcp_http_app", mcp_http_app)
+        await transport(scope, receive, send)

@@ -25,10 +25,16 @@ class IntegrationCheckService:
     def check(self, kind: IntegrationKind) -> IntegrationTestResult:
         setting = self.repository.get_integration(kind.value)
         if setting is None:
-            return self._result(kind, perf_counter(), False, "Die Integration ist nicht konfiguriert.")
+            return self._result(
+                kind, perf_counter(), False, "Die Integration ist nicht konfiguriert."
+            )
         payload = IntegrationWrite(
-            kind=kind, enabled=setting.enabled, base_url=setting.base_url, account=setting.account,
-            secret=setting.secret, selected_album_id=setting.selected_album_id,
+            kind=kind,
+            enabled=setting.enabled,
+            base_url=setting.base_url,
+            account=setting.account,
+            secret=setting.secret,
+            selected_album_id=setting.selected_album_id,
             document_root=setting.document_root,
         )
         return self.check_payload(payload)
@@ -39,7 +45,14 @@ class IntegrationCheckService:
         setting = payload
         if setting is None or not setting.enabled:
             return self._result(kind, started, False, "Die Integration ist deaktiviert.")
-        secret = setting.secret.get_secret_value() if hasattr(setting.secret, "get_secret_value") else setting.secret
+        secret = (
+            setting.secret.get_secret_value()
+            if hasattr(setting.secret, "get_secret_value")
+            else setting.secret
+        )
+        if not secret:
+            stored = self.repository.get_integration(kind.value)
+            secret = stored.secret if stored else None
         if not setting.base_url or not secret:
             return self._result(
                 kind,
@@ -52,7 +65,8 @@ class IntegrationCheckService:
                 kind,
                 started,
                 False,
-                "Für Nextcloud oder FRITZ!Box wird ein Konto beziehungsweise Benutzername benötigt.",
+                "Für Nextcloud oder FRITZ!Box wird ein Konto "
+                "beziehungsweise Benutzername benötigt.",
             )
 
         try:
@@ -63,9 +77,7 @@ class IntegrationCheckService:
                 headers={"User-Agent": "DocOfHome integration check"},
             ) as client:
                 if kind is IntegrationKind.HOME_ASSISTANT:
-                    message, version = self._check_home_assistant(
-                        client, setting.base_url, secret
-                    )
+                    message, version = self._check_home_assistant(client, setting.base_url, secret)
                 elif kind is IntegrationKind.IMMICH:
                     message, version = self._check_immich(client, setting.base_url, secret)
                 elif kind is IntegrationKind.NEXTCLOUD:
@@ -176,7 +188,6 @@ class IntegrationCheckService:
         )
         IntegrationCheckService._require_status(response, {207})
         return "Nextcloud-WebDAV ist erreichbar und die Anmeldung war erfolgreich.", None
-
 
     @staticmethod
     def _check_paperless(

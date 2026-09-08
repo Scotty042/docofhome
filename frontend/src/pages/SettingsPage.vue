@@ -172,6 +172,7 @@ async function persistConfiguration(): Promise<boolean> {
 
   const configuration = await settings.saveConfiguration(form.value)
   form.value = editableConfiguration(configuration)
+  savedForm.value = clone(form.value)
   return true
 }
 
@@ -254,9 +255,9 @@ async function testIntegration(kind: IntegrationKind) {
   error.value = null
   delete testResults.value[kind]
   try {
-    if (!await persistConfiguration()) return
-    testResults.value[kind] = await settingsApi.testIntegration(kind)
-    if (kind === 'immich' && testResults.value[kind]?.success) await loadImmichAlbums()
+    const integration = form.value.integrations.find((item) => item.kind === kind)
+    if (!integration) return
+    testResults.value[kind] = await settingsApi.testIntegrationDraft(integration)
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Verbindungstest konnte nicht ausgeführt werden.'
   } finally {

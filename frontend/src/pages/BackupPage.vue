@@ -26,7 +26,11 @@ function refreshBackups() {
     <div class="mb-6">
       <h1>Backup und Wiederherstellung</h1>
       <p class="text-medium-emphasis mb-0">
-        Sichere die komplette DocOfHome-Datenbank lokal und optional zusätzlich in deiner Nextcloud.
+        Sichere die DocOfHome-Datenbank, lokale Uploads und den Sicherungszeitplan lokal
+        und optional zusätzlich in deiner Nextcloud. Neue Sicherungen benötigen zur
+        Wiederherstellung Version 1.7.18 oder neuer (maximal 512 MiB entpackt).
+        Alte Sicherungen enthalten nur die Datenbank. Archive sind nicht verschlüsselt
+        und müssen vertraulich aufbewahrt werden; externe Dienste sind separat zu sichern.
       </p>
     </div>
     <BackupImportCard @imported="refreshBackups" />

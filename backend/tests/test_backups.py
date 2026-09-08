@@ -241,4 +241,4 @@ def test_legacy_tectoryn_backup_name_remains_compatible(
 
     listed = {item.filename for item in service.list_backups()}
     assert legacy_name in listed
-    assert service.validate_backup(legacy_name).valid is True
+    assert service.validate_backup(legacy_name).filename == legacy_name

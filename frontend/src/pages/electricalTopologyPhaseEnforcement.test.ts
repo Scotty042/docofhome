@@ -8,7 +8,7 @@ describe('electrical topology phase enforcement', () => {
   it('recognizes direct phase-rail connections and locks the line phase', () => {
     expect(topologyPage).toContain('directPhaseRailConnection')
     expect(topologyPage).toContain("source.device_type === 'phase_rail'")
-    expect(topologyPage).toContain("target.kind === 'protective_device'")
+    expect(topologyPage).toContain("isPhaseRailEndpoint(source) && ['protective_device', 'asset'].includes(target.kind)")
     expect(topologyPage).toContain('Fest vorgegebene Außenleiterphase')
     expect(topologyPage).toContain('Berechnet aus Startphase und TE-Position der Phasenschiene')
   })

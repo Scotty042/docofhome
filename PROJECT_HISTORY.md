@@ -2,6 +2,52 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.7.18 – 2026-09-08
+
+### Kurzüberblick
+
+- MCP-Umbenennungen erhalten Bezugsobjekt-Profile und Tätigkeitsarten. Die Leseantworten enthalten diese Felder; beim Anlegen einer Tätigkeit ist die Tätigkeitsart wählbar.
+- Rezepttitel werden vor der Validierung bereinigt. Migration `0057` repariert vorhandene leere Titel mit einer eindeutigen Ersatzbezeichnung, ohne Zutaten oder Zubereitung zu löschen.
+- Die MCP-Rezeptsuche bietet `offset`, `limit` (1 bis 100), `total`, `has_more` und `next_offset`. Für eine vollständige Bestands- oder Dublettenprüfung sind alle Seiten abzurufen. Bestehende Felder `items` und `count` bleiben erhalten.
+- Backupformat 2 enthält Datenbank, lokale Dateien unter `uploads/` und den Sicherungszeitplan `backups/config.json`, mit Größen- und SHA256-Prüfung pro Datei. Alte Datenbanksicherungen im Format 1 bleiben lesbar.
+- JSON-Exportformat 1.1 berücksichtigt die bisher fehlenden 13 Tabellen, einschließlich Rezepten, Elektro-/Energiedaten und Historienanhängen. Binäre Historienanhänge werden Base64-kodiert. Als geheim markierte Systemeinstellungen werden nicht exportiert.
+- Verbindungstests verwenden den ungespeicherten Integrationsentwurf, ohne andere Einstellungen zu speichern. Nach teilweise erfolgreichem Speichern entspricht „Verwerfen“ dem tatsächlich gespeicherten Stand.
+- Jeder App-Lebenszyklus erhält einen eigenen MCP-Server mit denselben 36 Werkzeugen. Bearer-Zugriff und Token-Pfad bleiben erhalten. Neue Laufzeittests prüfen Datenerhalt, Sicherung/Wiederherstellung, Export/Import und Einstellungszustände.
+
+### Update und Grenzen
+
+Vor dem Update den vollständigen persistenten Datenordner extern sichern. Die Datenbank wird automatisch auf `0057` migriert. Neue Sicherungen benötigen zum Wiederherstellen Version 1.7.18 oder neuer; Format 1 enthält weiterhin keine Bilder. Sicherungen sind nicht verschlüsselt und können Zugangsdaten enthalten: vertraulich aufbewahren. Die Grenze beträgt 512 MiB entpackt einschließlich Manifest.
+
+Beim Wiederherstellen werden enthaltene Dateien ersetzt und vorher unter `backups/pre-restore/` gesichert. Zusätzliche, nicht im Archiv enthaltene Dateien werden nicht gelöscht. Compose-Dateien, Reverse-Proxy-Einstellungen, Umgebungsvariablen und externe Immich-/Paperless-/Nextcloud-Inhalte müssen separat gesichert werden. JSON-Export ist kein Ersatz für ein Dateibackup und überträgt keine Integrationszugangsdaten.
+
+Dieses Patch-Release konzentriert sich auf die belegten Datenerhaltungsfehler. Eine REST-Anmeldung, Lazy Loading und die umfassende Bereinigung älterer Elektro-/Migrationstests sind nicht enthalten. Der lokale Gesamt-Qualitätscheck ist noch nicht vollständig grün; siehe Prüfstatus in `AUDIT.md`. Docker-/Python-3.13-Prüfung und ein Test auf der Zielinstallation stehen aus. Es wurde nichts produktiv installiert oder veröffentlicht.
+
+### Lokale Validierung
+
+191 Frontendtests sowie Typprüfung und Produktionsbuild erfolgreich. 47 gezielte
+Backendtests erfolgreich; Gesamtlauf: 282 bestanden, 29 fehlgeschlagen, keine
+Testaufbaufehler. Frische Migration bis 0057 und Datenerhaltung beim Update geprüft.
+Alle 37 Python-Prüfskripte erfolgreich. Gesamt-Ruff, Mypy und Schemaabgleich
+melden noch offene Punkte; Docker/Python 3.13 nicht lokal geprüft. Details: `AUDIT.md`.
+
+### Release-Manifest
+
+```json
+{
+  "name": "DocOfHome",
+  "version": "1.7.18",
+  "base_version": "1.7.17",
+  "base_zip_sha256": "7a50ebc3626d441dbf69cd0dd89d1adcbeb0ac0f1ac1e04483df33b94fd623b4",
+  "built_on": "2026-09-08",
+  "alembic_head": "0057",
+  "database_migration_required": true,
+  "backup_format_version": 2,
+  "export_version": "1.1",
+  "release_reason": "Data preservation, complete local backups, recipe integrity and settings safety",
+  "full_quality_gate_passed": false
+}
+```
+
 ## 1.7.17 – 2026-08-31
 
 ### Kurzüberblick

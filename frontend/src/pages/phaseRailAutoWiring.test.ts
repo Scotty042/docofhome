@@ -7,7 +7,7 @@ describe('phase rail automatic wiring', () => {
     expect(page).toContain('verbindet automatisch jedes vollständig überdeckte DIN-Gerät')
     expect(page).toContain('vierpoligen FI')
     expect(page).toContain('der vierte Pol bleibt für N frei')
-    expect(page).toContain('v-if="!automaticEditingConnection"')
+    expect(page).toContain('connectionEndpointRoute')
     expect(page).toContain('@click="archiveDetailDevice"')
     expect(page).toContain('@click="archiveDetailComponent"')
     expect(page).toContain('Das DIN-Gerät würde nur teilweise von der Phasen-/Kammschiene überdeckt.')

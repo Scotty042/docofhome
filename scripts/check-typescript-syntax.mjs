@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, relative, resolve } from 'node:path'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
-const require = createRequire(import.meta.url)
-const globalRoot = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
-const ts = require(join(globalRoot, 'typescript'))
+const require = createRequire(join(root, 'frontend', 'package.json'))
+const ts = require('typescript')
 
 function walk(directory) {
   const result = []

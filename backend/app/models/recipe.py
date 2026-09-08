@@ -1,12 +1,15 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Text
+from sqlalchemy import CheckConstraint, Text
 from sqlmodel import Field, SQLModel
 
 
 class Recipe(SQLModel, table=True):
     __tablename__ = "recipes"
+    __table_args__ = (
+        CheckConstraint("length(trim(title)) >= 1", name="ck_recipes_title_not_blank"),
+    )
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     title: str = Field(index=True, max_length=200)
     category: str = Field(default="", index=True, max_length=100)
@@ -23,4 +26,3 @@ class Recipe(SQLModel, table=True):
     attachments_json: str = Field(default="[]", sa_type=Text)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
-

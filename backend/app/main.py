@@ -2,23 +2,25 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 
 from app.api.v1 import electrical_layout
 from app.api.v1.router import api_router
 from app.core.settings import settings
-from app.mcp_server import mcp_http_app, mcp_server
+from app.mcp_server import McpHttpDispatcher, create_mcp_runtime
 from app.services.backup_schedule import backup_scheduler_loop
-from app.services.quality_schedule import quality_scheduler_loop
 from app.services.docker_sync_schedule import docker_sync_scheduler_loop
+from app.services.quality_schedule import quality_scheduler_loop
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
     """Prepare persistent paths and run lightweight background maintenance."""
 
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -28,8 +30,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     quality_task = asyncio.create_task(quality_scheduler_loop())
     docker_task = asyncio.create_task(docker_sync_scheduler_loop())
     try:
-        async with mcp_server.session_manager.run():
-            yield
+        server, transport = create_mcp_runtime()
+        async with server.session_manager.run():
+            yield {"mcp_http_app": transport}
     finally:
         scheduler_task.cancel()
         quality_task.cancel()
@@ -51,8 +54,14 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.include_router(api_router)
 app.include_router(electrical_layout.router, prefix="/api/v1")
-app.add_route("/mcp", mcp_http_app, methods=["GET", "POST", "DELETE"], name="mcp")
-app.add_route("/mcp/{token}", mcp_http_app, methods=["GET", "POST", "DELETE"], name="mcp-token")
+app.router.routes.extend(
+    [
+        Route("/mcp", McpHttpDispatcher(), methods=["GET", "POST", "DELETE"], name="mcp"),
+        Route(
+            "/mcp/{token}", McpHttpDispatcher(), methods=["GET", "POST", "DELETE"], name="mcp-token"
+        ),
+    ]
+)
 
 static_dir = settings.static_dir
 assets_dir = static_dir / "assets"

@@ -359,6 +359,8 @@ export const handbookSections: HandbookSection[] = [
 
 Seit Version 1.7.9 stehen zusätzlich Werkzeuge für Kochbuch, Wiki, verknüpfte Notizen, Assets, Orte, Assettypen, Produkte, Labels, Verbrauchszähler, Ablesungen und Netzwerkdokumentation bereit. Vor dem Anlegen immer zuerst im jeweiligen Bereich suchen. Lesen benötigt die Berechtigung \`read\`, Anlegen und Ändern \`write\`, Löschen und Archivieren \`admin\`.
 
+Seit 1.7.18 liefert die Rezeptsuche neben \`items\` und \`count\` auch \`total\`, \`has_more\` und \`next_offset\`. Für eine vollständige Dublettenprüfung bei \`has_more=true\` mit \`offset=next_offset\` und denselben Filtern weiterlesen. \`limit\` erlaubt 1 bis 100 Treffer je Seite. MCP-Umbenennungen erhalten vorhandene Profile und Tätigkeitsarten.
+
 Für SWAG heißt die Datei docofhome.subdomain.conf. DNS und server_name müssen zu docofhome.<domain> passen. SWAG und DocOfHome müssen im gemeinsamen externen Docker-Netzwerk swag_proxy liegen. Ein reales Upstream-Beispiel ist scotty042_docofhome:8000. Der Host-Port 8088 bildet nur Host → Container ab und wird nicht für Container-zu-Container-Kommunikation verwendet.
 
 Der vHost erlaubt ausschließlich location = /mcp und location ^~ /mcp/; location / liefert 404. In beiden MCP-Locations werden /config/nginx/proxy.conf und /config/nginx/resolver.conf eingebunden, der Upstream auf http://scotty042_docofhome:8000 gesetzt sowie proxy_buffering off und proxy_request_buffering off verwendet. Keine eigenen proxy_read_timeout- oder proxy_send_timeout-Direktiven ergänzen: proxy.conf definiert diese bereits und doppelte Direktiven verhindern den Nginx-Reload.
