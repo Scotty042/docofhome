@@ -17,7 +17,11 @@ def allowed_file(name: str) -> bool:
         and "\\" not in name
         and not path.is_absolute()
         and all(part not in {"", ".", ".."} for part in name.split("/"))
-        and (name == "backups/config.json" or (len(path.parts) > 1 and path.parts[0] == "uploads"))
+        and (
+            name == "backups/config.json"
+            or (len(path.parts) > 1 and path.parts[0] == "uploads")
+            or (len(path.parts) > 2 and path.parts[:2] == ("secrets", "docker-ssh"))
+        )
     )
 
 

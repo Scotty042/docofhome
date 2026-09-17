@@ -170,6 +170,9 @@ def test_full_backup_restores_images_config_and_database(database, tmp_path, mon
     config = tmp_path / "backups/config.json"
     config.parent.mkdir()
     config.write_text('{"enabled": true, "interval_hours": 48}')
+    private_key = tmp_path / "secrets/docker-ssh/test-host"
+    private_key.parent.mkdir(parents=True)
+    private_key.write_text("private ssh test key")
     session.add(Recipe(title="Rezept mit Bild", image_url="/api/v1/recipes/images/test.webp"))
     session.commit()
     service = BackupService(session)
@@ -178,6 +181,7 @@ def test_full_backup_restores_images_config_and_database(database, tmp_path, mon
     with ZipFile(BytesIO(content)) as archive:
         assert json.loads(archive.read("manifest.json"))["format_version"] == 2
         assert archive.read("uploads/recipe-images/test.webp") == image.read_bytes()
+        assert archive.read("secrets/docker-ssh/test-host") == private_key.read_bytes()
     fresh = tmp_path / "fresh"
     monkeypatch.setattr(settings, "data_dir", fresh)
     target = BackupService(session)
@@ -186,6 +190,9 @@ def test_full_backup_restores_images_config_and_database(database, tmp_path, mon
     assert apply_pending_restore()
     assert (fresh / "uploads/recipe-images/test.webp").read_bytes() == image.read_bytes()
     assert (fresh / "backups/config.json").read_bytes() == config.read_bytes()
+    assert (fresh / "secrets/docker-ssh/test-host").read_bytes() == private_key.read_bytes()
+    assert (fresh / "secrets/docker-ssh").stat().st_mode & 0o777 == 0o700
+    assert (fresh / "secrets/docker-ssh/test-host").stat().st_mode & 0o777 == 0o600
     with sqlite3.connect(settings.database_path) as conn:
         assert conn.execute("SELECT title FROM recipes").fetchone()[0] == "Rezept mit Bild"
     assert not apply_pending_restore()

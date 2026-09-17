@@ -1,5 +1,7 @@
+import re
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import (
@@ -201,6 +203,73 @@ class DockerConnectionTestRead(BaseModel):
     success: bool
     message: str
     docker_version: str | None = None
+
+
+class DockerHostWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    enabled: bool = False
+    connection_type: Literal["socket", "ssh"] = "ssh"
+    host_asset_id: UUID
+    socket_path: str | None = Field(default=None, max_length=500)
+    ssh_host: str | None = Field(default=None, max_length=255)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    ssh_user: str | None = Field(default=None, max_length=100)
+    ssh_host_key: str | None = None
+    refresh_interval_seconds: int = Field(default=300)
+
+    @model_validator(mode="after")
+    def validate_connection(self) -> "DockerHostWrite":
+        self.name = self.name.strip()
+        if self.connection_type == "socket":
+            if not self.socket_path or not self.socket_path.strip().startswith("/"):
+                raise ValueError(
+                    "Für einen lokalen Host ist ein absoluter Docker-Socket erforderlich"
+                )
+            self.socket_path = self.socket_path.strip()
+            self.ssh_host = self.ssh_user = self.ssh_host_key = None
+        else:
+            self.socket_path = None
+            self.ssh_host = self.ssh_host.strip() if self.ssh_host else None
+            self.ssh_user = self.ssh_user.strip() if self.ssh_user else None
+            self.ssh_host_key = self.ssh_host_key.strip() if self.ssh_host_key else None
+            if not self.ssh_host or not self.ssh_user:
+                raise ValueError("Für SSH sind Hostname und Benutzer erforderlich")
+            if self.ssh_host.startswith("-") or not re.fullmatch(
+                r"[A-Za-z0-9_.:-]+", self.ssh_host
+            ):
+                raise ValueError("Der SSH-Hostname enthält unzulässige Zeichen")
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", self.ssh_user):
+                raise ValueError("Der SSH-Benutzer enthält unzulässige Zeichen")
+            if self.ssh_host_key:
+                parts = self.ssh_host_key.split()
+                if len(parts) < 3 or parts[1] not in {
+                    "ssh-ed25519",
+                    "ecdsa-sha2-nistp256",
+                    "rsa-sha2-512",
+                    "ssh-rsa",
+                }:
+                    raise ValueError("Der SSH-Host-Schlüssel ist ungültig")
+        if self.refresh_interval_seconds not in {0, 30, 60, 300, 900, 1800}:
+            raise ValueError("Ungültiges Docker-Aktualisierungsintervall")
+        return self
+
+
+class DockerHostRead(DockerHostWrite):
+    id: UUID
+    host_name: str
+    public_key: str | None = None
+    key_configured: bool = False
+    host_key_fingerprint: str | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+
+
+class DockerHostKeyScanRead(BaseModel):
+    host_key: str
+    fingerprint: str
 
 
 class ExportManifestRead(BaseModel):

@@ -2,6 +2,44 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.7.19 – 2026-09-17
+
+### Kurzüberblick
+
+- Docker-Überwachung unterstützt mehrere lokale oder entfernte Hosts. Jeder Host ist einem eigenen Asset zugeordnet und besitzt einen getrennten Status, Zeitplan und Fehlerverlauf.
+- Entfernte Docker-Server werden per SSH und Public Key angebunden. DocOfHome erzeugt pro Host ein Ed25519-Schlüsselpaar; private Schlüssel verlassen `/data/secrets/docker-ssh/` nicht.
+- Die SSH-Serveridentität wird vor der ersten Verbindung abgerufen, als SHA256-Fingerabdruck angezeigt und erst nach dem Speichern fest vertraut. Ein geänderter Host-Schlüssel beendet die Verbindung.
+- Der mitgelieferte, serverseitige Befehl `docofhome-docker-snapshot` erlaubt ausschließlich lesende Abfragen von Docker-Version und Containerliste. Die dokumentierte `authorized_keys`-Zeile erzwingt diesen Befehl und deaktiviert Weiterleitungen und PTYs.
+- Container mit gleichem Namen oder gleicher Docker-ID auf unterschiedlichen Servern bleiben getrennt. Entfernen einer Hostverbindung löscht keine bereits dokumentierten Dienste.
+- Die bisherige lokale Socket-Anbindung bleibt verfügbar. Migration `0058` übernimmt eine vorhandene Einzelkonfiguration automatisch als lokalen Docker-Host.
+- Backups enthalten nun auch die SSH-Schlüsseldateien. Weil Backups damit private Schlüssel enthalten können, müssen sie wie Zugangsdaten geschützt werden.
+
+### Einrichtung und Sicherheit
+
+Auf jedem entfernten Docker-Server muss der Helfer aus `scripts/docofhome-docker-snapshot` als `/usr/local/bin/docofhome-docker-snapshot` installiert werden. Der Public Key aus DocOfHome wird für einen eigenen Benutzer mit `restrict` und `command="/usr/local/bin/docofhome-docker-snapshot"` in `authorized_keys` hinterlegt. Die vollständige Anleitung steht in `docs/DOCKER_SSH_MONITORING.md`.
+
+Ein Benutzer mit Zugriff auf den Docker-Socket besitzt grundsätzlich weitreichende Rechte. Die erzwungene SSH-Konfiguration begrenzt den bereitgestellten Schlüssel auf den fest eingebauten Lesebefehl, ersetzt aber nicht die Absicherung des Zielservers. Fingerabdrücke müssen außerhalb von DocOfHome verglichen werden. Private Schlüssel werden unverschlüsselt im geschützten persistenten Datenverzeichnis gespeichert; Sicherungen sind ebenfalls nicht verschlüsselt.
+
+### Update
+
+Vor dem Update ein externes Backup des vollständigen Datenverzeichnisses erstellen. Die Datenbank wird automatisch auf `0058` migriert. Eine vorhandene Socket-Konfiguration bleibt aktiv. Für SSH muss das aktualisierte Image gebaut werden, weil es den OpenSSH-Client enthält. Nach erfolgreicher Umstellung kann die Docker-Socket-Einbindung aus der Compose-Konfiguration entfernt werden, sofern kein lokaler Socket-Host mehr genutzt wird.
+
+### Release-Manifest
+
+```json
+{
+  "name": "DocOfHome",
+  "version": "1.7.19",
+  "base_version": "1.7.18",
+  "built_on": "2026-09-17",
+  "alembic_head": "0058",
+  "database_migration_required": true,
+  "backup_format_version": 2,
+  "release_reason": "Multi-host Docker monitoring with pinned SSH public-key access",
+  "full_quality_gate_passed": false
+}
+```
+
 ## 1.7.18 – 2026-09-08
 
 ### Kurzüberblick

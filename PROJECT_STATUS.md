@@ -1,8 +1,8 @@
 # DocOfHome – Projektstatus
 
-Stand: 8. September 2026  
-Release: **1.7.18**  
-Alembic-Head: **`0057`**
+Stand: 17. September 2026  
+Release: **1.7.19**  
+Alembic-Head: **`0058`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar und können unabhängig im Hauptmenü ein- oder ausgeblendet werden.
 
@@ -16,6 +16,7 @@ DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, E
 - Bezugsobjekt-Profile und objektübergreifender Lebenslauf für Wartungen, Prüfungen, Messungen und Termine;
 - manuelle Paperless-Verknüpfungen an Wartungs-/Historieneinträgen ohne PDF-Duplikate;
 - MCP-Endpunkt für berechtigten Lese-/Schreibzugriff;
+- mehrere Docker-Hosts per fest gepinnter SSH-Public-Key-Verbindung oder lokalem Socket;
 - persistente Daten unter `/data` und migrationsgestützte Updates.
 
 Vor jedem Update ist ein vollständiges Backup des persistenten `data`-Ordners empfohlen. Release-spezifische Details und frühere technische Entscheidungen stehen ausschließlich in `PROJECT_HISTORY.md`.

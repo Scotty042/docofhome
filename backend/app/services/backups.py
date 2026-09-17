@@ -92,6 +92,7 @@ class BackupService:
             ) as archive:
                 archive.write(snapshot_path, "database.sqlite3")
                 candidates = list((settings.data_dir / "uploads").rglob("*"))
+                candidates.extend((settings.data_dir / "secrets" / "docker-ssh").glob("*"))
                 config = self.backup_dir / "config.json"
                 if config.is_file():
                     candidates.append(config)

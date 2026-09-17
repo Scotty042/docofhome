@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Forced SSH command: expose one read-only Docker snapshot and nothing else."""
+
+import http.client
+import json
+import os
+import socket
+import sys
+
+SOCKET_PATH = os.environ.get("DOCOFHOME_DOCKER_SOCKET", "/var/run/docker.sock")
+
+
+class UnixConnection(http.client.HTTPConnection):
+    def connect(self):
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        connection.settimeout(10)
+        connection.connect(SOCKET_PATH)
+        self.sock = connection
+
+
+def get(path):
+    connection = UnixConnection("localhost", timeout=10)
+    try:
+        connection.request("GET", path, headers={"Host": "docker"})
+        response = connection.getresponse()
+        payload = response.read()
+    finally:
+        connection.close()
+    if response.status >= 400:
+        raise RuntimeError(f"Docker Engine HTTP {response.status}")
+    return json.loads(payload)
+
+
+try:
+    version = get("/version")
+    containers = get("/containers/json?all=1")
+    print(json.dumps({
+        "docker_version": version.get("Version") if isinstance(version, dict) else None,
+        "containers": containers,
+    }, separators=(",", ":")))
+except Exception as exc:
+    print(f"DocOfHome Docker snapshot failed: {exc}", file=sys.stderr)
+    raise SystemExit(1)

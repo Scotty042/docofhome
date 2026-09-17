@@ -168,3 +168,32 @@ export interface DockerConnectionTest {
   message: string
   docker_version: string | null
 }
+
+export interface DockerHostWrite {
+  name: string
+  enabled: boolean
+  connection_type: 'socket' | 'ssh'
+  host_asset_id: string
+  socket_path: string | null
+  ssh_host: string | null
+  ssh_port: number
+  ssh_user: string | null
+  ssh_host_key: string | null
+  refresh_interval_seconds: 0 | 30 | 60 | 300 | 900 | 1800
+}
+
+export interface DockerHost extends DockerHostWrite {
+  id: string
+  host_name: string
+  public_key: string | null
+  key_configured: boolean
+  host_key_fingerprint: string | null
+  last_attempt_at: string | null
+  last_success_at: string | null
+  last_error: string | null
+}
+
+export interface DockerHostKeyScan {
+  host_key: string
+  fingerprint: string
+}

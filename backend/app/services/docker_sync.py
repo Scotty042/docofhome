@@ -2,19 +2,28 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.connectors.docker_engine import DockerEngineConnector, DockerEngineError
+from app.connectors.docker_ssh import (
+    SshDockerEngineConnector,
+    ensure_key_pair,
+    host_key_fingerprint,
+    remove_key_pair,
+    scan_host_key,
+)
 from app.models.asset_engine import Asset
-from app.models.release import DockerSyncSetting, ServiceWorkload
+from app.models.release import DockerHost, DockerSyncSetting, ServiceWorkload
 from app.schemas.release import (
     DockerConnectionTestRead,
+    DockerHostKeyScanRead,
+    DockerHostRead,
+    DockerHostWrite,
     DockerSyncResultRead,
     DockerSyncSettingRead,
     DockerSyncSettingWrite,
@@ -40,6 +49,196 @@ class DockerSyncService:
             self.session.commit()
             self.session.refresh(record)
         return self._settings_read(record)
+
+    def list_hosts(self) -> list[DockerHostRead]:
+        records = self.session.exec(
+            select(DockerHost).order_by(col(DockerHost.name), col(DockerHost.id))
+        ).all()
+        return [self._host_read(record) for record in records]
+
+    def create_host(self, payload: DockerHostWrite) -> DockerHostRead:
+        self._validate_host(payload)
+        record = DockerHost(**payload.model_dump())
+        try:
+            if record.connection_type == "ssh":
+                ensure_key_pair(record.id)
+        except DockerEngineError as exc:
+            remove_key_pair(record.id)
+            raise DockerSyncError(str(exc)) from exc
+        self.session.add(record)
+        try:
+            self.session.commit()
+            self.session.refresh(record)
+            return self._host_read(record)
+        except (SQLAlchemyError, DockerEngineError):
+            self.session.rollback()
+            remove_key_pair(record.id)
+            raise
+
+    def update_host(self, host_id: UUID, payload: DockerHostWrite) -> DockerHostRead:
+        record = self._require_host(host_id)
+        self._validate_host(payload, exclude_id=host_id)
+        previous_type = record.connection_type
+        address_changed = payload.connection_type == "ssh" and (
+            payload.ssh_host != record.ssh_host or payload.ssh_port != record.ssh_port
+        )
+        if address_changed and payload.ssh_host_key == record.ssh_host_key:
+            payload.ssh_host_key = None
+        if payload.connection_type == "ssh":
+            try:
+                ensure_key_pair(record.id)
+            except DockerEngineError as exc:
+                raise DockerSyncError(str(exc)) from exc
+        for key, value in payload.model_dump().items():
+            setattr(record, key, value)
+        record.updated_at = datetime.now(UTC)
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        if record.connection_type != "ssh" and previous_type == "ssh":
+            remove_key_pair(record.id)
+        return self._host_read(record)
+
+    def delete_host(self, host_id: UUID) -> None:
+        record = self._require_host(host_id)
+        self.session.delete(record)
+        self.session.commit()
+        remove_key_pair(host_id)
+
+    def scan_host_key(self, host_id: UUID) -> DockerHostKeyScanRead:
+        record = self._require_host(host_id)
+        if record.connection_type != "ssh" or not record.ssh_host:
+            raise DockerSyncError("Diese Verbindung verwendet kein SSH")
+        try:
+            host_key, fingerprint = scan_host_key(record.ssh_host, record.ssh_port)
+        except DockerEngineError as exc:
+            raise DockerSyncError(str(exc)) from exc
+        return DockerHostKeyScanRead(host_key=host_key, fingerprint=fingerprint)
+
+    def test_host(self, host_id: UUID) -> DockerConnectionTestRead:
+        record = self._require_host(host_id)
+        try:
+            version = self._connector_for(record).version()
+        except DockerEngineError as exc:
+            return DockerConnectionTestRead(success=False, message=str(exc), docker_version=None)
+        return DockerConnectionTestRead(
+            success=True,
+            message=f"Docker-Host „{record.name}“ ist erreichbar.",
+            docker_version=version,
+        )
+
+    def sync_host(self, host_id: UUID) -> DockerSyncResultRead:
+        with _DOCKER_SYNC_LOCK:
+            return self._sync_host_locked(self._require_host(host_id))
+
+    def sync_due_hosts(self) -> int:
+        synchronized = 0
+        for record in self.session.exec(select(DockerHost).where(DockerHost.enabled == True)).all():  # noqa: E712
+            if record.refresh_interval_seconds <= 0:
+                continue
+            last = self._aware(record.last_attempt_at) if record.last_attempt_at else None
+            if last and datetime.now(UTC) < last + timedelta(
+                seconds=record.refresh_interval_seconds
+            ):
+                continue
+            try:
+                self.sync_host(record.id)
+            except DockerSyncError:
+                pass
+            synchronized += 1
+        return synchronized
+
+    def _sync_host_locked(self, record: DockerHost) -> DockerSyncResultRead:
+        now = datetime.now(UTC)
+        try:
+            record.last_attempt_at = now
+            record.updated_at = now
+            self.session.add(record)
+            self.session.commit()
+            connector = self._connector_for(record)
+            docker_version = connector.version()
+            containers = connector.containers(all_containers=True)
+            result = self._apply_containers(record.host_asset_id, containers, now, docker_version)
+            record = self._require_host(record.id)
+            record.last_success_at = now
+            record.last_error = None
+            record.updated_at = now
+            self.session.add(record)
+            self.session.commit()
+            return result
+        except (DockerEngineError, OSError, ValueError, SQLAlchemyError) as exc:
+            self.session.rollback()
+            record = self._require_host(record.id)
+            record.last_error = str(exc)
+            record.updated_at = datetime.now(UTC)
+            self.session.add(record)
+            try:
+                self.session.commit()
+            except SQLAlchemyError:
+                self.session.rollback()
+            raise DockerSyncError(str(exc)) from exc
+
+    def _connector_for(
+        self, record: DockerHost
+    ) -> DockerEngineConnector | SshDockerEngineConnector:
+        if record.connection_type == "socket":
+            return DockerEngineConnector(record.socket_path or "/var/run/docker.sock")
+        if not record.ssh_host or not record.ssh_user:
+            raise DockerEngineError("SSH-Hostname oder Benutzer fehlt")
+        if not record.ssh_host_key:
+            raise DockerEngineError("SSH-Serveridentität wurde noch nicht bestätigt")
+        return SshDockerEngineConnector(
+            record.id, record.ssh_host, record.ssh_port, record.ssh_user, record.ssh_host_key
+        )
+
+    def _validate_host(self, payload: DockerHostWrite, exclude_id: UUID | None = None) -> None:
+        asset = self.session.get(Asset, payload.host_asset_id)
+        if asset is None or asset.deleted_at is not None:
+            raise DockerSyncError("Das ausgewählte Host-Asset wurde nicht gefunden")
+        statement = select(DockerHost).where(DockerHost.host_asset_id == payload.host_asset_id)
+        if exclude_id:
+            statement = statement.where(DockerHost.id != exclude_id)
+        if self.session.exec(statement).first():
+            raise DockerSyncError("Für dieses Host-Asset besteht bereits eine Docker-Verbindung")
+        if payload.ssh_host_key and host_key_fingerprint(payload.ssh_host_key) is None:
+            raise DockerSyncError("Der SSH-Host-Schlüssel ist nicht gültig")
+
+    def _require_host(self, host_id: UUID) -> DockerHost:
+        record = self.session.get(DockerHost, host_id)
+        if record is None:
+            raise DockerSyncError("Docker-Host wurde nicht gefunden")
+        return record
+
+    def _host_read(self, record: DockerHost) -> DockerHostRead:
+        host = self.session.get(Asset, record.host_asset_id)
+        public_key = None
+        key_configured = False
+        if record.connection_type == "ssh":
+            try:
+                public_key = ensure_key_pair(record.id)
+                key_configured = True
+            except DockerEngineError:
+                pass
+        return DockerHostRead(
+            id=record.id,
+            name=record.name,
+            enabled=record.enabled,
+            connection_type=record.connection_type,
+            host_asset_id=record.host_asset_id,
+            host_name=host.name if host else "Unbekanntes Asset",
+            socket_path=record.socket_path,
+            ssh_host=record.ssh_host,
+            ssh_port=record.ssh_port,
+            ssh_user=record.ssh_user,
+            ssh_host_key=record.ssh_host_key,
+            refresh_interval_seconds=record.refresh_interval_seconds,
+            public_key=public_key,
+            key_configured=key_configured,
+            host_key_fingerprint=host_key_fingerprint(record.ssh_host_key),
+            last_attempt_at=self._aware(record.last_attempt_at) if record.last_attempt_at else None,
+            last_success_at=self._aware(record.last_success_at) if record.last_success_at else None,
+            last_error=record.last_error,
+        )
 
     def update_settings(self, payload: DockerSyncSettingWrite) -> DockerSyncSettingRead:
         record = self.session.get(DockerSyncSetting, 1) or DockerSyncSetting()
@@ -81,7 +280,9 @@ class DockerSyncService:
         if setting.last_attempt_at is None:
             return True
         last_attempt = self._aware(setting.last_attempt_at)
-        return datetime.now(UTC) >= last_attempt + timedelta(seconds=setting.refresh_interval_seconds)
+        return datetime.now(UTC) >= last_attempt + timedelta(
+            seconds=setting.refresh_interval_seconds
+        )
 
     def sync(self) -> DockerSyncResultRead:
         # The browser-triggered refresh and the background scheduler can fire at the
@@ -142,16 +343,16 @@ class DockerSyncService:
         synchronized_at: datetime,
         docker_version: str | None,
     ) -> DockerSyncResultRead:
-        existing = list(self.session.exec(
-            select(ServiceWorkload).where(
-                ServiceWorkload.host_asset_id == host_asset_id,
-                col(ServiceWorkload.deleted_at).is_(None),
-            )
-        ).all())
+        existing = list(
+            self.session.exec(
+                select(ServiceWorkload).where(
+                    ServiceWorkload.host_asset_id == host_asset_id,
+                    col(ServiceWorkload.deleted_at).is_(None),
+                )
+            ).all()
+        )
         by_container_id = {
-            item.docker_container_id: item
-            for item in existing
-            if item.docker_container_id
+            item.docker_container_id: item for item in existing if item.docker_container_id
         }
         by_name = {item.name.casefold(): item for item in existing}
         seen_ids: set[str] = set()
@@ -175,12 +376,29 @@ class DockerSyncService:
 
             image, image_tag = self._split_image(str(container.get("Image") or ""))
             state = str(container.get("State") or "unknown").lower()
-            status = "running" if state == "running" else "stopped" if state in {
-                "created", "exited", "dead", "paused"
-            } else "unknown"
-            labels = container.get("Labels") if isinstance(container.get("Labels"), dict) else {}
-            network_settings = container.get("NetworkSettings") if isinstance(container.get("NetworkSettings"), dict) else {}
-            networks = network_settings.get("Networks") if isinstance(network_settings.get("Networks"), dict) else {}
+            status = (
+                "running"
+                if state == "running"
+                else "stopped"
+                if state in {"created", "exited", "dead", "paused"}
+                else "unknown"
+            )
+            labels = cast(
+                dict[str, Any],
+                container.get("Labels") if isinstance(container.get("Labels"), dict) else {},
+            )
+            network_settings = cast(
+                dict[str, Any],
+                container.get("NetworkSettings")
+                if isinstance(container.get("NetworkSettings"), dict)
+                else {},
+            )
+            networks = cast(
+                dict[str, Any],
+                network_settings.get("Networks")
+                if isinstance(network_settings.get("Networks"), dict)
+                else {},
+            )
             network_names = sorted(str(value) for value in networks.keys())
             network_mode = self._network_mode(container, network_names)
             macvlan_address = None
@@ -194,15 +412,21 @@ class DockerSyncService:
             record.name = name
             record.image = image or None
             record.image_tag = image_tag
-            record.compose_project = str(labels.get("com.docker.compose.project") or "").strip() or None
+            record.compose_project = (
+                str(labels.get("com.docker.compose.project") or "").strip() or None
+            )
             record.network_mode = network_mode
             record.macvlan_address = macvlan_address
-            record.ports_json = json.dumps(self._ports(container.get("Ports")), separators=(",", ":"))
+            record.ports_json = json.dumps(
+                self._ports(container.get("Ports")), separators=(",", ":")
+            )
             record.status = status
             record.docker_container_id = container_id
             record.docker_status_text = str(container.get("Status") or state or "unknown")[:500]
             record.docker_networks_json = json.dumps(network_names, separators=(",", ":"))
-            record.docker_mounts_json = json.dumps(self._mounts(container.get("Mounts")), separators=(",", ":"))
+            record.docker_mounts_json = json.dumps(
+                self._mounts(container.get("Mounts")), separators=(",", ":")
+            )
             record.docker_last_seen_at = synchronized_at
             if created:
                 record.created_at = synchronized_at
@@ -237,7 +461,7 @@ class DockerSyncService:
         slash = value.rfind("/")
         colon = value.rfind(":")
         if colon > slash:
-            return value[:colon], value[colon + 1:] or None
+            return value[:colon], value[colon + 1 :] or None
         return value, None
 
     @staticmethod
@@ -251,11 +475,13 @@ class DockerSyncService:
             protocol = str(item.get("Type") or "tcp").lower()
             if protocol not in {"tcp", "udp"}:
                 protocol = "tcp"
-            result.append({
-                "container_port": int(item["PrivatePort"]),
-                "host_port": int(item["PublicPort"]) if item.get("PublicPort") else None,
-                "protocol": protocol,
-            })
+            result.append(
+                {
+                    "container_port": int(item["PrivatePort"]),
+                    "host_port": int(item["PublicPort"]) if item.get("PublicPort") else None,
+                    "protocol": protocol,
+                }
+            )
         return result
 
     @staticmethod
@@ -274,7 +500,10 @@ class DockerSyncService:
 
     @staticmethod
     def _network_mode(container: dict[str, Any], networks: list[str]) -> str:
-        host_config = container.get("HostConfig") if isinstance(container.get("HostConfig"), dict) else {}
+        host_config = cast(
+            dict[str, Any],
+            container.get("HostConfig") if isinstance(container.get("HostConfig"), dict) else {},
+        )
         mode = str(host_config.get("NetworkMode") or "").lower()
         if mode == "host":
             return "host"

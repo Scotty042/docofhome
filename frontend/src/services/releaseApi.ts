@@ -3,6 +3,9 @@ import type {
   DashboardSetting,
   DockerConnectionTest,
   DockerSyncResult,
+  DockerHost,
+  DockerHostKeyScan,
+  DockerHostWrite,
   DockerSyncSetting,
   DockerSyncSettingWrite,
   FritzBoxDevice,
@@ -76,6 +79,25 @@ export const releaseApi = {
   ),
   testDockerConnection: () => request<DockerConnectionTest>('/workloads/docker/test', { method: 'POST' }),
   syncDocker: () => request<DockerSyncResult>('/workloads/docker/sync', { method: 'POST' }),
+  dockerHosts: () => request<DockerHost[]>('/workloads/docker/hosts'),
+  createDockerHost: (payload: DockerHostWrite) => request<DockerHost>(
+    '/workloads/docker/hosts', { method: 'POST', body: JSON.stringify(payload) }
+  ),
+  updateDockerHost: (id: string, payload: DockerHostWrite) => request<DockerHost>(
+    `/workloads/docker/hosts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }
+  ),
+  deleteDockerHost: (id: string) => request<void>(
+    `/workloads/docker/hosts/${id}`, { method: 'DELETE' }
+  ),
+  scanDockerHostKey: (id: string) => request<DockerHostKeyScan>(
+    `/workloads/docker/hosts/${id}/host-key/scan`, { method: 'POST' }
+  ),
+  testDockerHost: (id: string) => request<DockerConnectionTest>(
+    `/workloads/docker/hosts/${id}/test`, { method: 'POST' }
+  ),
+  syncDockerHost: (id: string) => request<DockerSyncResult>(
+    `/workloads/docker/hosts/${id}/sync`, { method: 'POST' }
+  ),
   exportUrl: '/api/v1/portability/export',
   csvExportUrl: (module: string) => `/api/v1/portability/export/${encodeURIComponent(module)}.csv`,
   previewImport: (file: File) => request<ImportPreview>(

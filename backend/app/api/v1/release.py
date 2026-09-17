@@ -13,6 +13,9 @@ from app.schemas.release import (
     DashboardSettingRead,
     DashboardSettingWrite,
     DockerConnectionTestRead,
+    DockerHostKeyScanRead,
+    DockerHostRead,
+    DockerHostWrite,
     DockerSyncResultRead,
     DockerSyncSettingRead,
     DockerSyncSettingWrite,
@@ -30,6 +33,8 @@ from app.schemas.release import (
     ServiceWorkloadRead,
     ServiceWorkloadWrite,
 )
+from app.services.docker_sync import DockerSyncError, DockerSyncService
+from app.services.network import NetworkService
 from app.services.release import (
     DashboardService,
     GuidedSetupService,
@@ -41,9 +46,6 @@ from app.services.release import (
     ReleaseValidationError,
     WorkloadService,
 )
-
-from app.services.network import NetworkService
-from app.services.docker_sync import DockerSyncError, DockerSyncService
 
 router = APIRouter()
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -190,6 +192,65 @@ def test_docker_connection(session: SessionDependency) -> DockerConnectionTestRe
 def sync_docker_containers(session: SessionDependency) -> DockerSyncResultRead:
     try:
         return DockerSyncService(session).sync()
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/workloads/docker/hosts", response_model=list[DockerHostRead])
+def docker_hosts(session: SessionDependency) -> list[DockerHostRead]:
+    return DockerSyncService(session).list_hosts()
+
+
+@router.post("/workloads/docker/hosts", response_model=DockerHostRead, status_code=201)
+def create_docker_host(payload: DockerHostWrite, session: SessionDependency) -> DockerHostRead:
+    try:
+        return DockerSyncService(session).create_host(payload)
+    except (DockerSyncError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.put("/workloads/docker/hosts/{host_id}", response_model=DockerHostRead)
+def update_docker_host(
+    host_id: UUID, payload: DockerHostWrite, session: SessionDependency
+) -> DockerHostRead:
+    try:
+        return DockerSyncService(session).update_host(host_id, payload)
+    except (DockerSyncError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/workloads/docker/hosts/{host_id}", status_code=204)
+def delete_docker_host(host_id: UUID, session: SessionDependency) -> Response:
+    try:
+        DockerSyncService(session).delete_host(host_id)
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post(
+    "/workloads/docker/hosts/{host_id}/host-key/scan",
+    response_model=DockerHostKeyScanRead,
+)
+def scan_docker_host_key(host_id: UUID, session: SessionDependency) -> DockerHostKeyScanRead:
+    try:
+        return DockerSyncService(session).scan_host_key(host_id)
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/workloads/docker/hosts/{host_id}/test", response_model=DockerConnectionTestRead)
+def test_docker_host(host_id: UUID, session: SessionDependency) -> DockerConnectionTestRead:
+    try:
+        return DockerSyncService(session).test_host(host_id)
+    except DockerSyncError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/workloads/docker/hosts/{host_id}/sync", response_model=DockerSyncResultRead)
+def sync_docker_host(host_id: UUID, session: SessionDependency) -> DockerSyncResultRead:
+    try:
+        return DockerSyncService(session).sync_host(host_id)
     except DockerSyncError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -12,10 +12,7 @@ class DockerSyncScheduler:
         try:
             with Session(engine) as session:
                 service = DockerSyncService(session)
-                if not service.is_due():
-                    return False
-                service.sync()
-            return True
+                return service.sync_due_hosts() > 0
         except (DockerSyncError, SQLAlchemyError, OSError):
             return False
 

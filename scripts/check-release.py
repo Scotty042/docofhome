@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.7.18"
+VERSION = "1.7.19"
 
 assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == VERSION
 assert f'"version": "{VERSION}"' in (ROOT / "frontend/package.json").read_text(encoding="utf-8")
@@ -11,12 +11,15 @@ assert f'docofhome-shell-{VERSION}' in (ROOT / "frontend/public/service-worker.j
 
 source = json.loads((ROOT / "SOURCE_INFO.json").read_text(encoding="utf-8"))
 assert source["version"] == VERSION
-assert source["base_version"] == "1.7.17"
-assert source["alembic_head"] == "0057"
+assert source["base_version"] == "1.7.18"
+assert source["alembic_head"] == "0058"
 assert source["release_notes"] == "PROJECT_HISTORY.md"
 
 history = (ROOT / "PROJECT_HISTORY.md").read_text(encoding="utf-8")
 for marker in (
+    "## 1.7.19 – 2026-09-17",
+    "Migration `0058`",
+    "Docker-Überwachung unterstützt mehrere",
     "## 1.7.18 – 2026-09-08",
     "Migration `0057`",
     '"full_quality_gate_passed": false',
@@ -58,7 +61,14 @@ for marker in ("def subject_timeline", "paperless_links", "activity_kind"):
 
 # Keep 1.7.14 contracts that remain part of the release.
 workloads = (ROOT / "frontend/src/pages/WorkloadsPage.vue").read_text(encoding="utf-8")
-for marker in ("Jetzt aktualisieren", "Aktualisierungsintervall", "Docker-Socket", "Letzter Erfolg"):
+for marker in (
+    "Docker-Hosts",
+    "Server-Schlüssel abrufen",
+    "Public Key für authorized_keys",
+    "Aktualisierungsintervall",
+    "Docker-Socket",
+    "Letzter Erfolg",
+):
     assert marker in workloads, marker
 network = (ROOT / "frontend/src/pages/NetworkPage.vue").read_text(encoding="utf-8")
 for marker in ("sortIpTable('device')", "sortIpTable('documented')", "ipSortIcon"):

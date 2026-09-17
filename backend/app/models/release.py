@@ -93,6 +93,38 @@ class DockerSyncSetting(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class DockerHost(SQLModel, table=True):
+    __tablename__ = "docker_hosts"
+    __table_args__ = (
+        CheckConstraint(
+            "connection_type IN ('socket', 'ssh')",
+            name="ck_docker_hosts_connection_type",
+        ),
+        CheckConstraint(
+            "refresh_interval_seconds IN (0, 30, 60, 300, 900, 1800)",
+            name="ck_docker_hosts_interval",
+        ),
+        Index("uq_docker_hosts_asset", "host_asset_id", unique=True),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(max_length=200)
+    enabled: bool = False
+    connection_type: str = Field(default="ssh", max_length=20)
+    host_asset_id: UUID = Field(foreign_key="assets.id", index=True)
+    socket_path: str | None = Field(default=None, max_length=500)
+    ssh_host: str | None = Field(default=None, max_length=255)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    ssh_user: str | None = Field(default=None, max_length=100)
+    ssh_host_key: str | None = Field(default=None, sa_type=Text)
+    refresh_interval_seconds: int = Field(default=300)
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = Field(default=None, sa_type=Text)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class AuditEvent(SQLModel, table=True):
     __tablename__ = "audit_events"
     __table_args__ = (

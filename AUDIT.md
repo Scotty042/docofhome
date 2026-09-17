@@ -1,5 +1,54 @@
 # DocOfHome – aktueller Audit- und Qualitätsstatus
 
+Stand: 17. September 2026 · Release: 1.7.19 · Alembic-Head: `0058`
+
+## Ergänzung 1.7.19
+
+1.7.19 baut unverändert auf dem bereitgestellten und praktisch getesteten 1.7.18-Stand auf.
+Neu geprüft werden Mehrhost-Trennung, SSH-Befehlsbeschränkung, Host-Key-Pinning,
+Migration einer vorhandenen Socket-Konfiguration und Sicherung der SSH-Schlüssel.
+Es wurde keine produktive Installation verändert und kein GitHub-Release veröffentlicht.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Gezielte Backendtests für 1.7.18/1.7.19 und Migrationen | 14 bestanden |
+| Backend-Gesamttests | 286 bestanden, 30 fehlgeschlagen, keine Testaufbaufehler (316 Tests) |
+| Frontend-Gesamttests | 192 bestanden in 60 Dateien |
+| Vue-/TypeScript-Typprüfung | bestanden |
+| Frontend-Produktionsbuild | bestanden; Warnung wegen großem Hauptbundle bleibt |
+| Icon-Prüfung | 270 Icons verfügbar |
+| Release-, Versions- und statische Migrationsprüfungen | 38 Python-Prüfskripte bestanden |
+| TypeScript-/Vue-Syntaxprüfung | 202 Skripteinheiten bestanden |
+| Geänderte Backenddateien: Ruff | bestanden |
+| Geänderte SSH-/Docker-Backenddateien: Mypy | bestanden |
+| Ruff gesamt | 103 bestehende Meldungen verbleiben |
+| Mypy gesamt | 60 Meldungen in 15 Dateien verbleiben |
+| Frische Datenbankmigration bis 0058 | bestanden |
+| Alembic-Schemaabgleich | nicht bestanden; ausschließlich bereits dokumentierte Altabweichungen, keine neue Docker-Host-Abweichung |
+| Docker-Image und realer SSH-Zielserver | lokal nicht verfügbar, daher nicht ausgeführt |
+
+Die neuen Tests prüfen zwei Hosts mit identischem Containernamen und identischer
+Container-ID, getrennte Zuordnung zum jeweiligen Asset, Ed25519-Erzeugung und
+Dateirechte, festes `known_hosts`, ausschließlich Public-Key-Anmeldung, Migration
+der alten Socket-Konfiguration sowie den erzwungenen Serverbefehl. Der Helfer darf
+nur `/version` und `/containers/json?all=1` abfragen. Backup und Restore wurden
+einschließlich privater SSH-Schlüssel und der Rechte `0700`/`0600` geprüft.
+
+Der Gesamtprüflauf ist weiterhin nicht grün. 29 Fehler entsprechen den bereits für
+1.7.18 dokumentierten älteren Elektro-, Netzwerk-, Integrations- und
+Downgrade-Prüfungen. Zusätzlich ist am Testdatum 17. September ein bestehender
+Wiederholungsregeltest datumsabhängig fehlgeschlagen, weil er fest den bereits
+vergangenen 15. des Monats erwartet. Keiner dieser Fehler betrifft die neuen
+Mehrhost-/SSH-Tests. Sie wurden nicht übersprungen oder als bestanden dargestellt.
+
+Die lokale Laufzeit nutzt Python 3.12.14 und Node 24.19.0. Das Zielimage sieht
+Python 3.13.5 und Node 22.16 vor. Weder Docker noch ein erreichbarer SSH-Testserver
+standen lokal zur Verfügung. Deshalb müssen Image-Build, Public-Key-Einrichtung,
+Fingerabdruckvergleich und der erste echte NUC-Abgleich in einer isolierten
+Testinstallation bestätigt werden.
+
+## Historischer Prüfstatus 1.7.18
+
 Stand: 8. September 2026 · Release: 1.7.18 · Alembic-Head: `0057`
 
 ## Lokaler Prüfstatus 1.7.18

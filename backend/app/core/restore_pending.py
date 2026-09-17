@@ -79,6 +79,9 @@ def apply_pending_restore() -> bool:
                     staged = destination.with_name(destination.name + ".restore.tmp")
                     shutil.copy2(Path(staging) / name, staged)
                     staged.replace(destination)
+                    if name.startswith("secrets/docker-ssh/"):
+                        destination.parent.chmod(0o700)
+                        destination.chmod(0o600)
     replacement.replace(settings.database_path)
     pending.unlink()
     marker.unlink()

@@ -95,16 +95,19 @@ docker compose up -d --build
 
 Standardmäßig ist DocOfHome anschließend über Port `8088` erreichbar. Persistente Daten liegen im lokalen Verzeichnis `./data`.
 
-### Docker-Integration auf dem UGREEN NAS
+### Docker-Integration auf NUC, NAS und weiteren Servern
 
-Für den lesenden Containerimport benötigt DocOfHome Zugriff auf den Docker-Engine-Socket. Die mitgelieferte `compose.yaml` bindet `/var/run/docker.sock` ein. DocOfHome selbst verwendet dafür ausschließlich lesende `GET`-Anfragen. Der Zugriff auf einen Docker-Socket ist grundsätzlich privilegiert; die Installation sollte deshalb nur in einem vertrauenswürdigen lokalen Umfeld betrieben werden.
+DocOfHome kann mehrere Docker-Hosts getrennt überwachen. Für entfernte Server wird eine eingeschränkte SSH-Verbindung mit einem eigenen Ed25519-Schlüssel und fest geprüftem Server-Fingerabdruck empfohlen. Die bisherige lokale Socket-Verbindung bleibt verfügbar. Direkter Zugriff auf einen Docker-Socket ist grundsätzlich privilegiert.
 
 In **Dienste & Container** anschließend:
 
-1. das UGREEN NAS als Host-Asset auswählen,
-2. den Docker-Socket prüfen,
-3. das gewünschte Aktualisierungsintervall wählen,
-4. **Jetzt aktualisieren** ausführen.
+1. für jeden Server ein Host-Asset auswählen,
+2. SSH-Adresse und Benutzer speichern,
+3. den angezeigten Public Key mit dem erzwungenen Lesebefehl hinterlegen,
+4. den Server-Fingerabdruck extern vergleichen und speichern,
+5. Verbindung testen und den ersten Abgleich starten.
+
+Die vollständige, sicherheitsrelevante Einrichtung einschließlich `authorized_keys` steht in [`docs/DOCKER_SSH_MONITORING.md`](docs/DOCKER_SSH_MONITORING.md).
 
 ## Entwicklung
 
