@@ -42,6 +42,7 @@ from app.models.home_assistant import (
 from app.models.immich import ImmichAssetLink
 from app.models.integration_setting import IntegrationSetting
 from app.models.knowledge import DomainNote, WikiPage
+from app.models.lego import LegoSet
 from app.models.network import (
     NetworkAddress,
     NetworkAddressChange,
@@ -75,6 +76,7 @@ from app.models.work import (
 )
 
 __all__ = [
+    "LegoSet",
     "ApplicationSetting",
     "AuditEvent",
     "Asset",

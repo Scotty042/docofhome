@@ -16,6 +16,7 @@ from app.api.v1 import (
     home_assistant,
     immich,
     knowledge,
+    lego,
     mcp_settings,
     network,
     paperless,
@@ -45,6 +46,7 @@ api_router.include_router(paperless.router)
 api_router.include_router(work.router)
 api_router.include_router(quality.router)
 api_router.include_router(recipes.router)
+api_router.include_router(lego.router)
 api_router.include_router(release.router)
 api_router.include_router(home_assistant.router)
 api_router.include_router(immich.router)

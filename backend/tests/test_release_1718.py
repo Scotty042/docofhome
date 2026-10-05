@@ -83,7 +83,7 @@ def test_mcp_auth_and_tool_inventory_survive_repeated_lifespans(database):
             assert client.post("/mcp", headers=headers, json=request).status_code == 401
             response = client.post(f"/mcp/{token}", headers=headers, json=request)
             names = {tool["name"] for tool in response.json()["result"]["tools"]}
-            assert len(names) == 36
+            assert len(names) == 41
             assert {"search_recipes", "save_recipe", "get_recipe", "delete_recipe"} <= names
             McpSettingsService(session).update(McpSettingsWrite(enabled=True, permission="read"))
             denied = client.post(

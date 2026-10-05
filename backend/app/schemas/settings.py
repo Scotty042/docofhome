@@ -37,6 +37,7 @@ class ModuleKey(StrEnum):
     IMAGES = "images"
     DOCUMENTS = "documents"
     WORKLOADS = "workloads"
+    LEGO = "lego"
 
 
 class ThemePreference(StrEnum):

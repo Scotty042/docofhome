@@ -2,6 +2,30 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.7.20 – 2026-10-05
+
+### LEGO-Sammlung
+
+- Eigenständige Bildübersicht mit Suche, Themenwelt-, Lagerort- und Aufbaustatusfiltern.
+- Dashboard: Anzahl Sets, Kaufkosten in EUR und Teilezahl; fehlende Angaben separat sichtbar. Kennzahlen gelten unabhängig von Filtern für die gesamte Sammlung.
+- Ein Eintrag pro Setnummer; 10305 und 10305-1 sind identisch. Manuelles Erfassen und Bearbeiten einschließlich Fotos, Zustand, Vollständigkeit, Karton, Anleitung und Kaufdaten.
+- Optionale Breite, Tiefe und Höhe des aufgebauten Modells in cm, Maßhinweis, Quellen-URL und Recherchedatum. Keine Einzelsteinverwaltung und keine automatischen Katalogabrufe.
+- Fünf neue MCP-Werkzeuge: search_lego_sets, get_lego_set, save_lego_set, get_lego_dashboard, delete_lego_set. Änderungen über MCP erhalten nicht übergebene Felder; bestehende Berechtigungen gelten. Insgesamt 41 Werkzeuge.
+- Menü ein-/ausblendbar; vollständige Moduldeaktivierung ebenfalls möglich. Anleitung im Handbuch und unter docs/LEGO_COLLECTION.md.
+- LEGO-Daten in Backup/Restore und JSON-/CSV-Export/Import. Import erkennt Setnummer-Dubletten auch bei anderer ID.
+- Warnung bei ungespeicherten Änderungen, sticky Speicherleiste im Editor.
+- Migration `0059` legt die Sammlung an und ergänzt LEGO im bestehenden Menü, ohne andere Modulentscheidungen zu ändern.
+
+### Update
+
+Vollständiges Datenbackup erstellen, anschließend Image aus diesem Quellpaket bauen. Die Migration läuft beim Start. Das bestehende Dashboard und die Docker-/SSH-Funktionen aus 1.7.19 bleiben enthalten. Online-Recherche erfolgt über den verbundenen Assistenten mit anschließendem MCP-Schreibzugriff; alle Angaben bleiben manuell bearbeitbar.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.7.20","base_version":"1.7.19","built_on":"2026-10-05","alembic_head":"0059","database_migration_required":true,"backup_format_version":2,"full_quality_gate_passed":false}
+```
+
 ## 1.7.19 – 2026-09-17
 
 ### Kurzüberblick

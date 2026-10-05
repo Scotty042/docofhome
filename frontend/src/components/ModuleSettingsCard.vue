@@ -12,6 +12,7 @@ const props = defineProps<{ modelValue?: ModuleKey[], mainMenuValue?: ModuleKey[
 const emit = defineEmits<{ 'update:modelValue': [value: ModuleKey[]], 'update:mainMenuValue': [value: ModuleKey[]] }>()
 
 const modules: ModuleOption[] = [
+  { key: 'lego', title: 'LEGO-Sammlung', icon: 'mdi-toy-brick-outline', description: 'Sets mit Kaufkosten, Teilezahlen, Lagerorten und optionalen Modellmaßen verwalten.' },
   {
     key: 'locations',
     title: 'Bereiche & Räume',

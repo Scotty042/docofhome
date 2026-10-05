@@ -16,6 +16,7 @@ DocOfHome verbindet technische Dokumentation, Verbrauchsdaten, Wartungen, Wissen
 - **Verbrauch** – Zählerstände, Ableseerinnerungen und Monats- oder Jahresvergleiche für Strom, Wasser, Gas und PV verwalten.
 - **Wartung & Aufgaben** – wiederkehrende Tätigkeiten, Termine, Historien, Fälligkeiten, Messwerte und Kosten erfassen.
 - **Kochbuch** – eigene Rezepte mit Zutaten, Portionen, Arbeitsschritten, Druckansicht und Kochmodus verwalten.
+- **LEGO-Sammlung** – Sets anhand ihrer Nummer inventarisieren; Bilddashboard, Kaufkosten, Teilezahlen, Lagerorte und optionale Modellmaße. Manuell oder per MCP erfassen; Anleitung in [LEGO_COLLECTION.md](docs/LEGO_COLLECTION.md).
 - **Bilder & Dokumente** – Dateien und Fotos mit Geräten, Räumen, Wartungen und Ereignissen verknüpfen.
 - **Dienste & Container** – selbst gehostete Dienste und Docker-Container einschließlich Status, Images, Ports, Netzwerken und Mounts dokumentieren.
 - **Wiki, Handbuch & Glossar** – eigenes Wissen sammeln und Funktionen sowie Fachbegriffe direkt in der Anwendung nachschlagen.

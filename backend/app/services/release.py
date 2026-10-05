@@ -52,6 +52,7 @@ from app.models.home_assistant import (
 )
 from app.models.immich import ImmichAssetLink
 from app.models.knowledge import DomainNote, WikiPage
+from app.models.lego import LegoSet
 from app.models.network import (
     NetworkAddress,
     NetworkAddressChange,
@@ -85,6 +86,7 @@ from app.repositories.asset_engine import AssetRepository
 from app.repositories.network import NetworkRepository
 from app.schemas.asset_engine import AssetWrite
 from app.schemas.consumption import ConsumptionMeterWrite
+from app.schemas.lego import LegoSetWrite
 from app.schemas.release import (
     AuditEventRead,
     DashboardCardSetting,
@@ -568,6 +570,7 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("dashboard_settings", DashboardSetting, True),
     ("service_workloads", ServiceWorkload, True),
     ("recipes", Recipe, True),
+    ("lego_sets", LegoSet, True),
     ("electrical_asset_placements", ElectricalAssetPlacement, True),
     ("electrical_cabinet_components", ElectricalCabinetComponent, True),
     ("electrical_meter_placements", ElectricalMeterPlacement, True),
@@ -1012,6 +1015,21 @@ class PortabilityService:
         raise ReleaseNotFoundError("Das Importmodul wurde nicht gefunden")
 
     def _existing(self, model: type[SQLModel], row: dict[str, object]) -> SQLModel | None:
+        if model is LegoSet:
+            values = dict(row)
+            for key in ("theme", "storage_note", "condition", "seller", "dimensions_note", "notes"):
+                if values.get(key) is None:
+                    values[key] = ""
+            try:
+                normalized = LegoSetWrite.model_validate(values)
+            except ValidationError as exc:
+                raise ReleaseValidationError(f"LEGO-Set: {exc.errors()[0]['msg']}") from exc
+            row.update(normalized.model_dump())
+            existing_set = self.session.exec(
+                select(LegoSet).where(LegoSet.set_number == normalized.set_number)
+            ).first()
+            if existing_set is not None:
+                return existing_set
         mapper = sa_inspect(model)
         names = [column.key for column in mapper.primary_key]
         if not names or any(name not in row for name in names):

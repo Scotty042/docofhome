@@ -38,6 +38,7 @@ from app.schemas.knowledge import (
     WikiPageCreate,
     WikiPageUpdate,
 )
+from app.schemas.lego import LegoSetWrite
 from app.schemas.mcp import McpPermission
 from app.schemas.network import (
     NetworkAddressWrite,
@@ -68,6 +69,7 @@ from app.services.asset_engine import (
 )
 from app.services.consumption import ConsumptionService
 from app.services.knowledge import NoteService, WikiService
+from app.services.lego import LegoService
 from app.services.mcp_settings import McpSettingsService
 from app.services.network import NetworkService
 from app.services.work import WorkConflictError, WorkService
@@ -536,6 +538,75 @@ def delete_subject(subject_id: str) -> dict[str, str]:
 
 
 # Knowledge and cookbook
+@mcp_server.tool()
+def search_lego_sets(
+    query: str = "", set_number: str | None = None, offset: int = 0, limit: int = 100
+) -> dict[str, Any]:
+    """Sucht LEGO-Sets. Exakte Dublettenprüfung über set_number.
+
+    Bei has_more mit next_offset weiterlesen.
+    """
+    if offset < 0 or not 1 <= limit <= 100:
+        raise ValueError("offset muss >= 0 und limit zwischen 1 und 100 sein")
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        return LegoService(session).search(query, set_number, offset, limit)
+
+
+@mcp_server.tool()
+def get_lego_set(set_id: str) -> dict[str, Any]:
+    """Liest ein LEGO-Set einschließlich Kaufdaten, Quelle, Lagerort und Modellmaßen in cm."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        service = LegoService(session)
+        return service.read(service.get(_uuid(set_id, "set_id"))).model_dump(mode="json")
+
+
+@mcp_server.tool()
+def save_lego_set(data: dict[str, Any], set_id: str | None = None) -> dict[str, Any]:
+    """Legt ein Set an oder ändert gezielt übergebene Felder eines bestehenden Sets.
+
+    Neu: set_number und name erforderlich. Optionale Felder: theme, release_year,
+    parts_count, image_url (HTTPS), location_id, storage_note, condition,
+    build_status (built/disassembled/sealed), complete, box_present,
+    instructions_present, purchase_date (YYYY-MM-DD), purchase_price (EUR), seller,
+    width_cm, depth_cm, height_cm, dimensions_note, source_url, researched_at, notes.
+    Online-Daten vorher recherchieren, Quelle und Datum übergeben. Keine Preise
+    schätzen. Vor Anlegen search_lego_sets(set_number=...) aufrufen. Bei Änderungen
+    bleiben nicht übergebene Felder erhalten; null löscht optionale Angaben.
+    """
+    unknown = set(data) - LegoSetWrite.model_fields.keys()
+    if unknown:
+        raise ValueError(f"Unbekannte LEGO-Felder: {', '.join(sorted(unknown))}")
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        service = LegoService(session)
+        parsed_id = _uuid(set_id, "set_id") if set_id else None
+        previous = service.get(parsed_id).model_dump() if parsed_id else {}
+        payload = LegoSetWrite.model_validate({**previous, **data})
+        return {
+            "item": service.save(payload, parsed_id).model_dump(mode="json"),
+            "created": parsed_id is None,
+        }
+
+
+@mcp_server.tool()
+def get_lego_dashboard() -> dict[str, Any]:
+    """Liefert Zahl der Sets, Kaufkostensumme in EUR, Teilezahl und fehlende Angaben."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        return LegoService(session).dashboard().model_dump(mode="json")
+
+
+@mcp_server.tool()
+def delete_lego_set(set_id: str) -> dict[str, Any]:
+    """Löscht ein LEGO-Set; benötigt admin."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.ADMIN)
+        LegoService(session).delete(_uuid(set_id, "set_id"))
+        return {"status": "deleted", "set_id": set_id}
+
+
 @mcp_server.tool()
 def search_recipes(
     query: str | None = None,
@@ -1095,6 +1166,11 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         delete_activity,
         delete_subject,
         search_recipes,
+        search_lego_sets,
+        get_lego_set,
+        save_lego_set,
+        get_lego_dashboard,
+        delete_lego_set,
         get_recipe,
         save_recipe,
         delete_recipe,

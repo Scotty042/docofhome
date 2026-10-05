@@ -25,6 +25,7 @@ describe('static handbook and glossary content', () => {
       expect(terms.has(term), term).toBe(true)
     }
     expect(handbookSections.map((section) => section.id)).toEqual([
+      'lego-sammlung',
       'einstieg',
       'assets-und-produkte',
       'elektro',

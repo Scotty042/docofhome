@@ -1,6 +1,53 @@
 # DocOfHome – aktueller Audit- und Qualitätsstatus
 
-Stand: 17. September 2026 · Release: 1.7.19 · Alembic-Head: `0058`
+Stand: 5. Oktober 2026 · Release: 1.7.20 · Alembic-Head: `0059`
+
+## Ergänzung 1.7.20
+
+Basis ist der unveränderte Quellstand 1.7.19 mit SHA256
+`339880ec0964b451ca188da5cc4fa08d97502fccf34369086d16487b5a8c40c2`.
+Neu ist die LEGO-Sammlung. Alle bestehenden Quelldateien bleiben im Paket;
+Manifest und Prüfsumme weisen Ergänzungen und Änderungen einzeln aus.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Gezielte LEGO-/MCP-/Backup-/Docker-/Migrationstests | 28 bestanden |
+| Backend-Gesamtlauf | 301 bestanden, 29 fehlgeschlagen, 64 Warnungen (330 Tests) |
+| Frontend-Gesamtlauf | 197 bestanden in 61 Dateien |
+| Vue-/TypeScript-Typprüfung | bestanden |
+| Frontend-Produktionsbuild | bestanden; bekannte Bundlegrößenwarnung bleibt |
+| Icon-Prüfung | 271 Icons verfügbar |
+| Release-/Versions-/Branding-/Migrationsskripte | 38 bestanden |
+| TypeScript-/Vue-Syntaxprüfung | 206 Skripteinheiten bestanden |
+| Neue LEGO-Dateien: Ruff | bestanden |
+| Ruff gesamt | 103 bestehende Meldungen |
+| Mypy gesamt | 60 bestehende Meldungen in 15 Dateien, keine LEGO-Meldungen |
+| Frische Datenbankmigration bis 0059 | bestanden |
+| 0058 → 0059 → 0058 → 0059 mit vorhandenen Menüentscheidungen | bestanden |
+| Schemaabgleich | bekannte Altabweichungen; keine LEGO-/Docker-Abweichung |
+| Docker-Image-Build | lokal kein Docker verfügbar, nicht ausgeführt |
+
+Die 29 fehlgeschlagenen Tests wurden anhand ihrer Namen mit dem gespeicherten
+1.7.19-Gesamtlauf verglichen: kein neuer Fehler. Der seinerzeit zusätzlich
+datumsabhängig fehlgeschlagene Monatsregeltest besteht am 5. Oktober.
+Die vollständige Qualitätsprüfung ist damit weiterhin nicht grün. Die alten
+Elektro-, Netzwerk-, Integrations- und Downgradefehler wurden nicht übersprungen.
+
+Die neuen Backendtests prüfen normalisierte eindeutige Setnummern, exakte
+Preiswerte, unbekannte gegenüber bekannten Nullwerten, ungültige Eingaben,
+vollständige Seitennavigation, REST-Erstellen/Ändern/Löschen, echte MCP-Aufrufe
+über Bearer und Tokenpfad, Schreibschutz und Erhalt nicht übergebener Felder.
+JSON- und CSV-Roundtrips, Setnummerkonflikte bei anderer ID sowie vollständige
+Sicherung/Wiederherstellung einschließlich lokalem Bild wurden ausgeführt.
+Die Oberflächentests führen das tatsächliche Seitenskript mit Vue-Reaktivität
+aus und prüfen Filter, unbekannte Werte und Schutz vor ungespeicherten Änderungen.
+Dies ist kein Browser-End-to-End-Test.
+
+Online-Kataloge werden von DocOfHome nicht automatisch abgefragt. Ein verbundener
+Assistent kann recherchierte Angaben über MCP mit Quelle und Datum eintragen.
+Verfügbarkeit und Verlässlichkeit der externen Angaben wurden hier nicht geprüft.
+Es wurde keine produktive Installation geändert und kein GitHub-Release erstellt.
+Der geprüfte Quellstand ist vor dem Einsatz im Ziel-Dockerimage zu testen.
 
 ## Ergänzung 1.7.19
 

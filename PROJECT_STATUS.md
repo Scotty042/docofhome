@@ -1,12 +1,14 @@
 # DocOfHome – Projektstatus
 
-Stand: 17. September 2026  
-Release: **1.7.19**  
-Alembic-Head: **`0058`**
+Stand: 5. Oktober 2026  
+Release: **1.7.20**  
+Alembic-Head: **`0059`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar und können unabhängig im Hauptmenü ein- oder ausgeblendet werden.
 
 ## Aktueller technischer Stand
+
+- LEGO-Sammlung mit Bilddashboard, Kaufkosten/Teilezahlen, manueller Bearbeitung, Modellmaßen und fünf MCP-Werkzeugen;
 
 - zentrale Versions- und Implementierungshistorie in `PROJECT_HISTORY.md`;
 - FastAPI/SQLModel/Alembic-Backend und Vue/Vuetify-Frontend;

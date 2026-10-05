@@ -41,6 +41,7 @@ const moreOpen = computed({
 const setupLayout = computed(() => route.meta.setupLayout === true)
 const installationName = computed(() => settings.configuration?.installation_name ?? APP_NAME)
 const moduleNavigation: ModuleNavigationItem[] = [
+  { key: 'lego', title: 'LEGO-Sammlung', icon: 'mdi-toy-brick-outline', to: '/lego' },
   { key: 'locations', title: 'Bereiche & Räume', icon: 'mdi-home-floor-0', to: '/locations' },
   { key: 'electrical', title: 'Elektro', icon: 'mdi-flash', to: '/electrical' },
   { key: 'assets', title: 'Assets', icon: 'mdi-devices', to: '/assets' },

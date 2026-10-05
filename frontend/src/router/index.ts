@@ -11,6 +11,7 @@ import DataManagementPage from '../pages/DataManagementPage.vue'
 import DocumentsPage from '../pages/DocumentsPage.vue'
 import ConsumptionPage from '../pages/ConsumptionPage.vue'
 import CookbookPage from '../pages/CookbookPage.vue'
+import LegoPage from '../pages/LegoPage.vue'
 import ImmichGalleryPage from '../pages/ImmichGalleryPage.vue'
 import GuidedSetupPage from '../pages/GuidedSetupPage.vue'
 import MasterDataPage from '../pages/MasterDataPage.vue'
@@ -34,6 +35,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'dashboard', component: DashboardPage },
+    { path: '/lego', name: 'lego', component: LegoPage },
     ...locationRoutes,
     ...electricalRoutes,
     { path: '/assets', name: 'assets', component: AssetListPage },
@@ -78,6 +80,7 @@ router.beforeEach(async (to) => {
     if (setupRedirect !== true) return setupRedirect
     if (!settings.configuration) await settings.fetchConfiguration()
     const routeModules: Array<[string, string]> = [
+      ['/lego', 'lego'],
       ['/locations', 'locations'], ['/electrical', 'electrical'], ['/assets', 'assets'],
       ['/master-data', 'master_data'], ['/network', 'network'], ['/smart-home', 'smart_home'],
       ['/consumption', 'consumption'], ['/maintenance', 'maintenance'], ['/quality', 'quality'],

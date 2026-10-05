@@ -87,6 +87,15 @@ export const handbookCategories: HandbookCategory[] = [
 
 export const handbookSections: HandbookSection[] = [
   {
+    id: 'lego-sammlung', title: 'LEGO-Sammlung', category: 'assets',
+    introduction: 'Ein Set pro Setnummer, mit Bildübersicht, Lagerort und optionalen Modellmaßen. Einzelne Steine werden nicht verwaltet.',
+    entries: [
+      { id: 'lego-erfassen', term: 'LEGO-Set erfassen und bearbeiten', aliases: ['Setnummer', 'LEGO'], category: 'assets', summary: 'Sets manuell oder über MCP erfassen.', details: 'Unter LEGO-Sammlung → Set erfassen sind Setnummer und Name erforderlich. 10305 und 10305-1 gelten als dasselbe Set; doppelte Nummern werden abgewiesen. Bild, Themenwelt, Jahr, Teilezahl, Lagerort, Zustand, Aufbaustatus, Vollständigkeit, Karton, Anleitung, Kaufdatum, Kaufpreis in EUR, Händler und Notizen sind optional. Bild-Upload, URL, Immich und vorhandene Bildsuche nutzen die bestehende Bildfunktion. Bearbeiten ändert alle Angaben manuell. Ungespeicherte Änderungen lösen beim Schließen und Verlassen eine Warnung aus. Ausblenden im Hauptmenü oder vollständiges Deaktivieren erfolgt unter Einstellungen → Module; Daten bleiben erhalten.', related: ['Standort', 'Backup'] },
+      { id: 'lego-dashboard', term: 'LEGO-Dashboard', category: 'assets', summary: 'Sets, Kaufkosten und enthaltene Teile im Überblick.', details: 'Die drei Kennzahlen beziehen sich immer auf die gesamte Sammlung, auch bei aktiven Filtern. Kaufkosten sind tatsächlich erfasste Kaufpreise in EUR, keine aktuellen Sammlerwerte. Teilezahl ist die Summe der Set-Teilezahlen, kein Einzelsteinbestand. Fehlende Preise und Teilezahlen werden separat angezeigt; 0 ist ein bekannter Wert. Suche und Filter grenzen Bildkarten nach Name, Setnummer, Themenwelt, Lagerort oder Aufbaustatus ein.' },
+      { id: 'lego-masse-mcp', term: 'LEGO-Modellmaße und MCP', category: 'assets', summary: 'Online recherchierte Angaben mit Quelle speichern.', details: 'Breite, Tiefe und Höhe des aufgebauten Modells werden optional in Zentimetern gespeichert; keine Verpackungsmaße. Hinweise wie ausgeklappte Flügel gehören in den Maßhinweis. Unbekannte Werte leer lassen. ChatGPT kann Daten online recherchieren und über MCP eintragen; DocOfHome führt keine automatische externe Katalogabfrage aus. Quelle (URL) und Recherchedatum mitgeben. Vor Anlegen search_lego_sets mit set_number aufrufen. get_lego_set liest Details; save_lego_set nimmt data und optional set_id entgegen. Bei Änderung bleiben nicht übergebene Felder erhalten. get_lego_dashboard liefert Summen. Lesen benötigt read, Schreiben write, delete_lego_set admin. Die Laufzeit bietet 41 Werkzeuge. LEGO-Daten sind in Datenbanksicherung und JSON-/CSV-Export/Import enthalten; lokale Bilder benötigen ein vollständiges Backup.', example: '„Prüfe Set 10305 auf Dubletten, recherchiere Name, Teilezahl und Modellmaße und trage es mit Quellenangabe ein. Kaufpreis unbekannt lassen.“' }
+    ]
+  },
+  {
     id: 'einstieg',
     title: 'Einstieg',
     category: 'entry',

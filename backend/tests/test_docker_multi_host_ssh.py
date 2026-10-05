@@ -165,7 +165,7 @@ def test_migration_copies_legacy_socket_configuration(tmp_path, monkeypatch):
             "FROM docker_hosts"
         ).fetchone()
         assert row == ("socket", "/custom/docker.sock", asset_id, 60)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0058",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0059",)
 
 
 def test_forced_command_only_returns_docker_snapshot(monkeypatch, capsys):
