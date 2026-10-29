@@ -12,6 +12,7 @@ import DocumentsPage from '../pages/DocumentsPage.vue'
 import ConsumptionPage from '../pages/ConsumptionPage.vue'
 import CookbookPage from '../pages/CookbookPage.vue'
 import LegoPage from '../pages/LegoPage.vue'
+import NotificationSettingsPage from '../pages/NotificationSettingsPage.vue'
 import ImmichGalleryPage from '../pages/ImmichGalleryPage.vue'
 import GuidedSetupPage from '../pages/GuidedSetupPage.vue'
 import MasterDataPage from '../pages/MasterDataPage.vue'
@@ -68,7 +69,8 @@ const router = createRouter({
       component: ServiceUnavailablePage,
       meta: { setupLayout: true }
     },
-    { path: '/settings', name: 'settings', component: SettingsPage }
+    { path: '/settings', name: 'settings', component: SettingsPage },
+    { path: '/settings/notifications', name: 'notification-settings', component: NotificationSettingsPage }
   ]
 })
 

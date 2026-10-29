@@ -1,12 +1,14 @@
 # DocOfHome – Projektstatus
 
-Stand: 5. Oktober 2026  
-Release: **1.7.20**  
-Alembic-Head: **`0059`**
+Stand: 29. Oktober 2026  
+Release: **1.8.0**  
+Alembic-Head: **`0060`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar und können unabhängig im Hauptmenü ein- oder ausgeblendet werden.
 
 ## Aktueller technischer Stand
+
+- optionale tägliche Push-Erinnerungen über Pushover und ntfy mit Testversand, Kategorien und dauerhaftem Versandstatus;
 
 - LEGO-Sammlung mit Bilddashboard, Kaufkosten/Teilezahlen, manueller Bearbeitung, Modellmaßen und fünf MCP-Werkzeugen;
 

@@ -62,6 +62,7 @@ from app.models.network import (
     NetworkObservedAddress,
     NetworkSegment,
 )
+from app.models.notifications import PushDelivery
 from app.models.quality import QualityIssue, QualityRun
 from app.models.recipe import Recipe
 from app.models.release import (
@@ -571,6 +572,7 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("service_workloads", ServiceWorkload, True),
     ("recipes", Recipe, True),
     ("lego_sets", LegoSet, True),
+    ("push_deliveries", PushDelivery, False),
     ("electrical_asset_placements", ElectricalAssetPlacement, True),
     ("electrical_cabinet_components", ElectricalCabinetComponent, True),
     ("electrical_meter_placements", ElectricalMeterPlacement, True),

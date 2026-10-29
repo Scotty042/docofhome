@@ -270,6 +270,7 @@ async function testIntegration(kind: IntegrationKind) {
   <v-container class="settings-container pa-4 pa-sm-6" fluid>
     <div class="mb-6">
       <h1>Einstellungen</h1>
+      <v-btn to="/settings/notifications" prepend-icon="mdi-bell-outline" variant="tonal" class="my-3">Push-Benachrichtigungen</v-btn>
       <p class="text-medium-emphasis">
         Passe Darstellung, sichtbare Module und optionale Verbindungen deiner lokalen Installation an.
       </p>

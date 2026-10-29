@@ -1,6 +1,65 @@
 # DocOfHome – aktueller Audit- und Qualitätsstatus
 
-Stand: 5. Oktober 2026 · Release: 1.7.20 · Alembic-Head: `0059`
+Stand: 29. Oktober 2026 · Release: 1.8.0 · Alembic-Head: `0060`
+
+## Ergänzung 1.8.0
+
+Basis ist der ausgelieferte und vom Nutzer installierte Stand 1.7.20, SHA256
+`5458e47103b27fa1711122fcb344c4936dcb2d6514097eeb6e494706d1e40c95`.
+Der Paketbau prüft jeden Basispfad gegen dessen vorhandenes Dateimanifest.
+Keine vorhandene Quelldatei wird entfernt. Es wurde keine produktive Installation
+geändert und kein GitHub-Release veröffentlicht.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Gezielte Push-/LEGO-/MCP-/Backup-/Docker-/Migrationstests | 46 bestanden |
+| Backend-Gesamtlauf | 318 bestanden, 30 fehlgeschlagen, 67 Warnungen (348 Tests) |
+| Frontend-Gesamttests | 202 bestanden in 62 Dateien |
+| Vue-/TypeScript-Typprüfung | bestanden |
+| Frontend-Produktionsbuild | bestanden; bestehende Bundlegrößenwarnung |
+| Icon-Prüfung | 274 Icons verfügbar |
+| Release-/Versions-/Branding-/Migrationsskripte | 38 bestanden |
+| TypeScript-/Vue-Syntaxprüfung | 210 Skripteinheiten bestanden |
+| Neue Push-Dateien: Ruff | bestanden |
+| Ruff gesamt | 103 bestehende Meldungen |
+| Mypy gesamt | 60 bestehende Meldungen in 15 Dateien; keine neuen Push-Meldungen |
+| Frische Migration bis 0060 und 0059 → 0060 → 0059 → 0060 | bestanden |
+| Schemaabgleich | bestehende Altabweichungen, keine Push-Abweichung |
+| Docker-Image-Build und reale Smartphonezustellung | lokal nicht verfügbar, nicht ausgeführt |
+
+Die Push-Tests verwenden die tatsächlichen HTTP-Clients mit isolierten
+Serverantworten: Pushover-Formulardaten, ntfy-JSON und Bearer-Token, Unicode,
+Entwurfstest ohne Speichern, tägliche Zusammenfassung für beide Dienste,
+persistente Dublettenvermeidung über mehrere Sitzungen, abgelaufene Versandclaims,
+unabhängige Fehler und maximal drei Versuche, Sommer-/Winterzeit, begrenzte
+Nachrichtenlänge, ungültige Antworten und unterbundene Redirects.
+
+Die Auswahl prüft bestehende monatliche Ableseregeln einschließlich erledigter
+Ablesung, getrennte Kategorien, Ausschluss erledigter/archivierter Einträge und
+keine doppelte Meldung automatisch erzeugter Zähleraufgaben. Backup und Restore
+erhalten Konfiguration, Schlüssel und Versandmarker. Datenexporte enthalten weder
+Schlüssel noch private Topics; auch Audit-Ereignisse maskieren geheime Systemwerte.
+Diese Maskierung wurde beim neuen Exporttest ergänzt. Validierungsantworten der
+neuen Einstellungs-API enthalten keine geheimen Eingabewerte.
+
+Die neuen Oberflächentests führen das echte Seitenskript mit Vue-Reaktivität und
+isolierten Antworten aus. Sie prüfen Entwurfstest, Speichern, Entfernen von
+Schlüsseln, fehlerhaftes Speichern, Verwerfen und Schutz beim Verlassen/Neuladen.
+Dies ersetzt keinen Browser-End-to-End-Test.
+
+Automatischer Versand ist nach dem Update standardmäßig ausgeschaltet. Es wurden
+keine echten Pushover-/ntfy-Nachrichten gesendet und keine Benutzerzugangsdaten
+verwendet. Die Einrichtung erfordert einen Test des Empfangs auf dem eigenen
+Smartphone. Ein angenommener API-Aufruf bestätigt keine Geräte-Zustellung; bei
+unklarem Netzwerkergebnis ist trotz Versandmarkern eine Wiederholung möglich.
+
+Die vollständige Qualitätsprüfung bleibt wegen der dokumentierten Altfehler
+nicht grün. Die Protokolle liegen neben dem Paket unter validation-1.8.0.
+Die Fehlernamen wurden mit den gespeicherten Läufen verglichen: Gegenüber
+1.7.20 kommt ausschließlich der bereits in 1.7.19 dokumentierte datumsabhängige
+Monatsregeltest hinzu. Er erwartet fest den 15. des aktuellen Monats, der am
+29. Oktober bereits vergangen ist. Gegenüber der Fehlerliste von 1.7.19 gibt
+es keinen neuen Fehlernamen. Die übrigen 29 Altfehler bleiben unverändert.
 
 ## Ergänzung 1.7.20
 

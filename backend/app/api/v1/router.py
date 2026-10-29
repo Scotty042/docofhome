@@ -19,6 +19,7 @@ from app.api.v1 import (
     lego,
     mcp_settings,
     network,
+    notifications,
     paperless,
     quality,
     recipes,
@@ -36,6 +37,7 @@ api_router.include_router(health.router)
 api_router.include_router(system.router)
 api_router.include_router(settings.router)
 api_router.include_router(mcp_settings.router)
+api_router.include_router(notifications.router)
 api_router.include_router(backups.router)
 api_router.include_router(documents.router)
 api_router.include_router(document_links.router)

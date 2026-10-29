@@ -8,6 +8,8 @@ from sqlalchemy import CheckConstraint, Index, Text, event, inspect, text
 from sqlalchemy.orm import Session as OrmSession
 from sqlmodel import Field, SQLModel
 
+from app.models.system_setting import SystemSetting
+
 DEFAULT_DASHBOARD_LAYOUT = json.dumps(
     [
         {"id": "documentation", "visible": True},
@@ -227,6 +229,11 @@ def record_audit_events(
             if isinstance(record, DockerSyncSetting) and key in _DOCKER_SETTING_RUNTIME_FIELDS:
                 continue
             if isinstance(record, ServiceWorkload) and key.startswith("docker_"):
+                continue
+            if isinstance(record, SystemSetting) and key == "value" and (
+                record.is_secret or any(state.attrs.is_secret.history.deleted)
+            ):
+                changed[key] = "[redacted]"
                 continue
             if key.casefold() in _SENSITIVE_FIELDS or any(
                 marker in key.casefold() for marker in ("secret", "password", "token")

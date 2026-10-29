@@ -52,6 +52,7 @@ from app.models.network import (
     NetworkObservedAddress,
     NetworkSegment,
 )
+from app.models.notifications import PushDelivery
 from app.models.quality import QualityIssue, QualityRun
 from app.models.recipe import Recipe
 from app.models.release import (
@@ -76,6 +77,7 @@ from app.models.work import (
 )
 
 __all__ = [
+    "PushDelivery",
     "LegoSet",
     "ApplicationSetting",
     "AuditEvent",

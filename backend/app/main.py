@@ -16,6 +16,7 @@ from app.core.settings import settings
 from app.mcp_server import McpHttpDispatcher, create_mcp_runtime
 from app.services.backup_schedule import backup_scheduler_loop
 from app.services.docker_sync_schedule import docker_sync_scheduler_loop
+from app.services.notification_schedule import notification_scheduler_loop
 from app.services.quality_schedule import quality_scheduler_loop
 
 
@@ -29,6 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
     scheduler_task = asyncio.create_task(backup_scheduler_loop())
     quality_task = asyncio.create_task(quality_scheduler_loop())
     docker_task = asyncio.create_task(docker_sync_scheduler_loop())
+    push_task = asyncio.create_task(notification_scheduler_loop())
     try:
         server, transport = create_mcp_runtime()
         async with server.session_manager.run():
@@ -37,12 +39,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
         scheduler_task.cancel()
         quality_task.cancel()
         docker_task.cancel()
+        push_task.cancel()
         with suppress(asyncio.CancelledError):
             await scheduler_task
         with suppress(asyncio.CancelledError):
             await quality_task
         with suppress(asyncio.CancelledError):
             await docker_task
+        with suppress(asyncio.CancelledError):
+            await push_task
 
 
 app = FastAPI(

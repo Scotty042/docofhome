@@ -87,6 +87,14 @@ export const handbookCategories: HandbookCategory[] = [
 
 export const handbookSections: HandbookSection[] = [
   {
+    id: 'push-benachrichtigungen', title: 'Push-Benachrichtigungen', category: 'operations',
+    introduction: 'Pushover und ntfy erinnern optional an Zählerablesungen, Wartungen und Aufgaben.',
+    entries: [
+      { id: 'push-einrichtung', term: 'Push mit Pushover und ntfy', aliases: ['Push', 'Pushover', 'ntfy', 'Benachrichtigung'], category: 'operations', summary: 'Unter Einstellungen → Push-Benachrichtigungen einen oder beide Dienste einrichten.', details: 'Seit 1.8.0 können Pushover (App-Token und User-/Group-Key) und ntfy (Server, Topic und optionaler Access-Token) unabhängig oder gleichzeitig verwendet werden. In der ntfy-App denselben Server und dasselbe Topic abonnieren. Die Testknöpfe senden echte Nachrichten mit den aktuellen Eingaben, speichern aber nicht. Leere Schlüsselfelder behalten gespeicherte Werte bei; Entfernen löscht sie ausdrücklich. Automatischen Versand und die gewünschten Dienste erst nach Prüfung aktivieren und speichern. Bei ntfy private Topics mit Zugriffsschutz verwenden; für iOS-Sofortzustellung die ntfy-Serverdokumentation beachten. Die ausführliche Anleitung steht in docs/PUSH_NOTIFICATIONS.md.' },
+      { id: 'push-versand', term: 'Push-Erinnerungen und Versandstatus', category: 'operations', summary: 'Eine tägliche Zusammenfassung pro Dienst in deiner Installationszeitzone.', details: 'Zählerablesungen, Wartungsarbeiten und Aufgaben/Termine sind getrennt wählbar. Vorlauf 0–31 Tage, Uhrzeit und optionale öffentliche DocOfHome-Adresse einstellen. Ohne offene Einträge kein Versand. Erledigte und archivierte Einträge entfallen. Monatliche Ablesungen und Intervallregeln nutzen die vorhandenen Erinnerungen; automatisch erzeugte Zähleraufgaben werden nicht doppelt gemeldet. Bestätigter Tagesversand wird gespeichert, Fehler bis zu dreimal mit 15 Minuten Abstand versucht. Nach einem Neustart wird der aktuelle Tag nachgeholt. Bei einer unklaren Netzwerkantwort ist eine Wiederholung möglich. Angenommen bedeutet Annahme beim Dienst, nicht Empfang auf dem Handy. Schlüssel und private Topics fehlen in JSON-/CSV-Exporten; vollständige Backups enthalten sie und den Versandverlauf.' }
+    ]
+  },
+  {
     id: 'lego-sammlung', title: 'LEGO-Sammlung', category: 'assets',
     introduction: 'Ein Set pro Setnummer, mit Bildübersicht, Lagerort und optionalen Modellmaßen. Einzelne Steine werden nicht verwaltet.',
     entries: [

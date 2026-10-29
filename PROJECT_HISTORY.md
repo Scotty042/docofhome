@@ -2,6 +2,29 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.8.0 – 2026-10-29
+
+### Push-Benachrichtigungen
+
+- Pushover und ntfy können einzeln oder gleichzeitig für optionale Push-Erinnerungen genutzt werden. Nach dem Update bleibt der automatische Versand ausgeschaltet.
+- Neue Einstellungsseite mit getrennten Kategorien für Zählerablesungen, Wartungen und Aufgaben/Termine, täglicher Uhrzeit, Vorlauf und optionalem Link zu DocOfHome.
+- Testnachrichten verwenden den ungespeicherten Entwurf und gespeicherte Schlüssel, ohne andere Einstellungen zu verändern. Ausdrückliches Entfernen und Ersetzen von Schlüsseln wird unterstützt.
+- Automatischer Versand nutzt bestehende Ablesefenster und Fälligkeiten. Erledigte/archivierte Einträge entfallen, generierte Zähleraufgaben werden nicht doppelt gemeldet.
+- Migration `0060` legt das dauerhafte Versandprotokoll mit eindeutigen Versandmarkern an. Tagesversand pro Dienst/Empfänger, atomare Vergabe, Neustartschutz und maximal drei Versuche mit 15 Minuten Abstand; beide Dienste unabhängig.
+- Schlüssel und Konfiguration einschließlich privatem ntfy-Topic werden nicht über JSON/CSV exportiert. Vollständige Backups enthalten sie und den Versandverlauf. Validierungs- und Anbieterfehler werden ohne geheime Eingabewerte zurückgegeben.
+- Eigene sticky Speicherleiste und Warnung bei ungespeicherten Änderungen. Anleitung im Handbuch sowie docs/PUSH_NOTIFICATIONS.md.
+- Alle LEGO-, MCP-, Docker- und anderen Funktionen aus 1.7.20 bleiben erhalten; weiterhin 41 MCP-Werkzeuge.
+
+### Update und Betrieb
+
+Vollständiges Backup erstellen und das aktualisierte Dockerimage aus diesem Quellpaket bauen. Die Datenbank migriert beim Start auf 0060. Pushover oder ntfy unter Einstellungen → Push-Benachrichtigungen einrichten und eine Testnachricht senden. Der Hintergrundversand prüft jede Minute und sendet nach der gewählten Uhrzeit, sofern offene Erinnerungen existieren. Überfällige Einträge werden täglich erneut aufgenommen. Eine angenommene Nachricht bestätigt keine Zustellung auf dem Smartphone. Bei unklaren Netzwerkantworten sind Wiederholungen möglich. ntfy muss als externer oder eigener Dienst bereits verfügbar sein; DocOfHome installiert keinen weiteren Container.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.8.0","base_version":"1.7.20","built_on":"2026-10-29","alembic_head":"0060","database_migration_required":true,"backup_format_version":2,"full_quality_gate_passed":false}
+```
+
 ## 1.7.20 – 2026-10-05
 
 ### LEGO-Sammlung
