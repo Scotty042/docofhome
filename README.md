@@ -17,6 +17,7 @@ DocOfHome verbindet technische Dokumentation, Verbrauchsdaten, Wartungen, Wissen
 - **Wartung & Aufgaben** – wiederkehrende Tätigkeiten, Termine, Historien, Fälligkeiten, Messwerte und Kosten erfassen.
 - **Kochbuch** – eigene Rezepte mit Zutaten, Portionen, Arbeitsschritten, Druckansicht und Kochmodus verwalten.
 - **LEGO-Sammlung** – Sets anhand ihrer Nummer inventarisieren; Bilddashboard, Kaufkosten, Teilezahlen, Lagerorte und optionale Modellmaße. Manuell oder per MCP erfassen; Anleitung in [LEGO_COLLECTION.md](docs/LEGO_COLLECTION.md).
+- **Filament-Sammlung** – Rollen beliebiger Hersteller, Restmengen, AMS-Belegung, Archiv und Nachkaufliste. Optionale direkte Bambu-Cloud-Anbindung, acht MCP-Werkzeuge und 40 × 30 mm QR-Etiketten; [Anleitung](docs/FILAMENT.md).
 - **Push-Benachrichtigungen** – Optionale tägliche Erinnerungen an Zählerablesungen, Wartungen und Aufgaben über Pushover und/oder ntfy. Einrichtung unter Einstellungen; [Anleitung](docs/PUSH_NOTIFICATIONS.md).
 - **Bilder & Dokumente** – Dateien und Fotos mit Geräten, Räumen, Wartungen und Ereignissen verknüpfen.
 - **Dienste & Container** – selbst gehostete Dienste und Docker-Container einschließlich Status, Images, Ports, Netzwerken und Mounts dokumentieren.

@@ -12,6 +12,7 @@ import DocumentsPage from '../pages/DocumentsPage.vue'
 import ConsumptionPage from '../pages/ConsumptionPage.vue'
 import CookbookPage from '../pages/CookbookPage.vue'
 import LegoPage from '../pages/LegoPage.vue'
+import FilamentPage from '../pages/FilamentPage.vue'
 import NotificationSettingsPage from '../pages/NotificationSettingsPage.vue'
 import ImmichGalleryPage from '../pages/ImmichGalleryPage.vue'
 import GuidedSetupPage from '../pages/GuidedSetupPage.vue'
@@ -37,6 +38,8 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'dashboard', component: DashboardPage },
     { path: '/lego', name: 'lego', component: LegoPage },
+    { path: '/filament', name: 'filament', component: FilamentPage },
+    { path: '/filament/:id', name: 'filament-detail', component: FilamentPage },
     ...locationRoutes,
     ...electricalRoutes,
     { path: '/assets', name: 'assets', component: AssetListPage },
@@ -82,6 +85,7 @@ router.beforeEach(async (to) => {
     if (setupRedirect !== true) return setupRedirect
     if (!settings.configuration) await settings.fetchConfiguration()
     const routeModules: Array<[string, string]> = [
+      ['/filament', 'filament'],
       ['/lego', 'lego'],
       ['/locations', 'locations'], ['/electrical', 'electrical'], ['/assets', 'assets'],
       ['/master-data', 'master_data'], ['/network', 'network'], ['/smart-home', 'smart_home'],

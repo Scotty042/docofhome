@@ -2,6 +2,33 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.9.0 – 2026-10-29
+
+### Filament-Sammlung und Bambu Cloud
+
+- Neue Filament-Sammlung mit Bildkarten, Gesamtbestand, bekannten Restmengen, Nachkaufliste und kombinierbaren Filtern. Alle Hersteller und eigene Materialbezeichnungen können manuell erfasst werden.
+- Zustand eingeschweißt/offen, Lagerort, Farbname, Shop-Farbcode, Restgewicht und Notizen bleiben manuell bearbeitbar. Jede physische Rolle erhält eine stabile Rollen-ID. Gleiche Farbe bedeutet keine Dublette.
+- Direkte optionale Bambu-Cloud-Anmeldung mit Passwort/E-Mail-Code oder vorhandenem Access Token. Passwort und Code werden nicht gespeichert. Automatische Synchronisierung ist zunächst ausgeschaltet; Home Assistant ist nicht erforderlich.
+- Unvollständige Cloud-Seiten werden als Teilbestand gekennzeichnet. Fehlende Cloud-Rollen werden lokal erhalten; archivierte Rollen erscheinen beim Synchronisieren nicht erneut. Eine zusätzliche Cloud-Löschung ist eine eigene ausdrückliche Option beim Archivieren.
+- Optionale AMS-Statusabfrage über TLS-geschütztes Cloud-MQTT für mehrere Drucker. Exakte RFID-/tray_uuid-Zuordnung oder manuelle Bindung; unbekannte Slots werden nicht anhand ihrer Farbe geraten. „Zuletzt erkannt“ beschreibt die AMS-Erkennung und keine nachgewiesene Drucknutzung. Alte Beobachtungen sind sichtbar markiert.
+- Eindeutig passende Bambu-Shop-Farbbilder lassen sich auf Wunsch lokal zwischenspeichern; bei fehlender Zuordnung bleibt ein symbolischer Platzhalter oder ein manuell gewähltes Bild. Keine pauschale Bildübernahme bei jedem Sync.
+- Etiketten für Phomemo M110 mit 40 × 30 mm: PDF mit einer Rolle je Seite, einzelnes JPG oder mehrere JPGs als ZIP. Stabile Rollen-ID, Material, Farbe, Shopcode und QR-Link; keine veränderlichen Restmengen auf dauerhaften Etiketten.
+- Acht zusätzliche MCP-Werkzeuge für Suche, Detailansicht, Anlegen/Ändern, Archivieren/Wiederherstellen, Cloud-/AMS-Status, Synchronisieren, Etiketten und Shopbilder. Beide bisherigen Authentifizierungswege und Berechtigungsstufen bleiben erhalten; insgesamt 49 Werkzeuge.
+- Modul und Menüeintrag sind separat schaltbar. Handbuch, Export/Import und vollständige Backups sind erweitert. Zugangsdaten fehlen im JSON-/CSV-Export; vollständige Backups enthalten sie.
+- Migration `0061` ergänzt Rollen und AMS-Slots und erhält bestehende Modulentscheidungen. Quellbasis ist unverändert 1.8.0; keine vorhandene Quelldatei entfernt.
+
+### Einrichtung und Prüfgrenzen
+
+Vollständiges Backup erstellen, Image neu bauen und starten; die Migration läuft automatisch. Unter Filament → Einstellungen die öffentliche DocOfHome-Adresse für QR-Links und optional die Bambu-Verbindung einrichten. Druckerkennungen sind für MQTT erforderlich. Eine AMS-Abfrage erfolgt höchstens alle fünf Minuten. Die ausführliche Anleitung steht in `docs/FILAMENT.md` und im Handbuch.
+
+Die Bambu-Anbindung verwendet öffentlich untersuchte, nicht als stabil zugesicherte Cloud-Schnittstellen. Lokale Protokoll-, Daten- und MCP-Tests ersetzen keinen Test mit dem tatsächlichen Konto und Drucker. Der lokale Gesamtprüflauf enthält weiterhin bekannte Fehler aus 1.8.0; Details und Ergebnisse stehen in `AUDIT.md`. Es wurde nichts produktiv installiert oder veröffentlicht.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.9.0","base_version":"1.8.0","built_on":"2026-10-29","alembic_head":"0061","database_migration_required":true,"backup_format_version":2,"mcp_tools":49,"full_quality_gate_passed":false}
+```
+
 ## 1.8.0 – 2026-10-29
 
 ### Push-Benachrichtigungen

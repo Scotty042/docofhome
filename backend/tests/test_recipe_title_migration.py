@@ -23,7 +23,7 @@ def test_upgrade_repairs_blank_titles_without_losing_recipe_content(tmp_path, mo
         )
     command.upgrade(config, "head")
     with sqlite3.connect(settings.database_path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0060",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0061",)
         assert connection.execute(
             "SELECT title, ingredients_json, steps_json FROM recipes WHERE id='blank'"
         ).fetchone() == ("Wiederhergestelltes Rezept blank", '["Kartoffeln"]', '["Kochen"]')

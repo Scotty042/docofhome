@@ -34,6 +34,7 @@ from app.models.electrical_circuit import (
 )
 from app.models.electrical_topology import ElectricalConnection
 from app.models.energy import EnergyComponent, EnergyConfiguration
+from app.models.filament import FilamentSlot, FilamentSpool
 from app.models.home_assistant import (
     HomeAssistantAssetLink,
     HomeAssistantEntitySelection,
@@ -77,6 +78,8 @@ from app.models.work import (
 )
 
 __all__ = [
+    "FilamentSpool",
+    "FilamentSlot",
     "PushDelivery",
     "LegoSet",
     "ApplicationSetting",

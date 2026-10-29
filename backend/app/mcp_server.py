@@ -31,6 +31,7 @@ from app.schemas.consumption import (
     ConsumptionNoteWrite,
     ConsumptionReadingWrite,
 )
+from app.schemas.filament import LabelRequest, SpoolWrite
 from app.schemas.knowledge import (
     KnowledgeTargetType,
     NoteCreate,
@@ -68,6 +69,9 @@ from app.services.asset_engine import (
     ProductService,
 )
 from app.services.consumption import ConsumptionService
+from app.services.filament import FilamentService
+from app.services.filament_images import store_image
+from app.services.filament_labels import cached_labels
 from app.services.knowledge import NoteService, WikiService
 from app.services.lego import LegoService
 from app.services.mcp_settings import McpSettingsService
@@ -538,6 +542,142 @@ def delete_subject(subject_id: str) -> dict[str, str]:
 
 
 # Knowledge and cookbook
+@mcp_server.tool()
+def create_filament_labels(spool_ids: list[str], format: str = "pdf") -> dict[str, Any]:
+    """Erzeugt PDF- oder JPG-Etiketten für den Phomemo M110 (40 x 30 mm).
+
+    Mehrere JPGs als ZIP. Liefert einen 24 Stunden gültigen Downloadlink. Benötigt
+    die konfigurierte öffentliche DocOfHome-Adresse für QR-Links. Maximal 100 Rollen.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        request = LabelRequest.model_validate({"ids": spool_ids, "format": format})
+        return cached_labels(session, request)
+
+
+@mcp_server.tool()
+def fetch_filament_store_image(spool_id: str) -> dict[str, Any]:
+    """Sucht ein eindeutig passendes Bambu-Store-Farbbild und speichert es lokal (write).
+
+    Nutzt Shop-/Produktkennung; bei fehlender Eindeutigkeit manuell zuordnen.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        return store_image(session, _uuid(spool_id, "spool_id")).model_dump(mode="json")
+
+
+@mcp_server.tool()
+def search_filament_spools(
+    query: str = "",
+    material: str = "",
+    manufacturer: str = "",
+    condition: str = "",
+    reorder: bool | None = None,
+    archive: str = "active",
+    in_ams: bool | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Sucht Rollen mit kombinierbaren Filtern. archive: active/archived/all.
+
+    Material/Farbe allein sind keine physische Identität. Vor Anlegen nach RFID
+    und Rollen-ID prüfen. Bei has_more mit next_offset weiterlesen.
+    """
+    if offset < 0 or not 1 <= limit <= 100 or archive not in ("active", "archived", "all"):
+        raise ValueError("Ungültige Suche/Seitennavigation")
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        return FilamentService(session).search(
+            query,
+            material=material,
+            manufacturer=manufacturer,
+            condition=condition,
+            reorder=reorder,
+            archive=archive,
+            in_ams=in_ams,
+            offset=offset,
+            limit=limit,
+        )
+
+
+@mcp_server.tool()
+def get_filament_spool(spool_id: str) -> dict[str, Any]:
+    """Liest Rollen-ID, Material, Lagerung, Restmengen, AMS-Quelle und Erkennungszeiten."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        service = FilamentService(session)
+        return service.read(service.get(_uuid(spool_id, "spool_id"))).model_dump(mode="json")
+
+
+@mcp_server.tool()
+def save_filament_spool(data: dict[str, Any], spool_id: str | None = None) -> dict[str, Any]:
+    """Legt eine manuelle Rolle an oder ändert nur übergebene Felder.
+
+    Neu: material erforderlich. Felder: manufacturer, material, variant, color_name,
+    color_hex (#RRGGBB), shop_code, condition (sealed/open), initial_g, remaining_g,
+    remaining_percent, location_id, storage_note, reorder, reorder_note, notes,
+    image_url, rfid. Nicht übergebene Werte bleiben bei Änderungen erhalten.
+    Cloud-ID, Archiv und technische Zuordnungen sind nicht hier veränderbar.
+    """
+    if set(data) - SpoolWrite.model_fields.keys():
+        raise ValueError("Unbekannte Filamentfelder")
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        service = FilamentService(session)
+        parsed = _uuid(spool_id, "spool_id") if spool_id else None
+        previous = (
+            service.get(parsed).model_dump(include=set(SpoolWrite.model_fields)) if parsed else {}
+        )
+        return {
+            "item": service.save(
+                SpoolWrite.model_validate({**previous, **data}), parsed
+            ).model_dump(mode="json"),
+            "created": parsed is None,
+        }
+
+
+@mcp_server.tool()
+def archive_filament_spool(
+    spool_id: str, restore: bool = False, delete_cloud: bool = False
+) -> dict[str, Any]:
+    """Archiviert lokal (admin) oder stellt wieder her.
+
+    Cloud-Löschung nur auf ausdrücklichen Nutzerwunsch.
+
+    delete_cloud=False belässt die Cloud unverändert. Cloud-Identität bleibt erhalten,
+    damit archivierte Rollen beim Sync nicht neu entstehen.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.ADMIN)
+        return FilamentService(session).archive(
+            _uuid(spool_id, "spool_id"), restore=restore, delete_cloud=delete_cloud
+        )
+
+
+@mcp_server.tool()
+def get_filament_status() -> dict[str, Any]:
+    """Liest Cloud-/AMS-Abgleichstatus und beobachtete Slots, ohne Zugangsdaten."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        service = FilamentService(session)
+        return {"settings": service.settings(), "slots": service.slots()}
+
+
+@mcp_server.tool()
+def sync_filament_inventory(refresh_ams: bool = False) -> dict[str, Any]:
+    """Liest Bambu-Bestand und aktualisiert lokale Rollen (write). Optional AMS-MQTT-Status.
+
+    Keine Drucksteuerung und keine Cloud-Schreibvorgänge. AMS höchstens alle fünf Minuten.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        service = FilamentService(session)
+        result = service.sync()
+        if refresh_ams:
+            result["ams"] = service.refresh_mqtt()
+        return result
+
+
 @mcp_server.tool()
 def search_lego_sets(
     query: str = "", set_number: str | None = None, offset: int = 0, limit: int = 100
@@ -1167,6 +1307,14 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         delete_subject,
         search_recipes,
         search_lego_sets,
+        search_filament_spools,
+        get_filament_spool,
+        save_filament_spool,
+        archive_filament_spool,
+        get_filament_status,
+        sync_filament_inventory,
+        create_filament_labels,
+        fetch_filament_store_image,
         get_lego_set,
         save_lego_set,
         get_lego_dashboard,

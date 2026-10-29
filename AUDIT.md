@@ -1,6 +1,67 @@
 # DocOfHome – aktueller Audit- und Qualitätsstatus
 
-Stand: 29. Oktober 2026 · Release: 1.8.0 · Alembic-Head: `0060`
+Stand: 29. Oktober 2026 · Release: 1.9.0 · Alembic-Head: `0061`
+
+## Ergänzung 1.9.0
+
+Exakte Basis ist 1.8.0 mit ZIP-SHA256
+`a7c79b57268b9f8066a2d3959ebf2101e8a022eb625545e29a2b6fe39057a5d9`.
+Alle 715 Basisdateien wurden vor dem Paketbau erneut gegen das Manifest geprüft.
+Keine bestehende Quelldatei entfernt; 15 neue Quelldateien. Keine produktive
+Installation geändert, keine echte Cloud-Anmeldung ausgeführt und kein Release
+auf GitHub veröffentlicht.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Filament/Push/LEGO/MCP/Backup/Docker/Updates gezielt | 59 bestanden, 16 Warnungen |
+| Abschließender Backend-Gesamtlauf | 332 bestanden, 30 fehlgeschlagen, 71 Warnungen; exakt dieselben 30 fehlgeschlagenen Testfälle wie in 1.8.0 |
+| Frontend | 209 Tests in 63 Dateien bestanden |
+| Vue-/TypeScript-Typprüfung | bestanden |
+| Produktionsbuild | bestanden; bestehende Bundlegrößenwarnung |
+| Icons | alle 274 verfügbar |
+| Release-/Branding-/Versions-/Migrationsskripte | 38 bestanden |
+| TypeScript-/Vue-Syntax | 214 Skripteinheiten bestanden |
+| Neue Filament-Dateien: Ruff | bestanden |
+| Ruff gesamt | unverändert 103 bestehende Meldungen |
+| Mypy gesamt | unverändert 60 Meldungen in 15 Dateien; keine neuen Filament-Meldungen |
+| Migration | frische Datenbank bis 0061, 0060 → 0061 → 0060 → 0061 und Erhalt bestehender Modulentscheidungen geprüft |
+| Schemaabgleich | vorhandene Altabweichungen; keine Filament-Abweichung |
+| Etiketten | PDF mit zwei Seiten, physisch 40 × 30 mm; JPG 300 dpi; QR aus JPG und beiden gerenderten PDF-Seiten decodiert; beide PDF-Seiten visuell geprüft |
+| Öffentliche Bambu-Shop-Bildsuche | reales PLA-Basic-Farbbild 10502 eindeutig gefunden und lokal gespeichert |
+| Browser-Sichtprüfung | Produktionsbundle mit isoliertem Testbestand; Übersicht, Editor, sticky Buttons und Abbruch bei ungespeicherten Eingaben geprüft |
+| Docker/Linux/Python 3.13, echtes Bambu-Konto/AMS, physischer M110-Druck | lokal nicht verfügbar bzw. ohne Zugangsdaten; nicht ausgeführt |
+
+Der erste Gesamtlauf enthielt 331 bestandene Tests und 31 Fehler. Davon sind 30
+identisch zum dokumentierten 1.8.0-Lauf. Die zusätzliche LEGO-Testabweichung war
+eine veraltete Erwartung an die Modulliste ohne das neue Filament-Modul; diese
+Erwartung wurde auf den neuen Head aktualisiert und die Upgrade-/Downgrade-Prüfung
+erneut erfolgreich ausgeführt. Der abschließende Gesamtlauf bestätigt 332 bestandene
+Tests und dieselben 30 Altfehler wie in 1.8.0; keine zusätzlichen fehlgeschlagenen
+Testfälle. Die Gesamtprüfung ist wegen der Altfehler weiterhin nicht grün.
+
+Die 14 neuen Backendtests prüfen unter anderem beliebige Hersteller, kombinierte
+Filter und RFID-Suche, lokale Archividentität, unvollständige und wiederholte
+Cloud-Seiten, Login mit Bestätigungscode, genaue Cloud-Löschanfrage, maskierte
+Fehlermeldungen, MQTT-TLS und Status-Topics für mehrere Drucker, exakte RFID-
+Zuordnung, unbekannte/manuelle Slots und Teilmeldungen. Echte MCP-Aufrufe prüfen
+teilweise Änderungen, Schreibschutz, Archiv und Etiketten-Download. JSON-/CSV-
+Übernahme, Dublettenerkennung und vollständige Wiederherstellung werden ebenfalls
+gegen isolierte Datenbanken ausgeführt. Der wiederholte MCP-Lebenszyklustest
+bestätigt 49 registrierte Werkzeuge; Bearer- und Token-Pfad sind weiter abgedeckt.
+
+Die Cloud-/MQTT-Tests verwenden kontrollierte Antworten und Protokoll-Gegenstellen;
+sie bestätigen keinen erfolgreichen Zugriff auf das tatsächliche Konto oder den
+Drucker. Bambu verwendet nicht als stabil zugesicherte Schnittstellen. Die reale
+Einrichtung ist nach Installation zu prüfen. AMS-Erkennung ist kein Nachweis einer
+Drucknutzung, unvollständige Bestände bleiben gekennzeichnet. Lokales Archivieren
+ist unabhängig von einer optionalen Cloud-Löschung; Cloud-Zugangsdaten fehlen in
+JSON/CSV, sind jedoch in vollständigen Backups enthalten.
+
+Lokale Laufzeit: Python 3.12.14 und Node 24.19.0. Die Zielumgebung verlangt Python
+3.13 und nutzt Node 22.16.0. Backend-Entwicklungsabhängigkeiten aus 1.8.0 wurden
+über eine isolierte virtuelle Umgebung wiederverwendet und um reportlab, qrcode,
+paho-mqtt sowie PDF-/QR-Prüfwerkzeuge ergänzt. Das Frontend-Lockfile wurde nur in
+den Versionsfeldern geändert. Prüflogs liegen neben der ZIP unter `validation-1.9.0`.
 
 ## Ergänzung 1.8.0
 

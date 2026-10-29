@@ -256,11 +256,12 @@ def test_migration_keeps_existing_module_choices_and_supports_downgrade(tmp_path
         )
     command.upgrade(config, "head")
     with sqlite3.connect(settings.database_path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0060"
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0061"
         row = connection.execute(
             "SELECT enabled_modules_json,main_menu_modules_json FROM application_settings"
         ).fetchone()
-        assert json.loads(row[0]) == ["assets", "lego"] and json.loads(row[1]) == ["lego"]
+        assert json.loads(row[0]) == ["assets", "lego", "filament"]
+        assert json.loads(row[1]) == ["lego", "filament"]
     command.downgrade(config, "0058")
     with sqlite3.connect(settings.database_path) as connection:
         assert connection.execute(

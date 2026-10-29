@@ -26,7 +26,7 @@ Der Assistent recherchiert Angaben online und kann sie danach über die vorhande
 4. `get_lego_set(set_id="…")`: vollständigen Datensatz lesen. `save_lego_set(set_id="…",data={"storage_note":"Box 3"})` ändert nur angegebene Felder. Andere Daten bleiben erhalten; `null` entfernt optionale Angaben. Vor Änderungen vorhandener Daten die Absicht des Nutzers beachten.
 5. `get_lego_dashboard()`: Kennzahlen. `delete_lego_set(set_id="…")`: löschen.
 
-Lesen benötigt `read`, Speichern `write`, Löschen `admin`. Insgesamt sind 41 Werkzeuge registriert. Bearer-Authentifizierung und `/mcp/<token>` bleiben verfügbar.
+Lesen benötigt `read`, Speichern `write`, Löschen `admin`. Seit 1.9.0 sind insgesamt 49 Werkzeuge registriert. Bearer-Authentifizierung und `/mcp/<token>` bleiben verfügbar.
 
 ## Menü, Sicherung und Änderungen
 

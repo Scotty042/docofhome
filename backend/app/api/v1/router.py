@@ -12,6 +12,7 @@ from app.api.v1 import (
     electrical_circuits,
     electrical_topology,
     energy,
+    filament,
     health,
     home_assistant,
     immich,
@@ -49,6 +50,7 @@ api_router.include_router(work.router)
 api_router.include_router(quality.router)
 api_router.include_router(recipes.router)
 api_router.include_router(lego.router)
+api_router.include_router(filament.router)
 api_router.include_router(release.router)
 api_router.include_router(home_assistant.router)
 api_router.include_router(immich.router)

@@ -12,6 +12,7 @@ const props = defineProps<{ modelValue?: ModuleKey[], mainMenuValue?: ModuleKey[
 const emit = defineEmits<{ 'update:modelValue': [value: ModuleKey[]], 'update:mainMenuValue': [value: ModuleKey[]] }>()
 
 const modules: ModuleOption[] = [
+  { key: 'filament', title: 'Filament-Sammlung', icon: 'mdi-printer-3d-nozzle-outline', description: 'Rollen aller Hersteller, Bambu-Abgleich, AMS-Zuordnung, Archiv und Etiketten verwalten.' },
   { key: 'lego', title: 'LEGO-Sammlung', icon: 'mdi-toy-brick-outline', description: 'Sets mit Kaufkosten, Teilezahlen, Lagerorten und optionalen Modellmaßen verwalten.' },
   {
     key: 'locations',

@@ -45,6 +45,7 @@ from app.models.electrical import (
 from app.models.electrical_circuit import ElectricalCircuit, ElectricalCircuitAssetLink
 from app.models.electrical_topology import ElectricalConnection
 from app.models.energy import EnergyComponent, EnergyConfiguration
+from app.models.filament import FilamentSlot, FilamentSpool
 from app.models.home_assistant import (
     HomeAssistantAssetLink,
     HomeAssistantEntitySelection,
@@ -87,6 +88,7 @@ from app.repositories.asset_engine import AssetRepository
 from app.repositories.network import NetworkRepository
 from app.schemas.asset_engine import AssetWrite
 from app.schemas.consumption import ConsumptionMeterWrite
+from app.schemas.filament import SpoolWrite
 from app.schemas.lego import LegoSetWrite
 from app.schemas.release import (
     AuditEventRead,
@@ -572,6 +574,8 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("service_workloads", ServiceWorkload, True),
     ("recipes", Recipe, True),
     ("lego_sets", LegoSet, True),
+    ("filament_spools", FilamentSpool, True),
+    ("filament_slots", FilamentSlot, True),
     ("push_deliveries", PushDelivery, False),
     ("electrical_asset_placements", ElectricalAssetPlacement, True),
     ("electrical_cabinet_components", ElectricalCabinetComponent, True),
@@ -1017,6 +1021,48 @@ class PortabilityService:
         raise ReleaseNotFoundError("Das Importmodul wurde nicht gefunden")
 
     def _existing(self, model: type[SQLModel], row: dict[str, object]) -> SQLModel | None:
+        if model is FilamentSpool:
+            defaults = SpoolWrite(material=str(row.get("material") or "Unbekannt")).model_dump()
+            try:
+                normalized = SpoolWrite.model_validate(
+                    {
+                        key: row.get(key) if row.get(key) is not None else default
+                        for key, default in defaults.items()
+                    }
+                )
+            except ValidationError as exc:
+                raise ReleaseValidationError(f"Filament: {exc.errors()[0]['msg']}") from exc
+            row.update(normalized.model_dump())
+            for name in (
+                "cloud_account",
+                "cloud_id",
+                "rfid",
+                "printer_serial",
+                "ams_id",
+                "slot_id",
+                "mount_source",
+            ):
+                if row.get(name) == "":
+                    row[name] = None
+            for name in ("cloud_product_code",):
+                if row.get(name) is None:
+                    row[name] = ""
+            label = row.get("label_code")
+            account, cloud_id = row.get("cloud_account"), row.get("cloud_id")
+            statement = select(FilamentSpool).where(FilamentSpool.label_code == label)
+            if account and cloud_id:
+                from sqlalchemy import or_
+
+                statement = select(FilamentSpool).where(
+                    or_(
+                        FilamentSpool.label_code == label,
+                        (col(FilamentSpool.cloud_account) == account)
+                        & (col(FilamentSpool.cloud_id) == cloud_id),
+                    )
+                )
+            existing = self.session.exec(statement).first()
+            if existing is not None:
+                return existing
         if model is LegoSet:
             values = dict(row)
             for key in ("theme", "storage_note", "condition", "seller", "dimensions_note", "notes"):
