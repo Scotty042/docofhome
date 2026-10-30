@@ -1,58 +1,54 @@
-# Design-QA – DocOfHome 1.9.1
+# Design-QA – kompakte Oberfläche 1.9.2
 
-Datum: 30. Oktober 2026. Product Design: Umsetzung der ausdrücklich ausgewählten Variante 1. Gegenstand ist die echte Vue-/Vuetify-Anwendung aus dem bereitgestellten 1.9.0-Quellpaket, keine isolierte Designattrappe.
+Datum: 30. Oktober 2026. Grundlage ist Variante 1 aus 1.9.1. Der Nutzer wünscht ausdrücklich weniger Platzbedarf; die ursprünglichen Abstände und Schriftgrößen sind deshalb kein unveränderlicher Zielwert mehr. Farbwelt, Schriftfamilien, Gliederung und echte Funktionen bleiben bestehen.
 
-## Referenz und Prüfaufbau
+## Aufbau und Referenzen
 
-Ausgewählte Referenz: `docs/design-1.9.1/source-selected.png` (ursprünglich 1487 × 1058). Für den Desktopvergleich proportional auf 1440 × 1024 normalisiert. Tatsächliche Anwendung bei 1440 × 1024, DPR 1; deutscher Sprache und Zeitzone Europa/Berlin im Hauptprüflauf. Vollvergleich: `comparison-desktop.png`; Detailvergleich: `comparison-focus.png` im selben Ordner. Beide Bilder wurden gemeinsam visuell geprüft.
+Zwei getrennte lokale Testversionen mit denselben Ausgangsbeispieldaten: 1.9.1 auf Port 4181, 1.9.2 auf Port 4183. Keine produktiven Daten, Zugangsdaten oder NAS-Verbindungen. Testbackend für 1.9.2 auf Port 4184. Native @Browser-Kontrolle und zuvor genehmigte lokale Playwright-Prüfung verwendet.
 
-Lokaler Test unter 127.0.0.1:4181 mit eigenem FastAPI-Backend auf Port 4182, frischer Datenbank und ausschließlich Beispieldaten. 64 Geräte, Räume, Zähler und Aufgaben sowie Filament- und LEGO-Beispiele. Keine Verbindung zu NAS, produktiver Datenbank oder aktiven Integrationen. Chrome wurde mit frischem temporärem Kontext über Playwright ausgeführt. Der Nutzer hat diesen lokalen Prüfweg ausdrücklich genehmigt, nachdem die @Browser-Steuerung ausfiel.
+Belege in `docs/design-1.9.2/`: `comparison-desktop.png` zeigt 1.9.1 und 1.9.2 nebeneinander bei jeweils 1440 × 1024, DPR 1. `comparison-focus.png` vergleicht die Verbrauchskarten in Originalauflösung. Beide wurden visuell gemeinsam geprüft. Das ursprüngliche Variantenbild und die Prüfung von 1.9.1 bleiben unter `docs/design-1.9.1/` erhalten.
 
-## Vergleich der fünf Gestaltungsebenen
+## Messbarer Platzgewinn
 
-| Ebene | Ergebnis |
+Messwerte aus `density-results.json`, gleiche Desktopgröße und Beispieldaten:
+
+| Bereich | 1.9.1 | 1.9.2 |
+| --- | ---: | ---: |
+| Seitenleiste | 274 px | 240 px |
+| Dashboard-Titel | 56 px | 36 px |
+| Allgemeiner Inventartitel | 44,64 px | 31,68 px |
+| Unterkante der Hauptkarten ab Bildschirmoberkante | 993 px | 761 px |
+| Inventarzeile | 79 px | 55 px |
+| Vollständig sichtbare Inventarzeilen bei Seitengröße 10 | 8 | 10 |
+
+Die Einstellungsseite mit fünf aktivierten Beispielintegrationen benötigt ungefähr 20 % weniger Gesamthöhe. Ihre aktiven Werte wurden ausschließlich über schreibfreie Browser-Antwortfixtures dargestellt. Es wurde keine lokale oder produktive Integration aktiviert und keine Einstellung gespeichert. Die mobilen Modulzeilen ordnen ihre zwei Schalter nebeneinander unterhalb des Beschreibungstextes an. Die mobile Speicherleiste ist auf eine Zeile verkürzt; ihr gespeicherter/ungespeicherter Zustand bleibt über Statussymbol und zugänglichen Statustext erhalten.
+
+## Fünf Gestaltungsebenen
+
+| Ebene | Prüfung |
 | --- | --- |
-| Aufbau und Navigation | Salbeifarbene 274-px-Seitenleiste, Suchleiste, große Einleitung, Kennzahlen und zweispaltige Hauptkarten entsprechen der ausgewählten Richtung. Zusätzliche vorhandene Module bleiben erreichbar. |
-| Typografie | Serifentitel und Zahlenhierarchie, Source Sans 3 für Bedienung/Inhalte; Schriftdateien lokal ausgeliefert. Keine externen Schriftabrufe. |
-| Farben und Oberflächen | Cremefarbener Hintergrund, weiße Karten, dunkelgrüne Aktionen, dezente Trennlinien; abgestimmter Dunkelmodus erhalten. |
-| Abstände und Proportionen | Hauptkarten im 7:5-Raster, einheitliche Innenabstände, ausgerichtete Filter und Listen. Auf kleinen Displays einspaltig, temporäre Navigation. |
-| Inhalte, Symbole und Verhalten | Vorhandene MDI-Bibliothek; echte API-Daten und vorhandene Fachfunktionen. Keine simulierten Messwerte, Diagramme oder Statusbehauptungen. |
+| Aufbau | Schmalere Navigation, kürzere Kopfzeile, unveränderte Inhaltsgruppen und Fachabläufe. Dashboard im 7:5-Raster, auf kleinen Geräten einspaltig. |
+| Typografie | Gleiche lokalen Schriftdateien, kleinere Titel, weiterhin klare Titel-/Inhaltshierarchie. Zahlen, Fehlwerte und Einheiten lesbar. |
+| Farben | Helles Salbei-Design und abgestimmter Dunkelmodus beibehalten; Kontrastfarben aus 1.9.1 unverändert. |
+| Abstände | Kompakte Formulare, Tabellen, Registerkarten und Karten. Keine künstliche Dashboard-Mindesthöhe. Mobile Hauptaktionen behalten mindestens 44 Pixel Höhe. |
+| Inhalte und Verhalten | Keine Angaben entfernt, keine simulierten Dashboardwerte, keine Änderung an Integrationswerten oder Speicherroutinen. Symbole weiter aus MDI. |
 
-Bewusste daten-/funktionsbedingte Abweichungen: aktuelles Datum, echte offene Aufgaben und Verbrauchswerte; zusätzliche Dashboard-Bearbeitung und Verwaltungsgruppe. Fälligkeiten sind gruppierbar, statt alle Aufgaben künstlich auf denselben Tag zu setzen. Die Vorlage ist eine visuelle Richtung; eine pixelidentische Bildkopie wird nicht behauptet.
+## Browser- und Funktionsprüfung
 
-## Gefundene und behobene Probleme
+- 31 Kernprüfungen bestanden (`browser-results.json`): echte Dashboarddaten, Inventarsuche und Rücksprung, Ortsfilter und Zurücksetzen, vier Detailregister, Speichern/Wiederherstellen des Testgerätenamens, mobile Hauptaktionen und Suche, Dunkelmodus.
+- Dashboard, Inventar und Gerätedetails ohne Seitenüberlauf bei 360, 390, 768, 960 und 1440 Pixeln. Bei 390 Pixeln zusätzlich Räume, Filament, LEGO, Netzwerk, Elektro, Verbrauch, Wartung, Wissen, Dokumente und Einstellungen geprüft.
+- `density-results.json`: Einstellungsseite mit allen fünf aktiven Beispielintegrationen bei 360, 390 und 768 Pixeln ohne horizontalen Seitenüberlauf. Speicherleistenhöhe auf kleinen Displays zusätzlich geprüft.
+- `mobile-followup.json`: Verbrauchswertspalten bei 360, 390, 599, 768, 960 und 1440 Pixeln auf Mindestbreite und Seitenüberlauf geprüft; mobile Werte bleiben lesbar.
+- Keine JavaScript-Laufzeitfehler. Erwartete HTTP-409-Antworten auf nicht konfigurierte Home-Assistant-/Nextcloud-Integrationen in der isolierten Testdatenbank; keine externe Verbindungsprüfung.
 
-- Unlesbare Symbole auf hellen Avatarflächen: explizite Vordergrundfarben für helle und dunkle Oberflächen. Nachweis: aktuelle Inventar- und Detailbilder.
-- Navigation schloss Gruppen beim Wechsel zur Übersicht: Mehrfachöffnung und gespeicherte Gruppen pro Sitzung; aktive Route öffnet ihre Gruppe.
-- Zu enge Fälligkeitskarte und gestreckte Chips: 7:5-Aufteilung und korrigierte Flexregeln. Nachweis: Desktopvergleich.
-- Zu große Avatare in der mobilen Inventarliste: feste 44-px-Spalte statt wachsendem Flexelement. Nachweis: `inventory-mobile.png`.
-- Zu schmale Wertespalten auf kleinen Handys: Verbrauchszeilen als zweispaltiges Raster, Vergleich darunter. Nachweis: `dashboard-390.png` und `mobile-followup.json`.
-- Gleichzeitige Dashboard-Abfragen erzeugten konkurrierende Aufgaben-Synchronisierung: die beiden betroffenen Abfragen laufen nacheinander; keine Backendänderung.
-- Vorhandene Home-Assistant-Abfrage verwendete unzulässiges Seitenlimit 1000: auf erlaubte 500 korrigiert, Nachladen weiterer Seiten und einmaliges Refresh durch gezielten Test geprüft.
-- Erster Filtertest verwendete „Küche“ statt des dargestellten Pfads „Zuhause / Küche“: Test korrigiert; UI und URL-Filter geprüft.
-
-Keine offenen P0/P1/P2-Designbefunde innerhalb des überarbeiteten Umfangs. P3: Abstände und Symbolvarianten weichen an einigen Stellen geringfügig von der Bildreferenz ab; die übrigen Fachmodule verwenden ihr bisheriges Seitenlayout mit dem neuen gemeinsamen Erscheinungsbild.
-
-## Browserprüfung
-
-`docs/design-1.9.1/browser-results.json`: 31 bestandene Prüfungen. Dashboarddaten, Inventarsuche, Rücksprung mit erhaltener Suche, Ortsfilter und Zurücksetzen, vier Detailregister, echtes Speichern und Wiederherstellen eines Gerätenamens in der Testdatenbank, mobile Hauptaktionen und Suche sowie Dunkelmodus.
-
-Überlaufprüfungen bei 360, 390, 768, 960 und 1440 Pixeln für Dashboard, Inventar und Detailansicht. Zusätzlich bei 390 Pixeln Räume, Filament, LEGO, Netzwerk, Elektro, Verbrauch, Wartung, Wissen, Dokumente und Einstellungen. Die visuelle Kontrolle ergänzt die Überlaufprüfung, weil lesbare Wertespalten durch bloße Überlaufmessung nicht sichergestellt sind. Der gezielte mobile Nachtest prüft auch deren Mindestbreite, zusätzlich bei 599 Pixeln.
-
-`browser-followup.json`: tatsächlich geladene mobile Inventarliste, tatsächlicher Suchtreffer und Desktop-Tastaturbedienung mit Ctrl+K und Escape nachgeprüft. Keine JavaScript-Laufzeitfehler. Zwei erwartete HTTP-409-Meldungen bleiben in der isolierten Testkonfiguration: Home Assistant deaktiviert und Nextcloud nicht eingerichtet. Diese Integrationsabläufe wurden nicht extern geprüft. Die zuvor beobachtete ungültige 422-Abfrage ist behoben; der ältere Hauptprüflauf bleibt als unveränderter Vorher-Nachweis erhalten.
-
-## Kontrast und Bedienung
-
-Gemessene Designfarben in `contrast.json`: heller Haupttext 13,87:1, gedämpfter Text 5,01:1, weiße Beschriftung auf Primärfarbe 7,21:1, Navigation 12,48:1. Fokusmarkierungen, beschriftete Aktionssymbole, echte Links, mobile Menüpunkte und reduzierte Bewegung berücksichtigt. Dies ist keine vollständige WCAG-Zertifizierung und kein Screenreader-Gesamtaudit.
+Gefundene und behobene Designprobleme: übergroße Titel und Hauptaktionen, lange Tabellenzeilen, breite Navigation, unnötige Kartenabstände, hohe Modulzeilen und dreizeilige mobile Speicherleiste. Nachweise sind die Desktop-, Detail-, Inventar-, Einstellungs- und Mobilbilder im Belegordner. Keine offenen P0/P1/P2-Befunde im geänderten Umfang. P3: lange Einstellungsseiten bleiben bei vielen aktivierten Integrationen scrollbar; Beschreibungen werden nicht zur bloßen Höhenreduktion abgeschnitten.
 
 ## Technische Prüfung und Grenzen
 
-- Vue-Typprüfung erfolgreich; Produktionsbuild erfolgreich, bestehende Warnung zum großen JavaScript-Bündel bleibt bestehen.
-- 217 Frontendtests in 66 Dateien bestanden. Anschließend die drei Home-Assistant-Tests mit korrigiertem API-Limit erneut bestanden.
-- 287 MDI-Symbole gültig. Versions-, Release- und Brandingprüfung bestanden.
-- Frische Alembic-Migration bis 0061 erfolgreich, keine neue Migration.
-- Gezielte Backendtests: 66 bestanden, ein Fremdschlüsselfehler im Test `test_asset_creation_repairs_missing_code_counter`. Mit unverändertem 1.9.0 reproduziert; beide Protokolle liegen bei. Kein vollständiger grüner Gesamtprüflauf behauptet.
-- Backend-Anwendung, Migrationen und Containerkonfiguration unverändert gegenüber dem Original; keine ursprüngliche Quelldatei fehlt. Siehe `source-integrity.json`.
-- Testbackend unter Python 3.12; Dockerbuild und Python 3.13 nicht geprüft. Reale Cloud-/NAS-/Druckerintegrationen und Migration produktiver Bestandsdaten nicht geprüft.
+Vue-Typprüfung, Produktionsbuild, 217 Frontendtests in 66 Dateien, 287 MDI-Symbole sowie Versions-, Release- und Brandingprüfung erfolgreich. Nach der Anpassung der Speicherleiste die drei Tests zur sicheren Einstellungsspeicherung zusätzlich erneut geprüft. Die bereits bestehende Warnung zum großen JavaScript-Bündel bleibt.
 
-**Final result: passed** – für das visuelle Redesign und die beschriebenen lokalen Kernabläufe. Die produktive Installation blieb unverändert; die vollständige Releasefreigabe bleibt aufgrund der ausdrücklich genannten Prüfgrenzen offen (`full_quality_gate_passed: false`).
+Backend-Anwendung, Migrationen, Backendtests, Anforderungen und Containerkonfiguration sind bytegleich mit 1.9.1; lediglich die Versionsangabe in `backend/pyproject.toml` ändert sich. Keine neue Migration, Head 0061. Integrations-, Formular- und Einstellungsspeicherroutinen bleiben unverändert. Paketvergleich in `source-integrity.json`.
+
+Kein neuer Backend-Gesamtprüflauf oder Dockerbuild. Die dokumentierte Grenze aus 1.9.1 bleibt: ein in der unveränderten 1.9.0-Basis reproduzierter Fremdschlüssel-Testfehler; Testbackend unter Python 3.12 statt Docker-Python 3.13. Keine Prüfung realer Cloud-/NAS-/Drucker-Verbindungen. Deshalb weiterhin `full_quality_gate_passed: false`.
+
+**Final result: passed** für die kompakte Darstellung und beschriebenen lokalen Kernabläufe. Die laufende NAS-/Docker-Installation wurde nicht verändert.

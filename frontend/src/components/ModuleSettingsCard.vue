@@ -128,7 +128,7 @@ function setMainMenu(key: ModuleKey, value: boolean | null) {
         „Aktiviert“ stellt die Funktion bereit. Alle aktiven Module sind thematisch gruppiert. „Im Schnellzugriff“ ergänzt persönliche
         Verknüpfungen oberhalb der Gruppen. Deaktivieren löscht keine Daten.
       </v-alert>
-      <v-list lines="three" bg-color="transparent">
+      <v-list lines="two" bg-color="transparent" class="module-options">
         <v-list-item v-for="module in modules" :key="module.key" :prepend-icon="module.icon">
           <v-list-item-title class="d-flex align-center ga-2">
             {{ module.title }}
@@ -153,3 +153,8 @@ function setMainMenu(key: ModuleKey, value: boolean | null) {
     </v-card-text>
   </v-card>
 </template>
+
+<style scoped>
+.module-options :deep(.v-list-item){min-height:60px;padding:6px 8px}.module-options :deep(.v-list-item-title){font-size:14px;font-weight:600}.module-options :deep(.v-list-item-subtitle){font-size:13px;line-height:1.35;white-space:normal;overflow:visible;display:block}.module-options :deep(.v-list-item__prepend .v-list-item__spacer){width:12px}.module-options :deep(.v-label){font-size:13px}
+@media(max-width:959px){.module-options :deep(.v-list-item){grid-template-columns:24px minmax(0,1fr);grid-template-areas:'prepend content' '. append';column-gap:10px;padding-block:8px}.module-options :deep(.v-list-item__prepend){align-self:start;padding-top:4px}.module-options :deep(.v-list-item__prepend .v-list-item__spacer){display:none}.module-options :deep(.v-list-item__append){grid-column:2;grid-row:2;justify-self:start;padding-top:2px}.module-options :deep(.v-list-item__append .v-list-item__spacer){display:none}}
+</style>

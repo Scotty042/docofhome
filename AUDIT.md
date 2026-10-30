@@ -1,3 +1,13 @@
+# Prüfung der kompakten Oberfläche 1.9.2 – 30. Oktober 2026
+
+- Separate lokale Testinstanz und Vorher-Nachher-Vergleich; keine Änderung der NAS-Installation.
+- Kompakte Titel, Navigation, Tabellen, Formulare und Karten; mobile Schaltflächen weiterhin mit großen Touchflächen.
+- Vue-Typprüfung, Produktionsbuild, 217 Frontendtests, MDI-, Versions-, Release- und Brandingprüfung erfolgreich.
+- 31 lokale Browserprüfungen erfolgreich; zusätzliche Dichte-, Mobil- und Einstellungsprüfungen in `design-qa.md` dokumentiert.
+- Backend, Migrationen und Containerkonfiguration unverändert gegenüber 1.9.1. Kein neuer Backend-Gesamtprüflauf oder Dockerbuild. Die folgenden bekannten Prüfgrenzen gelten weiter.
+
+---
+
 # Prüfung des Redesigns 1.9.1 – 30. Oktober 2026
 
 - Getrennte lokale Testinstanz; produktive Docker-/NAS-Installation unverändert.

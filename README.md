@@ -129,3 +129,7 @@ Siehe [`LICENSE`](LICENSE) und [`SECURITY.md`](SECURITY.md). Bitte keine Zugangs
 ## Oberfläche 1.9.1
 
 Hinweise zur neuen Navigation, Darstellung und zum späteren Umstieg: [Redesign 1.9.1](docs/REDESIGN_1.9.1.md). Prüfbelege: [Design-QA](design-qa.md).
+
+## Kompakte Oberfläche 1.9.2
+
+Weniger Platzbedarf bei unveränderten Funktionen und Einstellungen. Details und lokale Prüfbelege: [Kompaktes Design](docs/COMPACT_DESIGN_1.9.2.md).

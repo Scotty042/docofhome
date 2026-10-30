@@ -2,6 +2,26 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.9.2 – 2026-10-30
+
+### Kompaktere Oberfläche
+
+- Kleinere Titel, kürzere Kopfzeile und 240 statt 274 Pixel breite Navigation schaffen mehr Platz für Inhalte.
+- Gemeinsame kompakte Formular-, Tabellen-, Listen- und Registerkartendichte. Karten haben weniger Innenabstand, Inventarzeilen kleinere Bilder und weniger Höhe.
+- Dashboard-Karten ohne künstliche Mindesthöhe; Messwerte, Fälligkeiten und Aktionen enger angeordnet. Auf Mobilgeräten bleiben Schaltflächen mindestens 44 Pixel hoch.
+- Einstellungen mit kürzeren Modulzeilen und kompakteren Integrationskarten. Schalter, Formularwerte und die Speicherung bestehender Einstellungen bleiben unverändert.
+- Keine Backend-, Datenbank-, Integrations- oder Dockeränderung gegenüber 1.9.1. Alembic-Head weiterhin 0061.
+
+### Prüfung und Grenzen
+
+Lokale Browser- und Designprüfung mit Beispieldaten; keine Änderung der laufenden Installation. Nachweise in `design-qa.md` und `docs/design-1.9.2/`. Bestehende Backend-Prüfgrenzen aus 1.9.1 gelten weiter; kein Dockerbuild und keine produktiven Integrationen getestet.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.9.2","base_version":"1.9.1","built_on":"2026-10-30","alembic_head":"0061","database_migration_required":false,"backup_format_version":2,"mcp_tools":49,"full_quality_gate_passed":false}
+```
+
 ## 1.9.1 – 2026-10-30
 
 ### Neue Oberfläche nach Designvariante 1

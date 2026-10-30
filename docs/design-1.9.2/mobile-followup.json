@@ -1,0 +1,32 @@
+[
+  {
+    "width": 360,
+    "minValueColumn": 116.5,
+    "passed": true
+  },
+  {
+    "width": 390,
+    "minValueColumn": 131.5,
+    "passed": true
+  },
+  {
+    "width": 599,
+    "minValueColumn": 236,
+    "passed": true
+  },
+  {
+    "width": 768,
+    "minValueColumn": 237.921875,
+    "passed": true
+  },
+  {
+    "width": 960,
+    "minValueColumn": 209.921875,
+    "passed": true
+  },
+  {
+    "width": 1440,
+    "minValueColumn": 205.75,
+    "passed": true
+  }
+]

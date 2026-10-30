@@ -14,11 +14,17 @@ import router from './router'
 
 const vuetify = createVuetify({
   defaults: {
-    VBtn: { elevation: 0, height: 44 },
-    VTextField: { variant: 'outlined', density: 'comfortable', color: 'primary' },
-    VSelect: { variant: 'outlined', density: 'comfortable', color: 'primary' },
-    VAutocomplete: { variant: 'outlined', density: 'comfortable', color: 'primary' },
+    VBtn: { elevation: 0, height: 36 },
+    VTextField: { variant: 'outlined', density: 'compact', color: 'primary' },
+    VSelect: { variant: 'outlined', density: 'compact', color: 'primary' },
+    VAutocomplete: { variant: 'outlined', density: 'compact', color: 'primary' },
     VTextarea: { variant: 'outlined', color: 'primary' },
+    VRow: { dense: true },
+    VList: { density: 'compact' },
+    VTable: { density: 'compact' },
+    VTabs: { height: 40 },
+    VSwitch: { density: 'compact' },
+    VCheckbox: { density: 'compact' },
     VCard: { elevation: 0, rounded: 'lg' },
     VTooltip: { openDelay: 350 }
   },

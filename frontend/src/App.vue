@@ -56,7 +56,7 @@ onMounted(async () => {
     <a class="skip-to-content" href="#main-content">Zum Inhalt</a>
     <GlobalNotifications />
     <template v-if="!setupLayout">
-      <v-navigation-drawer v-model="drawerOpen" :permanent="mdAndUp" :temporary="!mdAndUp" :width="274" class="home-navigation">
+      <v-navigation-drawer v-model="drawerOpen" :permanent="mdAndUp" :temporary="!mdAndUp" :width="240" class="home-navigation">
         <router-link to="/" class="home-brand" :aria-label="`${APP_NAME} – Übersicht`">
           <span>Doc<em>Of</em>Home</span>
           <small>{{ installationName }}</small>
@@ -91,7 +91,7 @@ onMounted(async () => {
           <p class="home-tagline">{{ APP_SLOGAN }}</p>
         </template>
       </v-navigation-drawer>
-      <v-app-bar flat class="home-topbar" :height="72">
+      <v-app-bar flat class="home-topbar" :height="56">
         <v-app-bar-nav-icon v-if="!mdAndUp" aria-label="Navigation öffnen" @click="drawerOpen = !drawerOpen" />
         <span v-if="!mdAndUp" class="mobile-brand">{{ APP_NAME }}</span>
         <GlobalSearch />

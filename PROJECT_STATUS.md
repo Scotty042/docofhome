@@ -1,13 +1,14 @@
 # DocOfHome – Projektstatus
 
 Stand: 30. Oktober 2026  
-Release: **1.9.1**  
+Release: **1.9.2**  
 Alembic-Head: **`0061`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.
 
 ## Aktueller technischer Stand
 
+- kompakte Darstellung mit kleineren Titeln, kürzeren Tabellenzeilen und reduzierten Abständen;
 - responsives Salbei-Design mit neuer Navigation, Dashboard, Inventarliste und gegliederten Gerätedetails;
 
 - Filament-Sammlung für beliebige Hersteller mit optionaler direkter Bambu-Cloud-/AMS-Anbindung, lokalem Archiv, Nachkaufliste, Bildern und 40 × 30 mm QR-Etiketten;

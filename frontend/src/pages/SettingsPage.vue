@@ -375,7 +375,7 @@ async function testIntegration(kind: IntegrationKind) {
       <v-card
         v-for="integration in form.integrations"
         :key="integration.kind"
-        class="mb-4"
+        class="mb-3 integration-card"
       >
         <v-card-title class="d-flex align-center ga-3">
           <v-icon :icon="integrationMeta[integration.kind].icon" color="primary" />
@@ -676,20 +676,23 @@ async function testIntegration(kind: IntegrationKind) {
       </v-card>
 
       <div class="settings-save-bar d-flex flex-column flex-sm-row align-sm-center ga-3 mt-6">
-        <div class="flex-grow-1" :class="dirty ? 'text-warning' : 'text-medium-emphasis'">
+        <div class="flex-grow-1 settings-save-status" role="status" :title="dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert'" :class="dirty ? 'text-warning' : 'text-medium-emphasis'">
           <v-icon :icon="dirty ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'" class="mr-1" />
-          {{ dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}
+          <span>{{ dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span>
         </div>
         <v-btn variant="text" :disabled="!dirty || saving" @click="discardChanges">Verwerfen</v-btn>
-        <v-btn color="primary" size="large" type="submit" :loading="saving" :disabled="!dirty" prepend-icon="mdi-content-save">Einstellungen speichern</v-btn>
+        <v-btn color="primary" type="submit" :loading="saving" :disabled="!dirty" prepend-icon="mdi-content-save" aria-label="Einstellungen speichern"><span class="d-none d-sm-inline">Einstellungen speichern</span><span class="d-sm-none">Speichern</span></v-btn>
       </div>
     </v-form>
   </v-container>
 </template>
 
 <style scoped>
-.settings-container { max-width: 1100px; }
+.settings-container { max-width: 1200px; }
+.integration-card :deep(.v-card-title){padding-block:8px;font-size:1.05rem}.integration-card :deep(.v-alert){padding:10px 12px;font-size:13px}.integration-card :deep(.v-card-text>p){font-size:14px;margin-bottom:12px!important}.integration-card :deep(.v-input__details){font-size:12px}.integration-card :deep(.v-row){row-gap:2px}
 h1 { font-size: clamp(1.8rem, 4vw, 2.25rem); }
-.settings-save-bar { position: sticky; z-index: 10; bottom: 0; padding: .75rem 1rem; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px 12px 0 0; background: rgb(var(--v-theme-surface)); box-shadow: 0 -4px 18px rgba(0, 0, 0, .14); }
+.settings-save-bar { position: sticky; z-index: 10; bottom: 0; padding: 8px 12px; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px 12px 0 0; background: rgb(var(--v-theme-surface)); box-shadow: 0 -4px 18px rgba(0, 0, 0, .14); }
+.settings-save-status{font-size:14px}
+@media(max-width:599px){.settings-save-bar{flex-direction:row!important;align-items:center;gap:6px!important;padding:8px 10px;padding-bottom:max(8px,env(safe-area-inset-bottom))}.settings-save-status{flex:1 1 auto}.settings-save-status span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.settings-save-bar>.v-btn{flex:0 0 auto;font-size:13px}}
 .token-url { display: block; overflow-wrap: anywhere; margin-top: .2rem; }
 </style>

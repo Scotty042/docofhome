@@ -1,0 +1,78 @@
+[
+  {
+    "label": "before",
+    "route": "/",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "headingFont": 56,
+    "sidebarWidth": 274,
+    "mainCardsBottom": 993.484375,
+    "visibleRows": 0
+  },
+  {
+    "label": "before",
+    "route": "/assets",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "headingFont": 44.64,
+    "sidebarWidth": 274,
+    "tableRow": 79,
+    "visibleRows": 8
+  },
+  {
+    "label": "before",
+    "route": "/settings",
+    "mockActiveIntegrations": true,
+    "pageHeight": 5286
+  },
+  {
+    "label": "compact",
+    "route": "/",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "headingFont": 36,
+    "sidebarWidth": 240,
+    "mainCardsBottom": 760.6875,
+    "visibleRows": 0
+  },
+  {
+    "label": "compact",
+    "route": "/assets",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "headingFont": 31.68,
+    "sidebarWidth": 240,
+    "tableRow": 55,
+    "visibleRows": 10
+  },
+  {
+    "label": "compact",
+    "route": "/settings",
+    "mockActiveIntegrations": true,
+    "pageHeight": 4215
+  },
+  {
+    "label": "compact",
+    "route": "/settings",
+    "width": 360,
+    "overflow": false,
+    "saveHeight": 62,
+    "passed": true
+  },
+  {
+    "label": "compact",
+    "route": "/settings",
+    "width": 390,
+    "overflow": false,
+    "saveHeight": 62,
+    "passed": true
+  },
+  {
+    "label": "compact",
+    "route": "/settings",
+    "width": 768,
+    "overflow": false,
+    "saveHeight": 62,
+    "passed": true
+  }
+]
