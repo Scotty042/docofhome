@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import time
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
@@ -46,6 +47,56 @@ def image_path(reference: str) -> Path:
     return path
 
 
+# Public catalog pages are shared by many physical rolls. Do not fetch the same
+# catalog again for every roll in a user-triggered batch.
+_CATALOG_CACHE: dict[str, tuple[float, bytes]] = {}
+
+
+def catalog_bytes(client: httpx.Client, url: str, *, cache: bool) -> bytes:
+    saved = _CATALOG_CACHE.get(url) if cache else None
+    if saved and time.monotonic() - saved[0] < 3600:
+        return saved[1]
+    with client.stream("GET", url) as response:
+        if not response.is_success:
+            raise ValueError("Store-Katalog derzeit nicht abrufbar; später erneut versuchen")
+        data = bytearray()
+        for chunk in response.iter_bytes():
+            data.extend(chunk)
+            if len(data) > 4 * 1024 * 1024:
+                raise ValueError("Store-Katalog zu groß")
+    content = bytes(data)
+    if cache:
+        if len(_CATALOG_CACHE) >= 64:
+            _CATALOG_CACHE.clear()
+        _CATALOG_CACHE[url] = (time.monotonic(), content)
+    return content
+
+
+def resolve_shop_code(client: httpx.Client, handle: str, product_code: str, *, cache: bool) -> str:
+    # The official Japanese Shopify catalog exposes the original manufacturer
+    # SKU (e.g. A00-P6-1.75-1000-SPLFREE), unlike the EU catalog's numeric SKU.
+    # Match the full product-code segment; never infer an ID from a color.
+    if not re.fullmatch(r"[A-Z]\d{2}-[A-Z]\d{1,2}", product_code):
+        raise ValueError("Keine eindeutige Shop-Farbnummer; Farbnummer bitte ergänzen")
+    catalog = json.loads(catalog_bytes(
+        client, f"https://bambu-lab-jp.myshopify.com/products/{handle}.js", cache=cache
+    ))
+    if not isinstance(catalog, dict) or not isinstance(catalog.get("variants"), list):
+        raise ValueError("Unbekanntes Store-Format für Produktcodes")
+    codes = set()
+    for variant in catalog.get("variants", []):
+        if not isinstance(variant, dict):
+            continue
+        if not str(variant.get("sku", "")).upper().startswith(product_code + "-"):
+            continue
+        match = re.search(r"\((\d{5})\)", str(variant.get("option1", "")))
+        if match:
+            codes.add(match[1])
+    if len(codes) != 1:
+        raise ValueError("Cloud-Produktcode nicht eindeutig im Store; Shop-Farbnummer bitte ergänzen")
+    return codes.pop()
+
+
 def store_image(
     session: Session, spool_id: UUID, *, transport: httpx.BaseTransport | None = None
 ) -> SpoolRead:
@@ -64,47 +115,39 @@ def store_image(
         timeout=15, follow_redirects=False, trust_env=False, transport=transport
     ) as client:
         try:
-            with client.stream(
-                "GET", f"https://eu.store.bambulab.com/products/{handle}"
-            ) as response:
-                if not response.is_success:
-                    raise ValueError("Store-Katalog derzeit nicht abrufbar; Bild manuell auswählen")
-                page = bytearray()
-                for chunk in response.iter_bytes():
-                    page.extend(chunk)
-                    if len(page) > 4 * 1024 * 1024:
-                        raise ValueError("Store-Katalog zu groß; Bild manuell auswählen")
+            code = spool.shop_code.strip()
+            if not code:
+                cloud_code = spool.cloud_product_code.strip().upper()
+                if re.fullmatch(r"\d{5}", cloud_code):
+                    code = cloud_code
+                else:
+                    code = resolve_shop_code(client, handle, cloud_code, cache=transport is None)
+            if not re.fullmatch(r"\d{5}", code):
+                raise ValueError("Shop-Farbnummer muss eine eindeutige fünfstellige Nummer sein")
+            page = catalog_bytes(client, f"https://eu.store.bambulab.com/de/products/{handle}", cache=transport is None)
             parser = ProductData()
             parser.feed(page.decode("utf-8"))
             product = json.loads("".join(parser.parts))
             if not isinstance(product, dict) or not isinstance(product.get("hasVariant"), list):
                 raise ValueError("Unbekanntes Store-Format; Bild manuell auswählen")
-            keys = [
-                key.lower()
-                for key in (spool.shop_code, spool.cloud_product_code)
-                if key and key != "0"
-            ]
-            if not keys:
-                raise ValueError(
-                    "Keine eindeutige Shop-/Produktkennung; Bild bitte manuell auswählen"
-                )
             matches = []
             for variant in product.get("hasVariant", []):
                 if not isinstance(variant, dict):
                     continue
-                text = " ".join(str(variant.get(key, "")) for key in ("sku", "name")).lower()
-                if any(
-                    re.search(r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])", text)
-                    for key in keys
-                ):
+                name = str(variant.get("name", ""))
+                if re.search(r"\(" + re.escape(code) + r"\)", name):
                     if isinstance(variant.get("image"), str):
-                        matches.append(variant["image"])
-            matches = list(dict.fromkeys(matches))
-            if len(matches) != 1:
-                raise ValueError(
-                    "Kein eindeutig passendes Farbbild gefunden; manuelle Zuordnung erforderlich"
-                )
-            url = matches[0]
+                        matches.append((variant["image"], name))
+            images = list(dict.fromkeys(url for url, _ in matches))
+            if len(images) != 1:
+                raise ValueError("Kein eindeutig passendes Farbbild gefunden; manuelle Zuordnung erforderlich")
+            color_name = ""
+            for _, name in matches:
+                color_match = re.search(r" - (.+?)\s*\(" + re.escape(code) + r"\)", name)
+                if color_match:
+                    color_name = color_match[1].strip()
+                    break
+            url = images[0]
             if url.startswith("//"):
                 url = "https:" + url
             for _ in range(4):
@@ -155,7 +198,11 @@ def store_image(
                 path.write_bytes(content)
             spool.image_url = f"/api/v1/filament/images/{reference}"
             spool.image_verified = True
-            spool.image_source_url = f"https://eu.store.bambulab.com/products/{handle}"
+            if not spool.shop_code:
+                spool.shop_code = code
+            if not spool.color_name and color_name:
+                spool.color_name = color_name[:200]
+            spool.image_source_url = f"https://eu.store.bambulab.com/de/products/{handle}"
             session.add(spool)
             session.commit()
             return service.read(spool)

@@ -12,17 +12,17 @@ function page() {
   const ast = ts.createSourceFile('Filament.ts',script,ts.ScriptTarget.Latest,true)
   for (const statement of [...ast.statements].reverse()) if (ts.isImportDeclaration(statement)) script = script.slice(0,statement.pos) + script.slice(statement.end)
   const config = { ...emptyFilamentConfig(), token_configured: false, last_sync: null, last_error: null, last_mqtt: null, mqtt_error: null }
-  const create = vi.fn(async () => ({})), loginApi = vi.fn(async () => ({ connected: true, verification_required: false }))
+  const storeImage = vi.fn(async (id: string) => ({id, image_url: '/local-image.png'})), create = vi.fn(async () => ({})), loginApi = vi.fn(async () => ({ connected: true, verification_required: false }))
   let leave = () => true
   const sandbox = { ref, computed, watch() {}, onMounted() {}, onBeforeUnmount() {}, onBeforeRouteLeave(fn: () => boolean) { leave = fn }, useRoute: () => ({ params: {} }),
     window: { addEventListener() {},removeEventListener() {},confirm:vi.fn(() => false) },
     emptySpool,editableSpool,emptyFilamentConfig,editableFilamentConfig,
-    filamentApi: { create,login:loginApi,list:async () => [],slots:async () => [],settings:async () => config }, locationApi: {} }
+    filamentApi: { create,storeImage,login:loginApi,list:async () => [],slots:async () => [],settings:async () => config }, locationApi: {} }
   vm.createContext(sandbox)
   const compiled=ts.transpileModule(script,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
-  const state=vm.runInContext(compiled+'\n({ form, items, material, manufacturer, archive, reorder, visible, loading, savedConfig, config, dirty, open, save, login, connect, unload })',sandbox)
+  const state=vm.runInContext(compiled+'\n({ form, items, material, manufacturer, archive, reorder, visible, loading, savedConfig, config, dirty, open, save, login, connect, unload, fillStoreImages, imageIssues })',sandbox)
   state.loading.value=false; state.savedConfig.value=JSON.stringify(state.config.value)
-  return {state,create,loginApi,leave:() => leave()}
+  return {state,create,storeImage,loginApi,leave:() => leave()}
 }
 
 describe('filament collection',() => {
@@ -60,6 +60,22 @@ describe('filament collection',() => {
     expect(state.config.value.public_url).toBe('https://draft.example.test')
     expect(state.config.value.printer_serials).toEqual(['DRAFT-PRINTER'])
     expect(state.dirty.value).toBe(true)
+  })
+  it('fills missing Bambu pictures without overwriting existing pictures or selecting other brands',async () => {
+    const {state,storeImage}=page()
+    state.items.value=[{...emptySpool(),id:'a',label_code:'FIL-a',manufacturer:'Bambu Lab',archived_at:null},{...emptySpool(),id:'b',manufacturer:'Bambu Lab',image_url:'/my-photo.png',archived_at:null},{...emptySpool(),id:'c',manufacturer:'SUNLU',archived_at:null},{...emptySpool(),id:'d',manufacturer:'Bambu Lab',archived_at:'old'}]
+    await state.fillStoreImages()
+    expect(storeImage).toHaveBeenCalledExactlyOnceWith('a')
+    expect(state.items.value.find((v: FilamentSpool)=>v.id==='b').image_url).toBe('/my-photo.png')
+  })
+  it('continues after an unclear image assignment and reports that roll',async () => {
+    const {state,storeImage}=page()
+    state.items.value=['a','b'].map(id=>({...emptySpool(),id,label_code:'FIL-'+id,manufacturer:'Bambu Lab',archived_at:null}))
+    storeImage.mockRejectedValueOnce(new Error('Keine eindeutige Farbnummer'))
+    await state.fillStoreImages()
+    expect(storeImage).toHaveBeenCalledTimes(2)
+    expect(state.imageIssues.value[0]).toContain('FIL-a')
+    expect(state.items.value.find((v: FilamentSpool)=>v.id==='b').image_url).toBe('/local-image.png')
   })
   it('loads all inventory pages',async () => {
     const fetch=vi.fn().mockResolvedValueOnce({ok:true,status:200,json:async () => ({items:[{id:'a'}],has_more:true,next_offset:1})}).mockResolvedValueOnce({ok:true,status:200,json:async () => ({items:[{id:'b'}],has_more:false,next_offset:null})})

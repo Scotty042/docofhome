@@ -147,3 +147,7 @@ Cloud-Zugangsdaten fehlen bewusst. Für lokale Bilder und eine vollständige
 Wiederherstellung das vollständige Dateibackup verwenden. Vor 1.9-Update ein Backup
 erstellen; Migration 0061 läuft beim Start. Ein Downgrade entfernt die neuen
 Filamenttabellen und sollte ausschließlich in einer gesicherten Testkopie erfolgen.
+
+## Darstellung und Store-Bilder ab 1.9.3
+
+Die AMS-Karten zeigen die gebundene Lagerrolle mit Bild, Name und Farbe. Fehlende Original-Store-Bilder lassen sich gesammelt ergänzen. [Anleitung und Grenzen](AMS_STORE_IMAGES_1.9.3.md).

@@ -1,54 +1,39 @@
-# Design-QA – kompakte Oberfläche 1.9.2
+# Design- und Funktionsprüfung 1.9.3
 
-Datum: 30. Oktober 2026. Grundlage ist Variante 1 aus 1.9.1. Der Nutzer wünscht ausdrücklich weniger Platzbedarf; die ursprünglichen Abstände und Schriftgrößen sind deshalb kein unveränderlicher Zielwert mehr. Farbwelt, Schriftfamilien, Gliederung und echte Funktionen bleiben bestehen.
+30. Oktober 2026. Umfang: AMS-Lagerrollen und originale Bambu-Farbbilder. Grundlage ist die kompakte Oberfläche 1.9.2. Die laufende NAS-Sammlung wurde ausschließlich schreibfrei gelesen. Es wurden keine produktiven Einstellungen, Rollen oder Zuordnungen geändert und kein Cloud-/MQTT-Abruf ausgelöst.
 
-## Aufbau und Referenzen
+## Befund und Änderung
 
-Zwei getrennte lokale Testversionen mit denselben Ausgangsbeispieldaten: 1.9.1 auf Port 4181, 1.9.2 auf Port 4183. Keine produktiven Daten, Zugangsdaten oder NAS-Verbindungen. Testbackend für 1.9.2 auf Port 4184. Native @Browser-Kontrolle und zuvor genehmigte lokale Playwright-Prüfung verwendet.
+Die bisherige AMS-Karte zeigte selbst bei eindeutiger Bindung lediglich `spool_label`. Die vorhandene Rollenliste enthält dagegen bereits Hersteller, Variante, Farbe, Bild und Restmenge. Die neue Anzeige verknüpft beide ausschließlich über die vorhandene `spool_id`. Sie zeigt Lagerangaben und AMS-Restmeldung mit getrennten Beschriftungen und öffnet die zugehörige Rolle. Ungebundene, leere, fehlende und archivierte Bindungen werden nicht durch eine Farbraterei ersetzt. Drucker werden getrennt gruppiert.
 
-Belege in `docs/design-1.9.2/`: `comparison-desktop.png` zeigt 1.9.1 und 1.9.2 nebeneinander bei jeweils 1440 × 1024, DPR 1. `comparison-focus.png` vergleicht die Verbrauchskarten in Originalauflösung. Beide wurden visuell gemeinsam geprüft. Das ursprüngliche Variantenbild und die Prüfung von 1.9.1 bleiben unter `docs/design-1.9.1/` erhalten.
+Die bisherige Store-Bildsuche konnte Cloud-Codes wie A00-P6 nicht zur Shop-Farbnummer auflösen. Der offizielle japanische Bambu-Shop stellt die ursprünglichen Hersteller-SKUs im öffentlichen Produktkatalog bereit. Daraus wird die exakte Farbnummer bestimmt und im offiziellen deutschen EU-Katalog auf ein eindeutiges Bild geprüft. Vorhandene Shop-Farbnummern werden direkt verwendet. Keine Bildsuche anhand ähnlicher Farben. Die gemeinsame Aktion ergänzt ausschließlich aktive Bambu-Rollen ohne Bild, behält manuelle Bilder bei und meldet einzelne ungelöste Fälle.
 
-## Messbarer Platzgewinn
+## Visuelle Prüfung
 
-Messwerte aus `density-results.json`, gleiche Desktopgröße und Beispieldaten:
+Belege unter `docs/design-1.9.3/`: `ams-desktop.png`, `ams-mobile.png` und `collection-store-images.png`. Desktop 1440 × 1024 und mobile Ansicht 390 Pixel breit visuell geprüft. Die Bildreferenz ist das vom Nutzer gezeigte Bambu-Modellbild; `bambu-hellgrau.png` ist das tatsächlich aus dem offiziellen Katalog heruntergeladene Originalbild nach lokaler Größenbegrenzung. Kein KI-Ersatz und keine nachgezeichnete Produktgrafik.
 
-| Bereich | 1.9.1 | 1.9.2 |
-| --- | ---: | ---: |
-| Seitenleiste | 274 px | 240 px |
-| Dashboard-Titel | 56 px | 36 px |
-| Allgemeiner Inventartitel | 44,64 px | 31,68 px |
-| Unterkante der Hauptkarten ab Bildschirmoberkante | 993 px | 761 px |
-| Inventarzeile | 79 px | 55 px |
-| Vollständig sichtbare Inventarzeilen bei Seitengröße 10 | 8 | 10 |
-
-Die Einstellungsseite mit fünf aktivierten Beispielintegrationen benötigt ungefähr 20 % weniger Gesamthöhe. Ihre aktiven Werte wurden ausschließlich über schreibfreie Browser-Antwortfixtures dargestellt. Es wurde keine lokale oder produktive Integration aktiviert und keine Einstellung gespeichert. Die mobilen Modulzeilen ordnen ihre zwei Schalter nebeneinander unterhalb des Beschreibungstextes an. Die mobile Speicherleiste ist auf eine Zeile verkürzt; ihr gespeicherter/ungespeicherter Zustand bleibt über Statussymbol und zugänglichen Statustext erhalten.
-
-## Fünf Gestaltungsebenen
-
-| Ebene | Prüfung |
+| Gestaltungsebene | Ergebnis |
 | --- | --- |
-| Aufbau | Schmalere Navigation, kürzere Kopfzeile, unveränderte Inhaltsgruppen und Fachabläufe. Dashboard im 7:5-Raster, auf kleinen Geräten einspaltig. |
-| Typografie | Gleiche lokalen Schriftdateien, kleinere Titel, weiterhin klare Titel-/Inhaltshierarchie. Zahlen, Fehlwerte und Einheiten lesbar. |
-| Farben | Helles Salbei-Design und abgestimmter Dunkelmodus beibehalten; Kontrastfarben aus 1.9.1 unverändert. |
-| Abstände | Kompakte Formulare, Tabellen, Registerkarten und Karten. Keine künstliche Dashboard-Mindesthöhe. Mobile Hauptaktionen behalten mindestens 44 Pixel Höhe. |
-| Inhalte und Verhalten | Keine Angaben entfernt, keine simulierten Dashboardwerte, keine Änderung an Integrationswerten oder Speicherroutinen. Symbole weiter aus MDI. |
+| Aufbau | Kompakte Karten pro AMS-Platz, gruppiert je Drucker, mit Direktzugriff auf die Lagerrolle. |
+| Typografie | Rollennamen und Farbe vor technischen IDs, gut umbrechende Bezeichnungen und Seriennummern. |
+| Farben | Gespeicherte Farbwerte plus Text; leere Plätze neutral, kein verbliebener Filamentfarbton als scheinbare Belegung. |
+| Abstände | Gemeinsames kompaktes Design aus 1.9.2; einspaltige mobile Karten und ausreichend große Schaltflächen. |
+| Bilder und Inhalte | Originalbilder aus dem Store; vorhandene Lagerbilder werden wiederverwendet. Fehlender Farbname zeigt Farbcode statt erfundener Bezeichnung. |
 
-## Browser- und Funktionsprüfung
+Gefundene und behobene Probleme: Darstellung der Rollen-ID statt der Lagerbezeichnung; keine direkte Detailöffnung; schwer durchsuchbare ID-Auswahl; unaufgelöste Cloud-Produktcodes bei der Bildsuche; farbiger Platzhalter für leer gemeldeten Slot. Der erste automatisierte Überlauftest prüfte während der Navigationsanimation; nach abgeschlossenem Layoutwechsel bei allen Breiten ohne Überlauf bestätigt. Dialogschließung und Datenaktualisierung werden vor Screenshots bzw. Prüfungen abgewartet.
 
-- 31 Kernprüfungen bestanden (`browser-results.json`): echte Dashboarddaten, Inventarsuche und Rücksprung, Ortsfilter und Zurücksetzen, vier Detailregister, Speichern/Wiederherstellen des Testgerätenamens, mobile Hauptaktionen und Suche, Dunkelmodus.
-- Dashboard, Inventar und Gerätedetails ohne Seitenüberlauf bei 360, 390, 768, 960 und 1440 Pixeln. Bei 390 Pixeln zusätzlich Räume, Filament, LEGO, Netzwerk, Elektro, Verbrauch, Wartung, Wissen, Dokumente und Einstellungen geprüft.
-- `density-results.json`: Einstellungsseite mit allen fünf aktiven Beispielintegrationen bei 360, 390 und 768 Pixeln ohne horizontalen Seitenüberlauf. Speicherleistenhöhe auf kleinen Displays zusätzlich geprüft.
-- `mobile-followup.json`: Verbrauchswertspalten bei 360, 390, 599, 768, 960 und 1440 Pixeln auf Mindestbreite und Seitenüberlauf geprüft; mobile Werte bleiben lesbar.
-- Keine JavaScript-Laufzeitfehler. Erwartete HTTP-409-Antworten auf nicht konfigurierte Home-Assistant-/Nextcloud-Integrationen in der isolierten Testdatenbank; keine externe Verbindungsprüfung.
+Keine offenen P0/P1/P2-Befunde im geänderten Umfang. Grenze: unbekannte oder nicht mehr im offiziellen Katalog vorhandene Varianten/Codes benötigen eine Shopnummer oder manuelle Bildzuordnung. Das ist sichtbar ausgewiesen. Es wird keine vollständige Abdeckung aller historischen Bambu-Filamente behauptet.
 
-Gefundene und behobene Designprobleme: übergroße Titel und Hauptaktionen, lange Tabellenzeilen, breite Navigation, unnötige Kartenabstände, hohe Modulzeilen und dreizeilige mobile Speicherleiste. Nachweise sind die Desktop-, Detail-, Inventar-, Einstellungs- und Mobilbilder im Belegordner. Keine offenen P0/P1/P2-Befunde im geänderten Umfang. P3: lange Einstellungsseiten bleiben bei vielen aktivierten Integrationen scrollbar; Beschreibungen werden nicht zur bloßen Höhenreduktion abgeschnitten.
+## Verifikation
 
-## Technische Prüfung und Grenzen
+- `browser-results.json`: AMS mit gebundener Lagerrolle, echten Originalbildern in lokalen Testantworten, Restmenge null/0, ungebundenen und leeren Slots, Detailöffnung, Suche und Speicherung der exakten Rollen-ID sowie gemeinsame Bildübernahme geprüft. Antworten auf Zuordnungs-/Bildänderungen wurden ausschließlich lokal simuliert. Kein produktiver Schreibzugriff. Keine JavaScript-Laufzeitfehler.
+- AMS bei 360, 390, 768, 960 und 1440 Pixeln ohne horizontalen Seitenüberlauf. Screenshot bei 390 Pixeln als Ganzseitenbeleg.
+- `official-store-live-check.json`: öffentlicher Live-Abruf in einer isolierten lokalen Testdatenbank erfolgreich: A00-P6 → 10202 / Magenta; 10104 → Hellgrau und genau der vom Nutzer genannten Bildquelle. Fehlende Farbnamen/Shopnummern werden ergänzt, bestehende Texte nicht überschrieben.
+- 223 Frontendtests in 67 Dateien bestanden, einschließlich neuer Fälle für exakte Bindung, gleiche Farben, leere/archivierte Rollen, Nullwerte und gemeinsame Bildübernahme.
+- 16 gezielte Filament-Backendtests bestanden, einschließlich eindeutiger SKU-Auflösung, Ablehnung mehrdeutiger/prefixähnlicher Codes und Erhalt eigener Farbnamen.
+- Vue-Typprüfung und Produktionsbuild bestanden. 289 MDI-Symbole gültig; Versions- und Releaseprüfung bestanden.
+- Keine neue Migration. Containerkonfiguration, Einstellungen, Cloud-Anmeldung, Synchronisierung und AMS-Identitätslogik unverändert. Änderungen am Backend beschränken sich auf die Store-Bildsuche und deren Tests; siehe `source-integrity.json`.
 
-Vue-Typprüfung, Produktionsbuild, 217 Frontendtests in 66 Dateien, 287 MDI-Symbole sowie Versions-, Release- und Brandingprüfung erfolgreich. Nach der Anpassung der Speicherleiste die drei Tests zur sicheren Einstellungsspeicherung zusätzlich erneut geprüft. Die bereits bestehende Warnung zum großen JavaScript-Bündel bleibt.
+Die bekannten Backend-Gesamtprüfgrenzen aus 1.9.1 gelten weiter. Keine Docker-/Python-3.13-Gesamtprüfung und kein Test echter Drucker-/Bambu-Konten. Öffentliche Store-Formate und Katalogbestände können sich ändern. Daher bleibt `full_quality_gate_passed: false`.
 
-Backend-Anwendung, Migrationen, Backendtests, Anforderungen und Containerkonfiguration sind bytegleich mit 1.9.1; lediglich die Versionsangabe in `backend/pyproject.toml` ändert sich. Keine neue Migration, Head 0061. Integrations-, Formular- und Einstellungsspeicherroutinen bleiben unverändert. Paketvergleich in `source-integrity.json`.
-
-Kein neuer Backend-Gesamtprüflauf oder Dockerbuild. Die dokumentierte Grenze aus 1.9.1 bleibt: ein in der unveränderten 1.9.0-Basis reproduzierter Fremdschlüssel-Testfehler; Testbackend unter Python 3.12 statt Docker-Python 3.13. Keine Prüfung realer Cloud-/NAS-/Drucker-Verbindungen. Deshalb weiterhin `full_quality_gate_passed: false`.
-
-**Final result: passed** für die kompakte Darstellung und beschriebenen lokalen Kernabläufe. Die laufende NAS-/Docker-Installation wurde nicht verändert.
+**Final result: passed** für die geänderte Anzeige, die lokal geprüften Abläufe und die ausdrücklich genannten zwei Live-Bildbeispiele. Die produktive Installation blieb unverändert.

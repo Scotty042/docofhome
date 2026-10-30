@@ -1,0 +1,45 @@
+{
+  "base_version": "1.9.2",
+  "missing_base_files": [],
+  "changed_base_files": [
+    "AUDIT.md",
+    "PROJECT_HISTORY.md",
+    "PROJECT_STATUS.md",
+    "README.md",
+    "SOURCE_INFO.json",
+    "VERSION",
+    "backend/app/services/filament_images.py",
+    "backend/pyproject.toml",
+    "backend/tests/test_filament.py",
+    "design-qa.md",
+    "docs/FILAMENT.md",
+    "frontend/package-lock.json",
+    "frontend/package.json",
+    "frontend/public/service-worker.js",
+    "frontend/src/pages/FilamentPage.vue",
+    "frontend/src/pages/filamentCollection.test.ts",
+    "scripts/check-release.py"
+  ],
+  "new_files": [
+    "docs/AMS_STORE_IMAGES_1.9.3.md",
+    "docs/design-1.9.2/design-qa.md",
+    "docs/design-1.9.3/ams-desktop.png",
+    "docs/design-1.9.3/ams-mobile.png",
+    "docs/design-1.9.3/bambu-hellgrau.png",
+    "docs/design-1.9.3/bambu-magenta.png",
+    "docs/design-1.9.3/browser-results.json",
+    "docs/design-1.9.3/collection-store-images.png",
+    "docs/design-1.9.3/official-store-live-check.json",
+    "frontend/src/services/filamentPresentation.test.ts",
+    "frontend/src/services/filamentPresentation.ts"
+  ],
+  "backend_changes_limited_to": [
+    "backend/app/services/filament_images.py",
+    "backend/pyproject.toml",
+    "backend/tests/test_filament.py"
+  ],
+  "migration_changes": false,
+  "settings_and_cloud_ams_identity_logic_unchanged": true,
+  "container_files_unchanged": true,
+  "production_data_included": false
+}

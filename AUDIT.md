@@ -1,3 +1,13 @@
+# Prüfung 1.9.3 – AMS und Store-Bilder
+
+- 223 Frontendtests und 16 gezielte Filament-Backendtests bestanden.
+- Vue-Typprüfung, Produktionsbuild, 289 MDI-Symbole sowie Versions- und Releaseprüfung erfolgreich.
+- Neue AMS-Anzeige und gemeinsame Bildübernahme mit ausschließlich lokalen Testantworten geprüft.
+- Zwei echte öffentliche Store-Abgleiche in einer isolierten Testdatenbank erfolgreich: A00-P6 → Magenta (10202), Hellgrau (10104) → angefragtes Originalbild.
+- Keine Änderung produktiver Daten oder Einstellungen, keine neue Migration. Kein neuer vollständiger Backend-/Docker-Prüflauf; bestehende Prüfgrenzen weiter gültig. Details in `design-qa.md`.
+
+---
+
 # Prüfung der kompakten Oberfläche 1.9.2 – 30. Oktober 2026
 
 - Separate lokale Testinstanz und Vorher-Nachher-Vergleich; keine Änderung der NAS-Installation.

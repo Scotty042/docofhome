@@ -2,6 +2,28 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.9.3 – 2026-10-30
+
+### AMS-Lagerrollen und Original-Store-Bilder
+
+- AMS-Plätze zeigen die ausdrücklich zugeordnete Lagerrolle mit Hersteller, Variante, Farbe, Bild, Lagerrestmenge und direktem Detailaufruf. Rollen-ID bleibt Zusatzinformation. Gruppierung nach Drucker, unveränderte technische AMS-/Slotnummern.
+- Nicht zugeordnete und leer gemeldete Plätze bleiben erkennbar. Keine physische Rollenzuordnung anhand von Material oder Farbe. Manuelle Auswahl ist nach Bezeichnung, Farbe und Rollen-ID durchsuchbar.
+- „Store-Bilder ergänzen“ bearbeitet aktive Bambu-Rollen ohne Bild; vorhandene eigene Bilder bleiben erhalten. Fehler einzelner Rollen unterbrechen den restlichen Abgleich nicht.
+- Eindeutige Cloud-Produktcodes werden über den offiziellen Bambu-Shop-Katalog zur Shop-Farbnummer aufgelöst. Das Farbbild stammt aus dem offiziellen deutschen EU-Produktkatalog und wird lokal zwischengespeichert. Fehlende Farbnummern und Farbnamen werden bei eindeutigem Treffer ergänzt; vorhandene Texte bleiben erhalten.
+- Keine Suche nach ähnlich aussehenden Farben. Fehlende oder widersprüchliche Katalogdaten führen zu einem sichtbaren Hinweis und erfordern eine Farbnummer oder manuelle Bildwahl.
+- Live-Gegenprüfung mit öffentlichen Katalogen für A00-P6 → Magenta (10202) und Hellgrau (10104) erfolgreich. Keine produktiven Einstellungen, Rollen oder Cloud-Bestände verändert.
+- Keine neue Migration, Head weiterhin 0061. Bestehende Cloud-Anmeldung, Synchronisierung und AMS-Identitätslogik unverändert.
+
+### Prüfung und Grenzen
+
+223 Frontendtests und 16 gezielte Filament-Backendtests bestanden. Browserprüfung der AMS-Anzeige und Zuordnung mit lokalen Beispieldaten. Die bekannten Backend-Gesamtprüfgrenzen aus 1.9.1 bleiben bestehen. Nicht jeder Materialtyp und historische Cloud-Code ist im offiziellen Shop eindeutig verfügbar. Weitere Hinweise in `docs/AMS_STORE_IMAGES_1.9.3.md` und `design-qa.md`.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.9.3","base_version":"1.9.2","built_on":"2026-10-30","alembic_head":"0061","database_migration_required":false,"backup_format_version":2,"mcp_tools":49,"full_quality_gate_passed":false}
+```
+
 ## 1.9.2 – 2026-10-30
 
 ### Kompaktere Oberfläche

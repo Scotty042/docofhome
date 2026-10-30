@@ -1,0 +1,18 @@
+[
+  {
+    "input_cloud_product_code": "A00-P6",
+    "input_shop_code": "",
+    "resolved_shop_code": "10202",
+    "color_name": "Magenta",
+    "verified": true,
+    "source": "https://eu.store.bambulab.com/de/products/pla-basic-filament"
+  },
+  {
+    "input_cloud_product_code": "",
+    "input_shop_code": "10104",
+    "resolved_shop_code": "10104",
+    "color_name": "Hellgrau",
+    "verified": true,
+    "source": "https://eu.store.bambulab.com/de/products/pla-basic-filament"
+  }
+]

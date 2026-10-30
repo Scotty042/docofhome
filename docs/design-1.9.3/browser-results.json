@@ -1,0 +1,18 @@
+{
+  "checks": [
+    "Bound spool displays inventory manufacturer, variant, color, stock quantity and ID",
+    "Zero stock and zero AMS percent stay visible",
+    "Unknown and empty slots remain explicit",
+    "Inventory detail opens from the AMS card",
+    "AMS reflow 360px",
+    "AMS reflow 390px",
+    "AMS reflow 768px",
+    "AMS reflow 960px",
+    "AMS reflow 1440px",
+    "Searchable assignment submits exact selected inventory ID and refreshes its name",
+    "Bulk image action fills missing Bambu image while retaining existing image and skipping other brands"
+  ],
+  "errors": [],
+  "fixtureOnly": true,
+  "productionWrites": 0
+}

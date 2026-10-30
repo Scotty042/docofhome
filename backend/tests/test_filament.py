@@ -486,3 +486,51 @@ def test_migration_upgrade_downgrade_and_module_choices(tmp_path, monkeypatch):
         assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0061"
     command.downgrade(cfg, "0060")
     command.upgrade(cfg, "head")
+
+
+def test_store_image_resolves_original_cloud_sku_via_official_catalog(session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    service = FilamentService(session)
+    saved = service.save(SpoolWrite(material="PLA", variant="PLA Basic", manufacturer="Bambu Lab"))
+    spool = service.get(saved.id)
+    spool.cloud_product_code = "A00-P6"
+    session.add(spool)
+    session.commit()
+    picture = BytesIO()
+    Image.new("RGB", (10, 10), "magenta").save(picture, format="PNG")
+    calls = []
+
+    def response(req):
+        calls.append(str(req.url))
+        if req.url.host == "bambu-lab-jp.myshopify.com":
+            return httpx.Response(200, json={"variants": [
+                {"sku": "A00-P6-1.75-1000-SPLFREE", "option1": "Magenta (10202)"},
+                {"sku": "A00-P60-1.75-1000-SPL", "option1": "Other (10203)"},
+            ]})
+        if req.url.host == "eu.store.bambulab.com":
+            product = {"hasVariant": [{"name": "PLA Basic - Magenta (10202) / Refill", "image": "https://store.bblcdn.eu/magenta.jpg"}]}
+            return httpx.Response(200, text='<script id="product-jsonld">' + json.dumps(product) + '</script>')
+        return httpx.Response(200, content=picture.getvalue())
+
+    result = store_image(session, spool.id, transport=httpx.MockTransport(response))
+    assert result.image_verified and result.shop_code == "10202"
+    assert result.color_name == "Magenta"
+    assert result.image_source_url.endswith("/de/products/pla-basic-filament")
+    assert len(calls) == 3
+    # Existing manual color names survive a later explicit image refresh.
+    spool.color_name = "Mein Magenta"
+    session.add(spool)
+    session.commit()
+    result = store_image(session, spool.id, transport=httpx.MockTransport(response))
+    assert result.color_name == "Mein Magenta"
+
+
+def test_store_cloud_sku_refuses_missing_ambiguous_or_prefix_matches():
+    from app.services.filament_images import resolve_shop_code
+    for variants in [[], [{"sku": "A00-P60-1.75-1000-SPL", "option1": "Wrong (10203)"}], [
+        {"sku": "A00-P6-1.75-1000-SPL", "option1": "Magenta (10202)"},
+        {"sku": "A00-P6-1.75-1000-SPLFREE", "option1": "Different (10203)"},
+    ]]:
+        with httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"variants": variants}))) as client:
+            with pytest.raises(ValueError):
+                resolve_shop_code(client, "pla-basic-filament", "A00-P6", cache=False)

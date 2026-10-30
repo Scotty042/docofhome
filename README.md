@@ -133,3 +133,7 @@ Hinweise zur neuen Navigation, Darstellung und zum späteren Umstieg: [Redesign 
 ## Kompakte Oberfläche 1.9.2
 
 Weniger Platzbedarf bei unveränderten Funktionen und Einstellungen. Details und lokale Prüfbelege: [Kompaktes Design](docs/COMPACT_DESIGN_1.9.2.md).
+
+## Filament und AMS 1.9.3
+
+[AMS-Lagerrollen und originale Store-Bilder](docs/AMS_STORE_IMAGES_1.9.3.md): Lagerrollendetails direkt im AMS und gemeinsamer Bildabgleich für eindeutig erkannte Bambu-Rollen.
