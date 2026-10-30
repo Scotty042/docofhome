@@ -53,7 +53,7 @@ async function allEntities(
   query: Omit<HomeAssistantEntityQuery, 'offset' | 'limit'> = {}
 ): Promise<HomeAssistantEntity[]> {
   const items: HomeAssistantEntity[] = []
-  const limit = 1000
+  const limit = 500
   while (true) {
     const result = await request<HomeAssistantEntityList>(
       `/entities${queryString({

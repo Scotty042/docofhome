@@ -8,10 +8,10 @@ afterEach(() => {
 })
 
 describe('first-run defaults', () => {
-  it('starts in dark mode with every integration disabled', () => {
+  it('starts in the selected light design with every integration disabled', () => {
     const configuration = createDefaultConfiguration()
 
-    expect(configuration.theme).toBe('dark')
+    expect(configuration.theme).toBe('light')
     expect(configuration.integrations).toHaveLength(5)
     expect(configuration.integrations.map((integration) => integration.kind)).toEqual(expect.arrayContaining(['fritzbox', 'paperless']))
     expect(configuration.integrations.every((integration) => !integration.enabled)).toBe(true)

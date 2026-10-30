@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Light body",
+    "foreground": "#152b2b",
+    "background": "#f8f7f3",
+    "contrast": 13.87
+  },
+  {
+    "name": "Light muted",
+    "foreground": "#63736b",
+    "background": "#ffffff",
+    "contrast": 5.01
+  },
+  {
+    "name": "Primary button",
+    "foreground": "#ffffff",
+    "background": "#2d6054",
+    "contrast": 7.21
+  },
+  {
+    "name": "Navigation",
+    "foreground": "#152b2b",
+    "background": "#e7ede4",
+    "contrast": 12.48
+  },
+  {
+    "name": "Light avatar icon",
+    "foreground": "#315542",
+    "background": "#e7ede4",
+    "contrast": 7.03
+  },
+  {
+    "name": "Dark body",
+    "foreground": "#edf3e9",
+    "background": "#202e25",
+    "contrast": 12.58
+  },
+  {
+    "name": "Dark secondary",
+    "foreground": "#b5c4b5",
+    "background": "#202e25",
+    "contrast": 7.79
+  }
+]

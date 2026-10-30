@@ -425,7 +425,7 @@ async function save() {
         </v-card-text>
       </v-card>
 
-      <div class="d-flex flex-column-reverse flex-sm-row justify-end ga-3">
+      <div class="asset-save-bar d-flex flex-column-reverse flex-sm-row justify-end ga-3">
         <v-btn variant="text" :to="assetId ? `/assets/${assetId}` : '/assets'">Abbrechen</v-btn>
         <v-btn type="submit" color="primary" prepend-icon="mdi-content-save" :loading="saving" :disabled="assetTypes.length === 0">
           {{ isReplacing ? 'Ersatz-Asset anlegen' : 'Asset speichern' }}
@@ -454,5 +454,6 @@ async function save() {
 
 <style scoped>
 .asset-editor { max-width: 1100px; }
+.asset-save-bar { position: sticky; bottom: 12px; z-index: 4; background: rgb(var(--v-theme-surface)); padding: 14px; border: 1px solid var(--home-rule); border-radius: 9px; margin-top: 20px; }
 h1 { font-size: clamp(1.7rem, 5vw, 2.2rem); }
 </style>

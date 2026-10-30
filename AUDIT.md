@@ -1,3 +1,14 @@
+# Prüfung des Redesigns 1.9.1 – 30. Oktober 2026
+
+- Getrennte lokale Testinstanz; produktive Docker-/NAS-Installation unverändert.
+- Vue-Typprüfung, Vite-Produktionsbuild, 217 Frontendtests und Prüfung von 287 verwendeten MDI-Symbolen erfolgreich.
+- Frische Testdatenbank erfolgreich bis Migration 0061 aufgebaut. Keine neue Migration eingeführt.
+- Gezielte Backendtests: 66 bestanden, ein Fehler in `test_asset_creation_repairs_missing_code_counter` (FOREIGN KEY constraint). Derselbe Test scheitert mit unveränderten Quellen aus 1.9.0 in derselben Umgebung.
+- Backend-Anwendung und Migrationsdateien bytegleich mit dem Ausgangspaket. Lokale Python-Version 3.12; Dockerbuild/Python 3.13 nicht geprüft.
+- Browser- und Designprüfung separat in `design-qa.md` dokumentiert. Kein vollständiger grüner Gesamtprüflauf behauptet.
+
+---
+
 # DocOfHome – aktueller Audit- und Qualitätsstatus
 
 Stand: 29. Oktober 2026 · Release: 1.9.0 · Alembic-Head: `0061`

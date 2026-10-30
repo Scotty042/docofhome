@@ -213,14 +213,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .global-search-shell {
-  flex: 0 1 420px;
+  flex: 1 1 660px;
   min-width: 0;
   margin-inline: 16px;
 }
 
 .global-search-field {
-  width: min(420px, 34vw);
-  min-width: 280px;
+  width: min(660px, 54vw);
+  min-width: 0;
 }
 
 .search-menu-card {
@@ -233,8 +233,8 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1100px) {
   .global-search-field {
-    width: 300px;
-    min-width: 240px;
+    width: min(500px, 48vw);
+    min-width: 0;
   }
 }
 

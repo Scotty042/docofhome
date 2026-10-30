@@ -2,224 +2,108 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
-
 import GlobalNotifications from './components/GlobalNotifications.vue'
 import GlobalSearch from './components/GlobalSearch.vue'
 import SupportFooter from './components/SupportFooter'
 import { APP_NAME, APP_SLOGAN } from './config/branding'
+import { enabledNavigation, navigationGroupForPath } from './config/navigation'
 import { useSettingsStore } from './stores/settings'
-import { moduleKeys, type ModuleKey } from './types/settings'
-
-interface ModuleNavigationItem {
-  key: ModuleKey
-  title: string
-  icon: string
-  to?: string
-  disabled?: boolean
-}
+import { moduleKeys } from './types/settings'
 
 const route = useRoute()
 const settings = useSettingsStore()
 const theme = useTheme()
 const { mdAndUp } = useDisplay()
 const drawerOpen = ref(mdAndUp.value)
-const drawerPermanent = computed(() => mdAndUp.value)
-const moreRoutes = ['/guided-setup', '/backups', '/data-management', '/archive', '/settings', '/about']
-const openNavigationGroups = ref<string[]>(
-  ['wiki', 'more'].filter((group) => sessionStorage.getItem(`docofhome.navigation.${group}`) === 'open')
-)
-function setNavigationGroup(group: string, open: boolean) {
-  const groups = new Set(openNavigationGroups.value)
-  if (open) groups.add(group)
-  else groups.delete(group)
-  openNavigationGroups.value = [...groups]
-}
-const moreOpen = computed({
-  get: () => openNavigationGroups.value.includes('more'),
-  set: (open: boolean) => setNavigationGroup('more', open)
-})
 const setupLayout = computed(() => route.meta.setupLayout === true)
-const installationName = computed(() => settings.configuration?.installation_name ?? APP_NAME)
-const moduleNavigation: ModuleNavigationItem[] = [
-  { key: 'filament', title: 'Filament-Sammlung', icon: 'mdi-printer-3d-nozzle-outline', to: '/filament' },
-  { key: 'lego', title: 'LEGO-Sammlung', icon: 'mdi-toy-brick-outline', to: '/lego' },
-  { key: 'locations', title: 'Bereiche & Räume', icon: 'mdi-home-floor-0', to: '/locations' },
-  { key: 'electrical', title: 'Elektro', icon: 'mdi-flash', to: '/electrical' },
-  { key: 'assets', title: 'Assets', icon: 'mdi-devices', to: '/assets' },
-  { key: 'master_data', title: 'Stammdaten', icon: 'mdi-database-cog-outline', to: '/master-data' },
-  { key: 'network', title: 'Netzwerk', icon: 'mdi-lan', to: '/network' },
-  { key: 'smart_home', title: 'Smart Home', icon: 'mdi-home-assistant', to: '/smart-home' },
-  { key: 'consumption', title: 'Verbrauch', icon: 'mdi-chart-line', to: '/consumption' },
-  { key: 'maintenance', title: 'Wartung & Aufgaben', icon: 'mdi-format-list-checks', to: '/maintenance' },
-  { key: 'quality', title: 'Dokumentationsqualität', icon: 'mdi-clipboard-check-outline', to: '/quality' },
-  { key: 'cookbook', title: 'Kochbuch', icon: 'mdi-chef-hat', to: '/wiki/kochbuch' }
-]
-const utilityNavigation: ModuleNavigationItem[] = [
-  { key: 'images', title: 'Bilder', icon: 'mdi-image-multiple-outline', to: '/images' },
-  { key: 'documents', title: 'Dokumente', icon: 'mdi-folder-outline', to: '/documents' },
-  { key: 'workloads', title: 'Dienste & Container', icon: 'mdi-docker', to: '/workloads' }
-]
-const enabledModules = computed(() => new Set(settings.configuration?.enabled_modules ?? moduleKeys))
-const mainMenuModules = computed(() => new Set(settings.configuration?.main_menu_modules ?? settings.configuration?.enabled_modules ?? moduleKeys))
-const visibleModuleNavigation = computed(() => (
-  moduleNavigation.filter((item) => enabledModules.value.has(item.key) && mainMenuModules.value.has(item.key))
-))
-const visibleUtilityNavigation = computed(() => (
-  utilityNavigation.filter((item) => enabledModules.value.has(item.key) && mainMenuModules.value.has(item.key))
-))
-const wikiEnabled = computed(() => enabledModules.value.has('wiki') && mainMenuModules.value.has('wiki'))
-const hiddenModuleNavigation = computed(() => {
-  const items = [...moduleNavigation, ...utilityNavigation].filter(
-    (item) => enabledModules.value.has(item.key) && !mainMenuModules.value.has(item.key)
-  )
-  if (enabledModules.value.has('wiki') && !mainMenuModules.value.has('wiki')) {
-    items.push({ key: 'wiki', title: 'Wiki', icon: 'mdi-book-open-page-variant', to: '/wiki' })
-  }
-  return items
+const installationName = computed(() => settings.configuration?.installation_name || APP_NAME)
+const enabledModules = computed(() => settings.configuration?.enabled_modules ?? moduleKeys)
+const groups = computed(() => enabledNavigation(enabledModules.value))
+const shortcuts = computed(() => {
+  const chosen = settings.configuration?.main_menu_modules ?? enabledModules.value
+  if (chosen.length === enabledModules.value.length) return []
+  return groups.value.flatMap(group => group.items).filter(item => chosen.includes(item.key))
 })
-
-watch(mdAndUp, (isDesktop) => {
-  drawerOpen.value = isDesktop
-})
-
-watch(openNavigationGroups, (groups) => {
-  for (const group of ['wiki', 'other', 'more']) {
-    sessionStorage.setItem(
-      `docofhome.navigation.${group}`,
-      groups.includes(group) ? 'open' : 'closed'
-    )
-  }
+function initialGroups(): string[] {
+  try {
+    const saved: unknown = JSON.parse(sessionStorage.getItem('docofhome.navigation.groups.v1.9.1') || 'null')
+    if (Array.isArray(saved) && saved.every(value => typeof value === 'string')) return saved
+  } catch { /* A denied or invalid storage entry must not block navigation. */ }
+  return ['home', 'daily', 'collections']
+}
+const openGroups = ref<string[]>(initialGroups())
+watch(openGroups, value => {
+  try { sessionStorage.setItem('docofhome.navigation.groups.v1.9.1', JSON.stringify(value)) } catch { /* Optional session preference. */ }
 }, { deep: true })
-
-watch(
-  () => route.path,
-  (path) => {
-    if (moreRoutes.some((entry) => path.startsWith(entry))) moreOpen.value = true
-    if (path.startsWith('/wiki')) setNavigationGroup('wiki', true)
-  },
-  { immediate: true }
-)
-
-watch(
-  () => settings.configuration?.theme,
-  (preference) => {
-    theme.global.name.value = preference === 'light' ? 'jarvisLight' : 'jarvisDark'
-  },
-  { immediate: true }
-)
-
+watch(mdAndUp, value => { drawerOpen.value = value })
+watch(() => route.path, path => {
+  const group = navigationGroupForPath(path)
+  if (group && !openGroups.value.includes(group)) openGroups.value = [...openGroups.value, group]
+  if (!mdAndUp.value) drawerOpen.value = false
+}, { immediate: true })
+watch(() => settings.configuration?.theme, preference => {
+  theme.global.name.value = preference === 'dark' ? 'jarvisDark' : 'jarvisLight'
+}, { immediate: true })
 onMounted(async () => {
   if (settings.setupComplete && !settings.configuration) {
-    try {
-      await settings.fetchConfiguration()
-    } catch {
-      // The page-level alert presents the API error without exposing request data.
-    }
+    try { await settings.fetchConfiguration() } catch { /* Error shown below. */ }
   }
 })
 </script>
 
 <template>
   <v-app>
+    <a class="skip-to-content" href="#main-content">Zum Inhalt</a>
     <GlobalNotifications />
     <template v-if="!setupLayout">
-      <v-app-bar flat border>
-        <v-app-bar-nav-icon
-          v-if="!drawerPermanent"
-          aria-label="Navigation öffnen"
-          title="Navigation öffnen"
-          @click="drawerOpen = !drawerOpen"
-        />
-        <v-app-bar-title class="app-title">
-          <strong>{{ installationName }}</strong>
-          <span class="slogan">{{ APP_NAME }} · {{ APP_SLOGAN }}</span>
-        </v-app-bar-title>
-        <GlobalSearch />
-        <v-chip
-          class="mr-3 d-none d-sm-flex"
-          color="success"
-          variant="tonal"
-          prepend-icon="mdi-server-network"
-        >
-          System bereit
-        </v-chip>
-      </v-app-bar>
-
-      <v-navigation-drawer v-model="drawerOpen" :permanent="drawerPermanent">
-        <v-list v-model:opened="openNavigationGroups" nav>
-          <v-list-item prepend-icon="mdi-view-dashboard" title="Dashboard" to="/" />
-          <v-list-item
-            v-for="item in visibleModuleNavigation"
-            :key="item.key"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :to="item.to"
-            :disabled="item.disabled"
-          />
-          <v-list-group v-if="wikiEnabled" value="wiki">
-            <template #activator="{ props }">
-              <v-list-item v-bind="props" prepend-icon="mdi-book-open-page-variant" title="Wiki" />
-            </template>
-            <v-list-item prepend-icon="mdi-file-document-outline" title="Wiki-Seiten" to="/wiki" />
-            <v-list-item prepend-icon="mdi-format-list-bulleted" title="Handbuch & Glossar" to="/wiki/handbuch" />
+      <v-navigation-drawer v-model="drawerOpen" :permanent="mdAndUp" :temporary="!mdAndUp" :width="274" class="home-navigation">
+        <router-link to="/" class="home-brand" :aria-label="`${APP_NAME} – Übersicht`">
+          <span>Doc<em>Of</em>Home</span>
+          <small>{{ installationName }}</small>
+        </router-link>
+        <v-list v-model:opened="openGroups" open-strategy="multiple" nav aria-label="Hauptnavigation" class="home-nav-list">
+          <v-list-item prepend-icon="mdi-home-variant" title="Übersicht" to="/" exact class="overview-link" />
+          <v-list-group v-if="shortcuts.length" value="shortcuts">
+            <template #activator="{ props }"><v-list-item v-bind="props" title="Schnellzugriff" prepend-icon="mdi-star-outline" /></template>
+            <v-list-item v-for="item in shortcuts" :key="item.key" :title="item.title" :to="item.to" :prepend-icon="item.icon" exact />
           </v-list-group>
-          <v-list-group v-if="hiddenModuleNavigation.length" value="other">
-            <template #activator="{ props }"><v-list-item v-bind="props" prepend-icon="mdi-dots-horizontal-circle-outline" title="Sonstiges" /></template>
-            <v-list-item v-for="item in hiddenModuleNavigation" :key="item.key" :prepend-icon="item.icon" :title="item.title" :to="item.to" />
-          </v-list-group>
-          <v-list-item
-            v-for="item in visibleUtilityNavigation"
-            :key="item.key"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :to="item.to"
-          />
-          <v-list-group value="more">
-            <template #activator="{ props }">
-              <v-list-item v-bind="props" prepend-icon="mdi-menu" title="Mehr" />
+          <v-list-group v-for="group in groups" :key="group.key" :value="group.key">
+            <template #activator="{ props }"><v-list-item v-bind="props" :title="group.title" :prepend-icon="group.icon" /></template>
+            <template v-for="item in group.items" :key="item.key">
+              <v-list-item v-if="item.key === 'wiki'" prepend-icon="mdi-book-outline" title="Wiki-Seiten" to="/wiki" exact />
+              <v-list-item v-else :title="item.title" :to="item.to" :prepend-icon="item.icon" />
             </template>
-            <v-list-item prepend-icon="mdi-wizard-hat" title="Geführte Einrichtung" to="/guided-setup" />
-            <v-list-item prepend-icon="mdi-database-arrow-up-outline" title="Backup" to="/backups" />
-            <v-list-item prepend-icon="mdi-database-sync-outline" title="Daten & Historie" to="/data-management" />
-            <v-list-item prepend-icon="mdi-archive-outline" title="Archiv" to="/archive" />
-            <v-list-item prepend-icon="mdi-cog" title="Einstellungen" to="/settings" />
-            <v-list-item prepend-icon="mdi-information-outline" title="Über DocOfHome" to="/about" />
+          </v-list-group>
+          <v-list-group value="tools">
+            <template #activator="{ props }"><v-list-item v-bind="props" title="Daten & Werkzeuge" prepend-icon="mdi-database-sync-outline" /></template>
+            <v-list-item title="Geführte Einrichtung" to="/guided-setup" prepend-icon="mdi-wizard-hat" />
+            <v-list-item title="Backup" to="/backups" prepend-icon="mdi-database-arrow-up-outline" />
+            <v-list-item title="Daten & Historie" to="/data-management" prepend-icon="mdi-database-sync-outline" />
+            <v-list-item title="Archiv" to="/archive" prepend-icon="mdi-archive-outline" />
           </v-list-group>
         </v-list>
+        <template #append>
+          <v-list nav class="home-nav-bottom">
+            <v-list-item title="Einstellungen" to="/settings" prepend-icon="mdi-cog-outline" />
+            <v-list-item v-if="enabledModules.includes('wiki')" title="Handbuch & Glossar" to="/wiki/handbuch" prepend-icon="mdi-help-circle-outline" />
+            <v-list-item title="Über DocOfHome" to="/about" prepend-icon="mdi-information-outline" />
+          </v-list>
+          <p class="home-tagline">{{ APP_SLOGAN }}</p>
+        </template>
       </v-navigation-drawer>
+      <v-app-bar flat class="home-topbar" :height="72">
+        <v-app-bar-nav-icon v-if="!mdAndUp" aria-label="Navigation öffnen" @click="drawerOpen = !drawerOpen" />
+        <span v-if="!mdAndUp" class="mobile-brand">{{ APP_NAME }}</span>
+        <GlobalSearch />
+        <v-spacer />
+        <v-btn icon="mdi-cog-outline" to="/settings" variant="text" aria-label="Einstellungen" />
+        <span class="home-app-label d-none d-lg-flex">Deine digitale Hausakte</span>
+      </v-app-bar>
     </template>
-
-    <v-main>
-      <v-alert
-        v-if="settings.error && !setupLayout"
-        type="error"
-        variant="tonal"
-        class="ma-4"
-        closable
-      >
-        {{ settings.error }}
-      </v-alert>
+    <v-main id="main-content" tabindex="-1">
+      <v-alert v-if="settings.error && !setupLayout" type="error" variant="tonal" class="ma-4" closable>{{ settings.error }}</v-alert>
       <router-view />
     </v-main>
     <SupportFooter v-if="!setupLayout" />
   </v-app>
 </template>
-
-<style scoped>
-.app-title {
-  min-width: 180px;
-}
-
-.slogan {
-  margin-left: 0.75rem;
-  color: rgb(var(--v-theme-secondary));
-  font-size: 0.85rem;
-  font-weight: 400;
-}
-
-@media (max-width: 500px) {
-  .slogan {
-    display: none;
-  }
-}
-</style>

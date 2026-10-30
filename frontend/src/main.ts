@@ -13,6 +13,15 @@ import { pinia } from './pinia'
 import router from './router'
 
 const vuetify = createVuetify({
+  defaults: {
+    VBtn: { elevation: 0, height: 44 },
+    VTextField: { variant: 'outlined', density: 'comfortable', color: 'primary' },
+    VSelect: { variant: 'outlined', density: 'comfortable', color: 'primary' },
+    VAutocomplete: { variant: 'outlined', density: 'comfortable', color: 'primary' },
+    VTextarea: { variant: 'outlined', color: 'primary' },
+    VCard: { elevation: 0, rounded: 'lg' },
+    VTooltip: { openDelay: 350 }
+  },
   components,
   directives,
   icons: {
@@ -21,32 +30,42 @@ const vuetify = createVuetify({
     sets: { mdi }
   },
   theme: {
-    defaultTheme: 'jarvisDark',
+    defaultTheme: 'jarvisLight',
     themes: {
       jarvisDark: {
         dark: true,
         colors: {
-          background: '#0f1720',
-          surface: '#17212b',
-          primary: '#26c6da',
-          secondary: '#90a4ae',
-          success: '#66bb6a',
-          warning: '#ffa726',
-          error: '#ef5350',
-          info: '#42a5f5'
+          background: '#18221c',
+          'on-background': '#edf3e9',
+          'on-surface': '#edf3e9',
+          'on-primary': '#193420',
+          'surface-variant': '#334b38',
+          'on-surface-variant': '#e1eed9',
+          surface: '#202e25',
+          primary: '#a8cfa7',
+          secondary: '#b5c4b5',
+          success: '#a6c98b',
+          warning: '#eab67d',
+          error: '#ef9c91',
+          info: '#a5cbd1'
         }
       },
       jarvisLight: {
         dark: false,
         colors: {
-          background: '#f3f6f8',
+          background: '#f8f7f3',
+          'on-background': '#152b2b',
+          'on-surface': '#152b2b',
+          'on-primary': '#ffffff',
+          'surface-variant': '#e7ede4',
+          'on-surface-variant': '#315542',
           surface: '#ffffff',
-          primary: '#007c91',
-          secondary: '#546e7a',
-          success: '#2e7d32',
-          warning: '#ef6c00',
-          error: '#c62828',
-          info: '#1565c0'
+          primary: '#2d6054',
+          secondary: '#63736b',
+          success: '#477035',
+          warning: '#a55c22',
+          error: '#b44035',
+          info: '#436b80'
         }
       }
     }

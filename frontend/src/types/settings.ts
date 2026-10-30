@@ -125,7 +125,7 @@ export function createDefaultConfiguration(): ConfigurationWrite {
     installation_name: '',
     language: 'de',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    theme: 'dark',
+    theme: 'light',
     online_product_image_search_enabled: false,
     product_image_source_wikimedia_enabled: true,
     product_image_source_duckduckgo_enabled: true,

@@ -1,0 +1,93 @@
+..........F........................................................      [100%]
+=================================== FAILURES ===================================
+_______________ test_asset_creation_repairs_missing_code_counter _______________
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1958: in _exec_single_context
+    self.dialect.do_execute(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:1192: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlite3.IntegrityError: FOREIGN KEY constraint failed
+
+The above exception was the direct cause of the following exception:
+tests/test_asset_engine.py:370: in test_asset_creation_repairs_missing_code_counter
+    session.commit()
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2095: in commit
+    trans.commit(_to_root=True)
+<sqlalchemy generated _go() wrapper for sqlalchemy.orm.session.SessionTransaction.commit>:2: in commit
+    return target(fn, self, _to_root=_to_root)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:1330: in commit
+    self._prepare_impl()
+<sqlalchemy generated _go() wrapper for sqlalchemy.orm.session.SessionTransaction._prepare_impl>:2: in _prepare_impl
+    return target(fn, self)
+           ^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:1304: in _prepare_impl
+    self.session.flush()
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4543: in flush
+    self._flush(objects)
+<sqlalchemy generated warned() wrapper for sqlalchemy.orm.session.Session._flush>:2: in _flush
+    return target(fn, self, objects=objects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/util/deprecations.py:281: in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4686: in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:166: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4647: in _flush
+    flush_context.execute()
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:467: in execute
+    rec.execute(self)
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:643: in execute
+    util.preloaded.orm_persistence._save_obj(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:92: in _save_obj
+    _emit_insert_statements(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1052: in _emit_insert_statements
+    result = connection.execute(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1463: in execute
+    return meth(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:533: in _execute_on_connection
+    return connection._execute_clauseelement(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1683: in _execute_clauseelement
+    ret = self._execute_context(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1837: in _execute_context
+    return self._exec_single_context(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1977: in _exec_single_context
+    self._handle_dbapi_exception(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2347: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1958: in _exec_single_context
+    self.dialect.do_execute(
+/private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:1192: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) FOREIGN KEY constraint failed
+E   [SQL: INSERT INTO assets (id, created_at, updated_at, deleted_at, name, jarvis_code, description, asset_type_id, product_id, location_id, serial_number, inventory_number, image_url, image_source, image_reference, module_width, breaker_characteristic, rated_current_a, coil_voltage_v, coil_voltage_type, contact_count, contact_type, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+E   [parameters: ('3896ff10a6c64304915df81c6dd77944', '2026-10-30 07:17:44.465743', '2026-10-30 07:17:44.465764', None, 'Existing relay', 'SRA-007', None, 'ec2f1287dfa84bffb4b815f0310b7be3', None, None, None, None, None, 'url', None, None, None, None, None, None, None, None, 'active')]
+E   (Background on this error at: https://sqlalche.me/e/21/gkpj)
+=============================== warnings summary ===============================
+../../../../../../../private/tmp/docofhome191-venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /private/tmp/docofhome191-venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_filament.py::test_migration_upgrade_downgrade_and_module_choices
+tests/test_filament.py::test_migration_upgrade_downgrade_and_module_choices
+tests/test_filament.py::test_migration_upgrade_downgrade_and_module_choices
+tests/test_filament.py::test_migration_upgrade_downgrade_and_module_choices
+tests/test_lego_collection.py::test_migration_keeps_existing_module_choices_and_supports_downgrade
+tests/test_lego_collection.py::test_migration_keeps_existing_module_choices_and_supports_downgrade
+tests/test_lego_collection.py::test_migration_keeps_existing_module_choices_and_supports_downgrade
+tests/test_lego_collection.py::test_migration_keeps_existing_module_choices_and_supports_downgrade
+  /private/tmp/docofhome191-venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:1192: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_asset_engine.py::test_asset_creation_repairs_missing_code_counter
+1 failed, 66 passed, 9 warnings in 71.48s (0:01:11)

@@ -2,6 +2,30 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.9.1 – 2026-10-30
+
+### Neue Oberfläche nach Designvariante 1
+
+- Helles Salbei-Design mit lokal ausgelieferter Source Sans 3, Serifentiteln, einheitlichen Formularen und zusätzlichem abgestimmtem Dunkelmodus.
+- Gruppierte Navigation mit allen aktivierten Modulen. Die bisherige Hauptmenü-Auswahl wird als Schnellzugriff angezeigt. Mobile Navigation über ein ausklappbares Menü.
+- Dashboard mit echten Monatswerten, Vorperiodenvergleich, offenen Aufgaben und gruppierten Ablesefälligkeiten. Fehlende Werte bleiben ausdrücklich als fehlend erkennbar. Dashboard-Konfiguration und Modulschalter bleiben erhalten.
+- Inventar mit kompakter Suche, ausklappbaren Filtern, mobiler Listenansicht und in der URL gespeicherten Such-/Filter-/Seitenzuständen.
+- Gerätedetails mit Übersicht, Dokumenten/Fotos, Wartung/Verlauf und Technik/Verknüpfungen. Bestehende Aktionen und Bearbeitungsformulare bleiben angebunden.
+- Eine vorhandene ungültige Home-Assistant-Seitengröße im Frontend wurde auf das API-Maximum 500 korrigiert; vollständiges Nachladen bleibt erhalten.
+- Backend-Anwendung, Migrationen, Integrationen, Dockerfile und Compose-Konfiguration sind unverändert. Keine zusätzliche Migration gegenüber 1.9.0; Head bleibt `0061`, weiterhin 49 MCP-Werkzeuge.
+
+### Prüfung und Betrieb
+
+Entwicklung ausschließlich in separater Quellkopie und lokaler Testinstanz mit Beispieldaten. Keine Änderung der laufenden NAS-/Docker-Installation. Designvergleich und Prüfbelege: `design-qa.md`, Umstiegsinformationen: `docs/REDESIGN_1.9.1.md`.
+
+Frontend-Typprüfung, Produktionsbuild, Symbolprüfung und 217 Frontendtests bestanden. Ein gezielter Backendprüflauf ergab 66 bestandene Tests und einen auch im unveränderten 1.9.0 reproduzierten Fremdschlüsselfehler in `test_asset_creation_repairs_missing_code_counter`. Ein vollständiger grüner Gesamtprüflauf und ein Dockerbuild unter Python 3.13 werden daher nicht behauptet.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.9.1","base_version":"1.9.0","built_on":"2026-10-30","alembic_head":"0061","database_migration_required":false,"backup_format_version":2,"mcp_tools":49,"full_quality_gate_passed":false}
+```
+
 ## 1.9.0 – 2026-10-29
 
 ### Filament-Sammlung und Bambu Cloud

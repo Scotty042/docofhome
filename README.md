@@ -125,3 +125,7 @@ DocOfHome ist in erster Linie aus meinen eigenen Anforderungen entstanden und wi
 ## Lizenz und Sicherheit
 
 Siehe [`LICENSE`](LICENSE) und [`SECURITY.md`](SECURITY.md). Bitte keine Zugangsdaten, Tokens oder privaten Inhalte in Issues veröffentlichen.
+
+## Oberfläche 1.9.1
+
+Hinweise zur neuen Navigation, Darstellung und zum späteren Umstieg: [Redesign 1.9.1](docs/REDESIGN_1.9.1.md). Prüfbelege: [Design-QA](design-qa.md).

@@ -1,0 +1,20 @@
+{
+  "passed": [
+    "Mobile inventory data fully loaded",
+    "Mobile global search returns actual asset",
+    "Home Assistant entity request respects API page limit",
+    "Desktop keyboard shortcut Ctrl+K and Escape"
+  ],
+  "errors": [
+    {
+      "url": "http://127.0.0.1:4181/api/v1/home-assistant/entities?domain=sensor&available=true&selection_scope=all&offset=0&limit=500",
+      "status": 409,
+      "body": "{\"detail\":\"Die Home-Assistant-Integration ist nicht aktiviert.\"}"
+    },
+    {
+      "url": "http://127.0.0.1:4181/api/v1/documents",
+      "status": 409,
+      "body": "{\"detail\":\"Nextcloud integration is not fully configured or enabled\"}"
+    }
+  ]
+}

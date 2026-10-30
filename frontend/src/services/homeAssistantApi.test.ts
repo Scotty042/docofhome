@@ -35,11 +35,11 @@ describe('Home Assistant API', () => {
   })
 
   it('loads every entity page with all-selection scope and refreshes only once', async () => {
-    const firstItems = Array.from({ length: 1000 }, (_, index) => ({ entity_id: `sensor.${index}` }))
-    const secondItems = [{ entity_id: 'sensor.1000' }]
+    const firstItems = Array.from({ length: 500 }, (_, index) => ({ entity_id: `sensor.${index}` }))
+    const secondItems = [{ entity_id: 'sensor.500' }]
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ items: firstItems, total: 1001 }))
-      .mockResolvedValueOnce(jsonResponse({ items: secondItems, total: 1001 }))
+      .mockResolvedValueOnce(jsonResponse({ items: firstItems, total: 501 }))
+      .mockResolvedValueOnce(jsonResponse({ items: secondItems, total: 501 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await homeAssistantApi.allEntities({
@@ -47,11 +47,12 @@ describe('Home Assistant API', () => {
       refresh: true
     })
 
-    expect(result).toHaveLength(1001)
+    expect(result).toHaveLength(501)
     expect(String(fetchMock.mock.calls[0][0])).toContain('selection_scope=all')
     expect(String(fetchMock.mock.calls[0][0])).toContain('refresh=true')
     expect(String(fetchMock.mock.calls[0][0])).toContain('offset=0')
-    expect(String(fetchMock.mock.calls[1][0])).toContain('offset=1000')
+    expect(String(fetchMock.mock.calls[0][0])).toContain('limit=500')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('offset=500')
     expect(String(fetchMock.mock.calls[1][0])).not.toContain('refresh=true')
   })
   it('loads asset-specific links and current Home Assistant properties', async () => {

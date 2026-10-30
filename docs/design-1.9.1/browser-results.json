@@ -1,0 +1,148 @@
+{
+  "results": [
+    {
+      "name": "Dashboard with actual local backend",
+      "passed": true
+    },
+    {
+      "name": "Inventory search and detail return preserve URL",
+      "passed": true
+    },
+    {
+      "name": "Inventory filters write a location to URL",
+      "passed": true
+    },
+    {
+      "name": "Detail tabs and edit submit reach the real API",
+      "passed": true
+    },
+    {
+      "name": "Mobile detail actions and inventory are usable at 390px",
+      "passed": true
+    },
+    {
+      "name": "Mobile global search finds the local asset",
+      "passed": true
+    },
+    {
+      "name": "Reflow 360px /",
+      "passed": true
+    },
+    {
+      "name": "Reflow 360px /assets",
+      "passed": true
+    },
+    {
+      "name": "Reflow 360px /assets/dfb4f886-7ddc-4f0e-bf5b-c77ee4e9d797",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /assets",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /locations",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /filament",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /lego",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /network",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /electrical",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /consumption",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /maintenance",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /wiki",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /documents",
+      "passed": true
+    },
+    {
+      "name": "Reflow 390px /settings",
+      "passed": true
+    },
+    {
+      "name": "Reflow 768px /",
+      "passed": true
+    },
+    {
+      "name": "Reflow 768px /assets",
+      "passed": true
+    },
+    {
+      "name": "Reflow 768px /assets/dfb4f886-7ddc-4f0e-bf5b-c77ee4e9d797",
+      "passed": true
+    },
+    {
+      "name": "Reflow 960px /",
+      "passed": true
+    },
+    {
+      "name": "Reflow 960px /assets",
+      "passed": true
+    },
+    {
+      "name": "Reflow 960px /assets/dfb4f886-7ddc-4f0e-bf5b-c77ee4e9d797",
+      "passed": true
+    },
+    {
+      "name": "Reflow 1440px /",
+      "passed": true
+    },
+    {
+      "name": "Reflow 1440px /assets",
+      "passed": true
+    },
+    {
+      "name": "Reflow 1440px /assets/dfb4f886-7ddc-4f0e-bf5b-c77ee4e9d797",
+      "passed": true
+    },
+    {
+      "name": "Dark theme remains supported without changing production preferences",
+      "passed": true
+    }
+  ],
+  "errors": [
+    {
+      "kind": "response",
+      "status": 422,
+      "url": "http://127.0.0.1:4181/api/v1/home-assistant/entities?domain=sensor&available=true&selection_scope=all&offset=0&limit=1000"
+    },
+    {
+      "kind": "console",
+      "text": "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+    },
+    {
+      "kind": "response",
+      "status": 409,
+      "url": "http://127.0.0.1:4181/api/v1/documents"
+    },
+    {
+      "kind": "console",
+      "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+    }
+  ]
+}
