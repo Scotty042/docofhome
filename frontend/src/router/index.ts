@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { pinia } from '../pinia'
+import TimeTrackingPage from '../pages/TimeTrackingPage.vue'
 import AboutPage from '../pages/AboutPage.vue'
 import ArchivePage from '../pages/ArchivePage.vue'
 import AssetDetailPage from '../pages/AssetDetailPage.vue'
@@ -36,6 +37,7 @@ import { resolveSetupNavigation } from './setupNavigation'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/time-tracking', name: 'time-tracking', component: TimeTrackingPage },
     { path: '/', name: 'dashboard', component: DashboardPage },
     { path: '/lego', name: 'lego', component: LegoPage },
     { path: '/filament', name: 'filament', component: FilamentPage },
@@ -85,6 +87,7 @@ router.beforeEach(async (to) => {
     if (setupRedirect !== true) return setupRedirect
     if (!settings.configuration) await settings.fetchConfiguration()
     const routeModules: Array<[string, string]> = [
+      ['/time-tracking', 'time_tracking'],
       ['/filament', 'filament'],
       ['/lego', 'lego'],
       ['/locations', 'locations'], ['/electrical', 'electrical'], ['/assets', 'assets'],

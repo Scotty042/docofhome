@@ -30,6 +30,7 @@ const objectTypeLabels: Record<string, string> = {
   work_item_events: 'Aufgabenereignis', wiki_pages: 'Wiki-Seite', domain_notes: 'Notiz',
   document_links: 'Dokumentverknüpfung', immich_asset_links: 'Bildverknüpfung',
   home_assistant_asset_links: 'Home-Assistant-Verknüpfung', service_workloads: 'Dienst oder Container',
+  work_intervals: 'Arbeitslauf',
   lego_sets: 'LEGO-Set',
   filament_spools: 'Filamentrolle', filament_slots: 'AMS-Slot',
   docker_sync_settings: 'Docker-Synchronisierung', dashboard_settings: 'Dashboard-Einstellung', system_settings: 'Systemeinstellung',
@@ -165,6 +166,7 @@ function eventObjectLabel(event: AuditEvent) {
 }
 
 const csvModules = [
+  'work_intervals',
   'filament_spools',
   'lego_sets',
   'assets',

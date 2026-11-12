@@ -2,6 +2,36 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.10.0 – 2026-11-12
+
+### Ticketbasierte Zeiterfassung
+
+- Ticketnummer, Kundenname und weitere Info mit Start, Pause, Ende und Wiederaufnahme. Jeder Arbeitslauf enthält Anfangszeit, Endzeit und Dauer. Wiederaufnahme erstellt einen neuen Timeslot; Ticketnummern werden für die Summen nach Entfernen äußerer Leerzeichen exakt gruppiert.
+- Tagesübersicht mit Ticketsummen und gesamter Arbeitszeit ohne Pausen; frühere Tage auswählbar. Arbeitsläufe über Mitternacht werden tageweise aufgeteilt. Oberfläche verwendet Browserzeitzone, MCP die konfigurierte Installationszeitzone.
+- Serverzeit und persistente Timer; Schließen des Browsers beendet keinen Arbeitslauf. Ein partieller eindeutiger Datenbankindex verhindert zwei gleichzeitig laufende Timer auch bei konkurrierenden Anfragen. Kein automatischer Tätigkeitswechsel.
+- Migration `0062` ergänzt `work_intervals`, aktiviert das neue Modul und erhält bestehende Entscheidungen für andere Module. Navigation, Modulschalter und integriertes Handbuch sind ergänzt.
+- Vier zusätzliche MCP-Werkzeuge: `list_work_intervals`, `start_work_interval`, `stop_work_interval`, `get_work_day`; insgesamt 53 Werkzeuge. Lesen benötigt read, Start/Pause/Ende write. Beide Authentifizierungswege bleiben erhalten. Werkzeugliste nach dem Update im Client neu laden.
+- JSON-/CSV-Export einschließlich Arbeitsläufen, CSV-Link unter Datenverwaltung. Allgemeiner Datenimport von Arbeitsläufen bleibt gesperrt, damit kein laufender Timer reaktiviert wird. Vollständige Backups sichern die Datenbank einschließlich Timer.
+- GitHub-Verweise, Issue-/PR-Vorlagen und CI bleiben im Quellpaket enthalten. Versionsquellen, Paket-Lockdatei und Service-Worker-Kennung sind auf 1.10.0 angehoben.
+
+### Update und Grenzen
+
+Vor dem Update vollständiges Backup erstellen. Quellen in die vorhandene Installation übernehmen und dabei `.env` sowie den bestehenden `data`-Ordner erhalten. Anschließend im bisherigen Installationsverzeichnis `docker compose up -d --build` ausführen. Migrationen laufen beim Containerstart. Keinen neuen leeren Datenpfad als Ersatz für den bisherigen Bestand verwenden. Unter Alltag → Zeiterfassung prüfen; den MCP-Client neu verbinden bzw. Werkzeugliste aktualisieren. Anleitung: `docs/TIME_TRACKING.md`, MCP: `docs/MCP_SETUP.md`.
+
+Gemeinsame persönliche Zeiterfassung ohne Benutzerzuordnung und ohne manuelle Zeitkorrektur. Ein nach Backup-Wiederherstellung laufender Timer muss geprüft werden. Ein Downgrade auf 0061 entfernt die neue Zeittabelle und ihre Einträge; für ein produktives Zurückrollen das vollständige Backup verwenden.
+
+### Validierung
+
+226 Frontendtests bestanden; Vue-Typprüfung, Produktionsbuild und Symbolprüfung bestanden. 25 gezielte Backendtests für Zeiterfassung, MCP, Berechtigungen, Export und bestehende Backup-/Transportverträge bestanden. Darunter reale MCP-HTTP-Aufrufe über Bearer und Tokenpfad, 53 registrierte Werkzeuge und 23-/25-Stunden-Tage. Frische Datenbank bis 0062 und 0061 → 0062 → 0061 → 0062 mit bestehenden Modulentscheidungen geprüft. Neue Backenddateien und ergänzter MCP-Server bestehen Ruff. Mypy: 80 bestehende Meldungen in 15 Dateien, identische Meldungen wie Basis 1.9.2; keine neuen Zeiterfassungsfehler. Ruff gesamt enthält 110 Bestandsmeldungen einschließlich unverändert übernommener 1.9.3-Dateien. Der erste vollständige Backendlauf ergab 333 bestandene und 33 fehlgeschlagene Tests. Drei Erwartungen an den alten Migrations-Head wurden aktualisiert und im Nachtest geprüft; 30 Fehler in bestehenden Bereichen bleiben offen. Einzelheiten stehen in `AUDIT.md`.
+
+Lokale Prüfungen unter Python 3.12 und Node 24. Kein Docker-/Linux-/Python-3.13-Build und keine produktive Installation geprüft. Keine GitHub-Veröffentlichung oder Änderung produktiver Daten.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.0","base_version":"1.9.3","built_on":"2026-11-12","alembic_head":"0062","database_migration_required":true,"backup_format_version":2,"mcp_tools":53,"full_quality_gate_passed":false}
+```
+
 ## 1.9.3 – 2026-10-30
 
 ### AMS-Lagerrollen und Original-Store-Bilder

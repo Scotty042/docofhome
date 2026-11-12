@@ -15,6 +15,7 @@ DocOfHome verbindet technische Dokumentation, Verbrauchsdaten, Wartungen, Wissen
 - **Elektro** – Verteilungen, Stromkreise, Schutzgeräte, Leiter, Schienen und die Topologie des Verteilerkastens dokumentieren.
 - **Verbrauch** – Zählerstände, Ableseerinnerungen und Monats- oder Jahresvergleiche für Strom, Wasser, Gas und PV verwalten.
 - **Wartung & Aufgaben** – wiederkehrende Tätigkeiten, Termine, Historien, Fälligkeiten, Messwerte und Kosten erfassen.
+- **Zeiterfassung** – Arbeitsläufe mit Ticketnummer, Kundenname und Info erfassen; Start, Pause, Ende, Wiederaufnahme sowie Ticket- und Tagessummen. [Anleitung](docs/TIME_TRACKING.md).
 - **Kochbuch** – eigene Rezepte mit Zutaten, Portionen, Arbeitsschritten, Druckansicht und Kochmodus verwalten.
 - **LEGO-Sammlung** – Sets anhand ihrer Nummer inventarisieren; Bilddashboard, Kaufkosten, Teilezahlen, Lagerorte und optionale Modellmaße. Manuell oder per MCP erfassen; Anleitung in [LEGO_COLLECTION.md](docs/LEGO_COLLECTION.md).
 - **Filament-Sammlung** – Rollen beliebiger Hersteller, Restmengen, AMS-Belegung, Archiv und Nachkaufliste. Optionale direkte Bambu-Cloud-Anbindung, acht MCP-Werkzeuge und 40 × 30 mm QR-Etiketten; [Anleitung](docs/FILAMENT.md).
@@ -137,3 +138,7 @@ Weniger Platzbedarf bei unveränderten Funktionen und Einstellungen. Details und
 ## Filament und AMS 1.9.3
 
 [AMS-Lagerrollen und originale Store-Bilder](docs/AMS_STORE_IMAGES_1.9.3.md): Lagerrollendetails direkt im AMS und gemeinsamer Bildabgleich für eindeutig erkannte Bambu-Rollen.
+
+## Zeiterfassung 1.10.0
+
+Arbeitszeiten pro Ticket und Kunde mit Start, Pause, Ende und Wiederaufnahme. Einzelne Timeslots und Tagesauswertung; vier MCP-Werkzeuge. [Anleitung](docs/TIME_TRACKING.md).

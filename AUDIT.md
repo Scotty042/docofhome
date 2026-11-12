@@ -1,3 +1,56 @@
+# Prüfung 1.10.0 – Zeiterfassung – 12. November 2026
+
+Paketkorrektur: ZIP enthält die Quellen direkt auf oberster Ebene, insbesondere `VERSION`, `Dockerfile`, `compose.yaml` und `.github/`. Der zusätzliche Versionsordner wurde entfernt. Der Paketbau prüft diese Publisher-Vorgabe künftig automatisch.
+
+
+- 226 Frontendtests in 68 Dateien bestanden; Typprüfung, Produktionsbuild und Symbolprüfung erfolgreich (bestehende Bundlegrößenwarnung).
+- 25 gezielte Backendtests bestanden: Zeiterfassung, MCP-Lesen/Schreiben/Berechtigungen, beide Authentifizierungswege, Wiederaufnahme, Export, Backup-/Transportregression und Sommer-/Winterzeit.
+- Migration 0062 auf frischer Datenbank sowie Upgrade/Downgrade/Wiederupgrade mit gezielter Modulauswahl erfolgreich; eindeutiger aktiver Timer geprüft.
+- Neue Backenddateien und MCP-Server: Ruff bestanden. Ruff gesamt: 110 Meldungen. Davon 103 wie Basis 1.9.2 plus sieben aus unverändert übernommenen Filamentdateien aus 1.9.3.
+- Mypy: 80 Meldungen in 15 Dateien; Vergleich mit Basis 1.9.2 in derselben Umgebung ergibt dieselben Diagnosemeldungen. Keine neue Meldung für die Zeiterfassung.
+- Erster Backend-Gesamtlauf: 333 bestanden, 33 fehlgeschlagen, 72 Warnungen (366 Tests). Drei Migrationsprüfungen erwarteten noch Head 0061; Erwartungen auf 0062 und neues Modul angepasst und anschließend separat erfolgreich geprüft. Die drei später ergänzten MCP-Tests sind im grünen gezielten 25-Test-Lauf enthalten. Kein abschließender vollständiger grüner Gesamtprüflauf behauptet.
+- Die übrigen 30 fehlgeschlagenen Fälle betreffen bestehende Bereiche (Elektro, Datenmigrationen, Asset-Zähler, Netzwerk, HA und Kalenderlogik); sie wurden in diesem Release nicht behoben. Die vollständige Liste des ersten Laufs folgt.
+- Lokale Umgebung: Python 3.12, Node 24; Projektziel Docker/Python 3.13 und Node 22 nicht ausgeführt. Kein Docker installiert. Kein produktives Update, kein GitHub-Push/Release.
+- Handbuch und MCP-Dokumentation aktualisiert; Historie und Manifest bleiben zentral in PROJECT_HISTORY.md.
+
+### Fehlgeschlagene Tests des ersten Gesamtlaufs
+
+- `tests/test_asset_engine.py::test_asset_creation_repairs_missing_code_counter`
+- `tests/test_collected_integration_migration.py::test_collected_integration_migration_upgrade_downgrade_and_reupgrade`
+- `tests/test_docker_multi_host_ssh.py::test_migration_copies_legacy_socket_configuration`
+- `tests/test_electrical_circuit_asset_migration.py::test_circuit_asset_migration_preserves_existing_data_and_downgrades`
+- `tests/test_electrical_circuit_migration.py::test_circuit_migration_preserves_electrical_data_and_downgrades`
+- `tests/test_electrical_circuits.py::test_circuit_asset_assignments_are_searchable_and_historic`
+- `tests/test_electrical_layout.py::test_meter_asset_can_be_placed_without_consumption_meter`
+- `tests/test_electrical_layout.py::test_phase_rail_contacts_every_fully_covered_din_device`
+- `tests/test_electrical_layout.py::test_structured_phase_rail_replaces_manual_feeds_and_contacts_all_din_devices`
+- `tests/test_electrical_layout.py::test_phase_rail_can_link_to_rcd_din_asset`
+- `tests/test_electrical_migration.py::test_electrical_migration_preserves_existing_data_and_is_downgrade_safe`
+- `tests/test_electrical_migration.py::test_electrical_migration_upgrades_a_fresh_database_without_drift`
+- `tests/test_electrical_review_fixes.py::test_distribution_capacity_cannot_exclude_active_device`
+- `tests/test_electrical_topology.py::test_supply_topology_paths_phases_cable_and_rcd_counts`
+- `tests/test_electrical_topology.py::test_archived_endpoints_cannot_receive_new_connections`
+- `tests/test_electrical_topology.py::test_grid_connection_is_a_real_source_only_endpoint`
+- `tests/test_electrical_topology.py::test_cabinet_component_accepts_multiple_feeds_and_preserves_phases`
+- `tests/test_electrical_topology.py::test_phase_rail_phase_is_forced_when_wiring_a_protective_device`
+- `tests/test_electrical_topology.py::test_n_and_pe_rails_are_selectable_and_keep_auxiliary_conductors_separate`
+- `tests/test_electrical_topology.py::test_separate_neutral_feed_does_not_inherit_parallel_line_phases`
+- `tests/test_electrical_topology_migration.py::test_topology_migration_preserves_existing_data_and_downgrades`
+- `tests/test_filament.py::test_migration_upgrade_downgrade_and_module_choices`
+- `tests/test_home_assistant.py::test_parallel_home_assistant_reads_share_one_sync`
+- `tests/test_home_assistant_selection_migration.py::test_selection_migration_preserves_links_and_downgrades_to_0010`
+- `tests/test_immich_album_selection_migration.py::test_immich_album_selection_migration_preserves_integration_and_downgrades`
+- `tests/test_immich_migration.py::test_immich_link_migration_preserves_existing_data_and_downgrades`
+- `tests/test_lego_collection.py::test_migration_keeps_existing_module_choices_and_supports_downgrade`
+- `tests/test_network.py::test_release_1_7_ip_reconciliation_keeps_documented_address`
+- `tests/test_nextcloud_document_root_migration.py::test_document_root_migration_preserves_nextcloud_configuration_and_downgrades`
+- `tests/test_recipe_title_migration.py::test_upgrade_repairs_blank_titles_without_losing_recipe_content`
+- `tests/test_release_data_integrity.py::test_calendar_recurrence_uses_last_available_february_day`
+- `tests/test_release_migration_recovery.py::test_release_migration_recovers_stale_sqlite_batch_table`
+- `tests/test_subdistribution_layout_migration.py::test_0030_allows_subdistribution_sections_and_round_trips`
+
+---
+
 # Prüfung 1.9.3 – AMS und Store-Bilder
 
 - 223 Frontendtests und 16 gezielte Filament-Backendtests bestanden.

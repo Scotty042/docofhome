@@ -69,6 +69,7 @@ from app.models.smart_meter import (
     SmartMeterMeasurementPoint,
 )
 from app.models.system_setting import SystemSetting
+from app.models.time_tracking import WorkInterval
 from app.models.work import (
     WorkItem,
     WorkItemEvent,
@@ -135,6 +136,7 @@ __all__ = [
     "SmartMeterMeasurementPoint",
     "SystemSetting",
     "WikiPage",
+    "WorkInterval",
     "WorkItem",
     "WorkItemEvent",
     "WorkItemEventAttachment",

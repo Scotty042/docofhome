@@ -29,10 +29,12 @@ from app.api.v1 import (
     settings,
     smart_meter,
     system,
+    time_tracking,
     work,
 )
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(time_tracking.router)
 api_router.include_router(about.router)
 api_router.include_router(health.router)
 api_router.include_router(system.router)

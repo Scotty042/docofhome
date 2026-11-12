@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time
-from typing import Any
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from fastapi import HTTPException
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.recipes import apply as apply_recipe
 from app.api.v1.recipes import read_model as read_recipe
+from app.api.v1.time_tracking import StartRequest
+from app.api.v1.time_tracking import start as start_interval
+from app.api.v1.time_tracking import stop as stop_interval
 from app.core.settings import settings
 from app.db.session import engine
 from app.models.application_setting import ApplicationSetting
 from app.models.recipe import Recipe
+from app.models.time_tracking import WorkInterval
 from app.schemas.asset_engine import (
     AssetTypeWrite,
     AssetWrite,
@@ -1222,6 +1227,94 @@ def delete_network_record(kind: str, record_id: str) -> dict[str, str]:
         return {"status": "archived", "kind": kind, "record_id": record_id}
 
 
+@mcp_server.tool()
+def list_work_intervals(
+    ticket: str = "", offset: int = 0, limit: int = 100
+) -> dict[str, Any]:
+    """Liest Arbeitsläufe und den aktiven Timer. Bei has_more mit next_offset weiterlesen."""
+    if offset < 0 or not 1 <= limit <= 100:
+        raise ValueError("offset muss >= 0 und limit zwischen 1 und 100 sein")
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        query = select(WorkInterval)
+        if ticket.strip():
+            query = query.where(WorkInterval.ticket == ticket.strip())
+        rows = session.exec(
+            query.order_by(col(WorkInterval.started_at).desc(), WorkInterval.id)
+            .offset(offset)
+            .limit(limit + 1)
+        ).all()
+        more = len(rows) > limit
+        return {
+            "items": [row.model_dump(mode="json") for row in rows[:limit]],
+            "has_more": more,
+            "next_offset": offset + limit if more else None,
+        }
+
+
+@mcp_server.tool()
+def start_work_interval(ticket: str, customer: str, info: str = "") -> dict[str, Any]:
+    """Startet einen neuen Arbeitslauf, auch bei Wiederaufnahme. Zuerst aktive Zeiten prüfen.
+
+    Ticketnummer, Kundenname und weitere Info. Ein laufender Timer wird nie automatisch beendet.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        try:
+            return start_interval(
+                StartRequest(ticket=ticket, customer=customer, info=info), session
+            ).model_dump(mode="json")
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+
+
+@mcp_server.tool()
+def stop_work_interval(
+    interval_id: str, action: Literal["pause", "end"]
+) -> dict[str, Any]:
+    """Schließt einen laufenden Timeslot mit Serverzeit ab. pause pausiert, end beendet."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        try:
+            return stop_interval(interval_id, action, session).model_dump(mode="json")
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+
+
+@mcp_server.tool()
+def get_work_day(day: str) -> dict[str, Any]:
+    """Tagessumme und Ticketsummen ohne Pausen, day als YYYY-MM-DD in Installationszeitzone."""
+    selected = date.fromisoformat(day)
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        zone = _installation_zone(session)
+        start = datetime.combine(selected, time.min, zone).timestamp()
+        end = datetime.combine(selected + timedelta(days=1), time.min, zone).timestamp()
+        current = datetime.now(UTC).timestamp()
+        tickets: dict[str, dict[str, Any]] = {}
+        for row in session.exec(
+            select(WorkInterval).where(WorkInterval.started_at < end)
+        ).all():
+            duration = max(
+                0, min(row.ended_at or current, end) - max(row.started_at, start)
+            )
+            if duration <= 0:
+                continue
+            group = tickets.setdefault(
+                row.ticket, {"ticket": row.ticket, "seconds": 0.0, "intervals": []}
+            )
+            group["seconds"] += duration
+            group["intervals"].append(
+                {**row.model_dump(mode="json"), "day_seconds": duration}
+            )
+        return {
+            "day": day,
+            "timezone": str(zone),
+            "tickets": list(tickets.values()),
+            "seconds": sum(group["seconds"] for group in tickets.values()),
+        }
+
+
 class McpBearerAuthMiddleware:
     """Small ASGI bearer gate backed by the persistent DocOfHome MCP token.
 
@@ -1291,6 +1384,10 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
     )
     for function in (
         docofhome_info,
+        list_work_intervals,
+        start_work_interval,
+        stop_work_interval,
+        get_work_day,
         search_subjects,
         create_subject,
         update_subject,

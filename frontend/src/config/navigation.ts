@@ -14,6 +14,7 @@ export const navigationGroups: NavigationGroup[] = [
     { key: 'workloads', title: 'Dienste & Container', icon: 'mdi-docker', to: '/workloads' }
   ] },
   { key: 'daily', title: 'Alltag', icon: 'mdi-chart-bar', items: [
+    { key: 'time_tracking', title: 'Zeiterfassung', icon: 'mdi-clock-outline', to: '/time-tracking' },
     { key: 'consumption', title: 'Verbrauch', icon: 'mdi-lightning-bolt-outline', to: '/consumption' },
     { key: 'maintenance', title: 'Wartung & Aufgaben', icon: 'mdi-checkbox-marked-outline', to: '/maintenance' }
   ] },

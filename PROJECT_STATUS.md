@@ -1,12 +1,14 @@
 # DocOfHome – Projektstatus
 
-Stand: 30. Oktober 2026  
-Release: **1.9.3**  
-Alembic-Head: **`0061`**
+Stand: 12. November 2026  
+Release: **1.10.0**  
+Alembic-Head: **`0062`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.
 
 ## Aktueller technischer Stand
+
+- Ticketbasierte Zeiterfassung mit einzelnen Arbeitsläufen, Start/Pause/Ende, Wiederaufnahme, Ticket- und Tagessummen; vier MCP-Werkzeuge und Datenexport. Migration `0062`.
 
 - AMS-Karten mit Lagerrollendetails; gemeinsamer Abruf eindeutig passender Bambu-Originalbilder für Rollen ohne Bild;
 
@@ -14,7 +16,7 @@ DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, E
 - responsives Salbei-Design mit neuer Navigation, Dashboard, Inventarliste und gegliederten Gerätedetails;
 
 - Filament-Sammlung für beliebige Hersteller mit optionaler direkter Bambu-Cloud-/AMS-Anbindung, lokalem Archiv, Nachkaufliste, Bildern und 40 × 30 mm QR-Etiketten;
-- insgesamt 49 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
+- insgesamt 53 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
 
 - optionale tägliche Push-Erinnerungen über Pushover und ntfy mit Testversand, Kategorien und dauerhaftem Versandstatus;
 

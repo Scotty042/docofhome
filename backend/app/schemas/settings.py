@@ -39,6 +39,7 @@ class ModuleKey(StrEnum):
     WORKLOADS = "workloads"
     LEGO = "lego"
     FILAMENT = "filament"
+    TIME_TRACKING = "time_tracking"
 
 
 class ThemePreference(StrEnum):

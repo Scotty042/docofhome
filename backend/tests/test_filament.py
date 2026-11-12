@@ -483,7 +483,7 @@ def test_migration_upgrade_downgrade_and_module_choices(tmp_path, monkeypatch):
     with sqlite3.connect(settings.database_path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM filament_spools").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM filament_slots").fetchone()[0] == 0
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0061"
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0062"
     command.downgrade(cfg, "0060")
     command.upgrade(cfg, "head")
 

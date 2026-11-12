@@ -107,3 +107,17 @@ Authorization: Bearer doh_mcp_...
   Reverse-Proxy-Konfigurationen hinterlegt werden.
 - Für den normalen Einsatz mit ChatGPT ist **Lesen & Schreiben** sinnvoll; Vollzugriff sollte
   nur aktiviert werden, wenn MCP auch löschen dürfen soll.
+
+
+## Zeiterfassung ab 1.10.0
+
+Nach dem Update die Werkzeugliste im MCP-Client neu laden. Insgesamt 53 Werkzeuge.
+
+| Werkzeug | Berechtigung | Funktion |
+| --- | --- | --- |
+| `list_work_intervals` | read | Arbeitsläufe, optional Ticketfilter; `offset`, `limit` (1–100), `has_more`/`next_offset` |
+| `start_work_interval` | write | Neuer Timeslot mit `ticket`, `customer`, optional `info`; auch Wiederaufnahme |
+| `stop_work_interval` | write | Laufenden Timeslot per `interval_id` und `action` (`pause` oder `end`) schließen |
+| `get_work_day` | read | `day` als YYYY-MM-DD: Gesamtsumme, Ticketsummen und Timeslots in Installationszeitzone |
+
+Vor Start die aktiven Arbeitsläufe prüfen. Ein neuer Start stoppt niemals einen bestehenden Timer. Wiederaufnahme erzeugt einen neuen Timeslot. Summen werden in Sekunden geliefert. Beide Authentifizierungswege bleiben unterstützt.

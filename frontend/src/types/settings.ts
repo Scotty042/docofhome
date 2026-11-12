@@ -1,7 +1,7 @@
 export type IntegrationKind = 'home_assistant' | 'immich' | 'nextcloud' | 'fritzbox' | 'paperless'
 export type Language = 'de' | 'en'
 export type ThemePreference = 'dark' | 'light'
-export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality' | 'cookbook' | 'images' | 'documents' | 'workloads' | 'lego' | 'filament'
+export type ModuleKey = 'locations' | 'electrical' | 'assets' | 'master_data' | 'network' | 'smart_home' | 'consumption' | 'wiki' | 'maintenance' | 'quality' | 'cookbook' | 'images' | 'documents' | 'workloads' | 'lego' | 'filament' | 'time_tracking'
 
 export type McpPermission = 'read' | 'write' | 'admin'
 
@@ -102,6 +102,7 @@ export const integrationKinds: IntegrationKind[] = [
 
 export const moduleKeys: ModuleKey[] = [
   'filament',
+  'time_tracking',
   'lego',
   'locations',
   'electrical',

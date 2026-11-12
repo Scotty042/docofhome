@@ -77,6 +77,7 @@ from app.models.release import (
 )
 from app.models.smart_meter import SmartMeterMeasurementEntity, SmartMeterMeasurementPoint
 from app.models.system_setting import SystemSetting
+from app.models.time_tracking import WorkInterval
 from app.models.work import (
     WorkItem,
     WorkItemEvent,
@@ -576,6 +577,7 @@ EXPORT_MODELS: tuple[tuple[str, type[SQLModel], bool], ...] = (
     ("lego_sets", LegoSet, True),
     ("filament_spools", FilamentSpool, True),
     ("filament_slots", FilamentSlot, True),
+    ("work_intervals", WorkInterval, False),
     ("push_deliveries", PushDelivery, False),
     ("electrical_asset_placements", ElectricalAssetPlacement, True),
     ("electrical_cabinet_components", ElectricalCabinetComponent, True),
