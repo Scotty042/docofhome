@@ -15,7 +15,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.recipes import apply as apply_recipe
 from app.api.v1.recipes import read_model as read_recipe
-from app.api.v1.time_tracking import IntervalWrite, StartRequest, save_interval
+from app.api.v1.time_tracking import IntervalWrite, StartRequest, delete_interval, save_interval
 from app.api.v1.time_tracking import start as start_interval
 from app.api.v1.time_tracking import stop as stop_interval
 from app.core.settings import settings
@@ -1335,6 +1335,22 @@ def save_work_interval(
             raise ValueError(str(exc.detail)) from exc
 
 
+@mcp_server.tool()
+def delete_work_interval(interval_id: str) -> dict[str, str]:
+    """Löscht einen abgeschlossenen Arbeitslauf endgültig. Vollzugriff (admin) erforderlich.
+
+    Die ID bezeichnet genau einen Arbeitslauf, einschließlich aller Tagesanteile.
+    Laufende Timer zuerst pausieren oder beenden.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.ADMIN)
+        try:
+            delete_interval(interval_id, session)
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+        return {"status": "deleted", "interval_id": interval_id}
+
+
 class McpBearerAuthMiddleware:
     """Small ASGI bearer gate backed by the persistent DocOfHome MCP token.
 
@@ -1409,6 +1425,7 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         stop_work_interval,
         get_work_day,
         save_work_interval,
+        delete_work_interval,
         search_subjects,
         create_subject,
         update_subject,

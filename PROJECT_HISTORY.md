@@ -2,6 +2,26 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.10.3 – 2026-11-12
+
+### Arbeitsläufe löschen
+
+- Löschen-Button neben Bearbeiten bei abgeschlossenen und pausierten Arbeitsläufen. Bestätigungsdialog mit Tätigkeit/Kunde und vollständiger Zeitspanne, Abbrechen und Endgültig löschen.
+- Genau ein Arbeitslauf wird entfernt; weitere Arbeitsläufe derselben Tätigkeit bleiben erhalten. Tagesanteile desselben Arbeitslaufs über Mitternacht verschwinden gemeinsam. Tages-, Tätigkeits- und Gesamtsummen sowie heutige Wiederaufnahme werden aktualisiert.
+- Laufende Timer vor dem Löschen pausieren/beenden; Schutz in Oberfläche und Backend. Löschvorgang innerhalb einer SQLite-Schreibreservierung. Fehlende IDs liefern 404, laufende Timer 409 und erfolgreicher DELETE 204 ohne Antwortinhalt.
+- MCP ergänzt `delete_work_interval` mit admin-Berechtigung. read/write können nicht löschen. Insgesamt 55 Werkzeuge, beide Authentifizierungswege bleiben unterstützt. Werkzeugliste im Client aktualisieren.
+- Keine neue Migration; Head 0062. Löschen ist endgültig, vollständige ältere Backups bleiben bestehen. Doku, Handbuch, Status, Versionsquellen und Publisher-Paket aktualisiert.
+
+### Validierung und Grenzen
+
+233 Frontendtests und 25 gezielte Backendtests bestanden. Neue Fälle für Löschen genau eines Arbeitslaufs, Erhalt anderer Zeiten, erneute Nutzung des freigegebenen Zeitraums, unbekannte IDs, Schutz laufender Timer und MCP-Berechtigungen. Weitere Ergebnisse stehen in AUDIT.md. Bestehende Backend-Gesamtprüfgrenzen bleiben erhalten; kein vollständiger grüner Gesamtlauf oder Dockerbuild behauptet. Keine produktiven Einträge gelöscht, keine GitHub-Veröffentlichung.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.3","base_version":"1.10.2","built_on":"2026-11-12","alembic_head":"0062","database_migration_required":false,"backup_format_version":2,"mcp_tools":55,"full_quality_gate_passed":false}
+```
+
 ## 1.10.2 – 2026-11-12
 
 ### Tagesgruppen und kompakte Tätigkeitseingabe

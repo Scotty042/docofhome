@@ -131,3 +131,8 @@ Vor Start die aktiven Arbeitsläufe prüfen. Ein neuer Start stoppt niemals eine
 ### Oberflächenbezeichnung ab 1.10.2
 
 Das Feld `ticket` wird in der Oberfläche als **Tätigkeit/Ticketnr** bezeichnet und kann auch eine Tätigkeitsbezeichnung enthalten. MCP-Feldnamen und die 54 Werkzeuge bleiben unverändert. Tagesgruppen und die heutige Wiederaufnahmeliste betreffen die Oberfläche; `list_work_intervals` kann weiterhin frühere Arbeitsläufe lesen.
+
+
+### Arbeitslauf löschen ab 1.10.3
+
+`delete_work_interval(interval_id)` benötigt **admin** und löscht genau einen abgeschlossenen oder pausierten Arbeitslauf endgültig, einschließlich aller Tagesanteile. read und write reichen nicht aus. Laufende Timer sind geschützt; zuerst pausieren oder beenden. Vorher die konkrete ID und Zeitspanne mit `list_work_intervals` prüfen. Insgesamt **55 Werkzeuge**; Werkzeugliste nach Update neu laden.

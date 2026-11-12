@@ -107,3 +107,44 @@ def test_mcp_manual_and_edit(database):
             },
         )
         assert response.json()["result"]["isError"]
+
+
+def test_mcp_delete_requires_admin_and_updates_summaries(database):
+    session, token = database
+    with TestClient(app) as client:
+        data = {
+            "ticket": "DELETE-1",
+            "customer": "K",
+            "started_at": "2026-01-10T08:00:00+01:00",
+            "ended_at": "2026-01-10T09:00:00+01:00",
+        }
+        first = call(client, token, "save_work_interval", data)
+        for permission in ("read", "write"):
+            McpSettingsService(session).update(
+                McpSettingsWrite(enabled=True, permission=permission)
+            )
+            response = client.post(
+                "/mcp",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json, text/event-stream",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "delete_work_interval",
+                        "arguments": {"interval_id": first["id"]},
+                    },
+                },
+            )
+            assert response.json()["result"]["isError"]
+            assert len(call(client, token, "list_work_intervals", {})["items"]) == 1
+        McpSettingsService(session).update(McpSettingsWrite(enabled=True, permission="admin"))
+        result = call(
+            client, token, "delete_work_interval", {"interval_id": first["id"]}, path=True
+        )
+        assert result["status"] == "deleted"
+        assert call(client, token, "list_work_intervals", {})["items"] == []
+        assert call(client, token, "get_work_day", {"day": "2026-01-10"})["seconds"] == 0

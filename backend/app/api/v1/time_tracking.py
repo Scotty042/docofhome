@@ -131,3 +131,16 @@ def create_manual(data: IntervalWrite, session: SessionDep) -> WorkInterval:
 @router.put("/{interval_id}", response_model=WorkInterval)
 def edit_interval(interval_id: str, data: IntervalWrite, session: SessionDep) -> WorkInterval:
     return save_interval(data, session, interval_id)
+
+
+@router.delete("/{interval_id}", status_code=204)
+def delete_interval(interval_id: str, session: SessionDep) -> None:
+    """Delete one closed interval; never discard an active timer."""
+    session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+    row = session.get(WorkInterval, interval_id)
+    if row is None:
+        raise HTTPException(404, "Arbeitslauf nicht gefunden.")
+    if row.running:
+        raise HTTPException(409, "Bitte den laufenden Arbeitslauf zuerst pausieren oder beenden.")
+    session.delete(row)
+    session.commit()

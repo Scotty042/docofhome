@@ -32,13 +32,13 @@ const days = computed(() => groupByDay(items.value, bounds.value, now.value))
 const dayTitle = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
 const clock = (value: number) => new Date(value * 1000).toLocaleTimeString('de-DE')
 const stamp = (value: number) => new Date(value*1000).toLocaleString('de-DE')
-async function request(path = '', body?: unknown, method = 'POST'): Promise<unknown> {
-  const response = await fetch(`/api/v1/time-tracking${path}`, body === undefined ? undefined : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+async function request(path = '', body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<unknown> {
+  const response = await fetch(`/api/v1/time-tracking${path}`, { method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) })
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     throw new Error(typeof data.detail === 'string' ? data.detail : Array.isArray(data.detail) ? data.detail.map((d: { msg: string }) => d.msg.replace('Value error, ', '')).join(' ') : 'Zeiterfassung konnte nicht geladen oder gespeichert werden.')
   }
-  return response.json()
+  return response.status === 204 ? undefined : response.json()
 }
 async function load() { items.value = await request() as Interval[] }
 async function act(path: string, body: unknown = {}) {
@@ -68,6 +68,22 @@ async function saveInterval() {
     editor.value = false
     try { await load() } catch { error.value = 'Eintrag gespeichert; Ansicht konnte nicht aktualisiert werden.' }
   } catch (e) { editError.value = e instanceof Error ? e.message : String(e) }
+  finally { busy.value = false }
+}
+const deleteDialog = ref(false), deleteTarget = ref<Interval | null>(null), deleteError = ref('')
+function openDelete(slot: Interval) {
+  deleteTarget.value = slot; deleteError.value = ''; deleteDialog.value = true
+}
+async function confirmDelete() {
+  if (!deleteTarget.value || busy.value) return
+  const id = deleteTarget.value.id
+  busy.value = true; deleteError.value = ''
+  try {
+    await request(`/${id}`, undefined, 'DELETE')
+    items.value = items.value.filter(item => item.id !== id)
+    deleteDialog.value = false; deleteTarget.value = null
+    try { await load() } catch { error.value = 'Eintrag gelöscht; weitere Daten konnten nicht aktualisiert werden.' }
+  } catch (e) { deleteError.value = e instanceof Error ? e.message : String(e) }
   finally { busy.value = false }
 }
 async function refresh() {
@@ -149,7 +165,9 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
                 <td class="text-no-wrap">{{ slice.interval.running && slice.end === now ? 'läuft' : slice.end === day.end ? '24:00:00' : clock(slice.end) }}</td>
                 <td>{{ duration(slice.seconds) }}</td>
                 <td>{{ slice.interval.running ? 'Läuft' : slice.interval.completed ? 'Beendet' : 'Pausiert' }}</td>
-                <td><v-btn v-if="!slice.interval.running" variant="text" :disabled="busy" :aria-label="`Arbeitslauf ${slice.interval.ticket} vom ${stamp(slice.interval.started_at)} bearbeiten`" @click="openEditor(slice.interval)">Bearbeiten</v-btn></td>
+                <td><div v-if="!slice.interval.running" class="d-flex flex-wrap ga-1"><v-btn variant="text" :disabled="busy" :aria-label="`Arbeitslauf ${slice.interval.ticket} vom ${stamp(slice.interval.started_at)} bearbeiten`" @click="openEditor(slice.interval)">Bearbeiten</v-btn>
+                  <v-btn color="error" variant="text" :disabled="busy" :aria-label="`Arbeitslauf ${slice.interval.ticket} vom ${stamp(slice.interval.started_at)} löschen`" @click="openDelete(slice.interval)">Löschen</v-btn>
+                </div></td>
               </tr>
             </tbody>
           </v-table>
@@ -176,6 +194,24 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
             <v-btn type="submit" color="primary" :loading="busy" :disabled="!draft.ticket.trim() || !draft.customer.trim() || !draft.start || !draft.end">Speichern</v-btn>
           </v-card-actions>
         </v-form>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="deleteDialog" max-width="560" :persistent="busy">
+      <v-card title="Arbeitslauf löschen?">
+        <v-card-text>
+          <v-alert v-if="deleteError" type="error" role="alert" class="mb-4">{{ deleteError }}</v-alert>
+          <template v-if="deleteTarget">
+            <p><strong>{{ deleteTarget.ticket }} · {{ deleteTarget.customer }}</strong></p>
+            <p>Beginn: {{ stamp(deleteTarget.started_at) }}</p>
+            <p>Ende: {{ deleteTarget.ended_at === null ? 'läuft' : stamp(deleteTarget.ended_at) }}</p>
+            <p class="mt-3">Dieser Arbeitslauf wird endgültig gelöscht. Bei einem Arbeitslauf über Mitternacht werden alle Tagesanteile entfernt. Weitere Arbeitsläufe derselben Tätigkeit bleiben erhalten.</p>
+          </template>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn :disabled="busy" @click="deleteDialog = false">Abbrechen</v-btn>
+          <v-spacer />
+          <v-btn color="error" :loading="busy" :disabled="!deleteTarget" @click="confirmDelete">Endgültig löschen</v-btn>
+        </v-card-actions>
       </v-card>
     </v-dialog>
   </v-container>

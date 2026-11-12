@@ -1,3 +1,16 @@
+# Prüfung 1.10.3 – Arbeitsläufe löschen – 12. November 2026
+
+- 233 Frontendtests in 68 Dateien bestanden. Die Tagesgruppierung und Wiederaufnahmeliste bleiben abgedeckt.
+- 25 gezielte Backendtests für Zeiterfassung, MCP und bestehende Transportverträge bestanden. Neue Fälle: genau einen Arbeitslauf löschen, andere Zeiten erhalten, 204 ohne Antwortinhalt, fehlende IDs, Zeitraum erneut erfassen, laufende Timer schützen und read/write beim MCP-Löschen ablehnen. MCP-admin kann löschen, Tagessumme wird anschließend null; beide bisherigen Authentifizierungswege bleiben geprüft.
+- Geänderte Backenddateien einschließlich MCP-Server und neuer Tests bestehen Ruff.
+- Keine neue Migration; Head 0062. Insgesamt 55 MCP-Werkzeuge. Kein vollständiger neuer Backend-Gesamtlauf, keine produktiven Einträge gelöscht, kein GitHub-Push/Release.
+- Vue-/TypeScript-Typprüfung, Produktionsbuild, Symbolprüfung (289 MDI-Icons), Versions-, Release-, Branding- und Syntaxprüfung bestanden; bekannte Bundlegrößenwarnung.
+- Mypy: 80 Bestandsmeldungen in 15 Dateien, keine zusätzliche Diagnose gegenüber 1.10.1. Kein vollständiger grüner Backend-Gesamtlauf oder Dockerbuild behauptet.
+- Browserprüfung mit isolierten Beispieldaten: Löschen-Buttons, passender Bestätigungsdialog mit Zeitspanne, Abbrechen schließt den Dialog und erhält alle Einträge. Der eigentliche Löschvorgang ist durch automatisierte API-/MCP-Tests geprüft; keine produktiven Daten gelöscht.
+- Publisher-kompatibles flaches ZIP, jede enthaltene Datei byteweise geprüft, SHA-256 neu erzeugt. Bestehende Gesamtprüfgrenzen bleiben erhalten.
+
+---
+
 # Prüfung 1.10.2 – Tagesgruppen – 12. November 2026
 
 - 233 Frontendtests in 68 Dateien bestanden (TZ=Europe/Berlin). Neue Fälle: Tagesreihenfolge, Tagessummen, mehrere Arbeitsläufe, Mitternachtsanteile, Original-ID beim Bearbeiten, Datumsfilter, Zeitumstellungen und Wiederaufnahme nur heute mit neuesten Angaben.

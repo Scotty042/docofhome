@@ -135,3 +135,25 @@ def test_new_installations_offer_time_tracking_by_default():
     settings = ApplicationSetting(installation_name="Test", timezone="Europe/Berlin")
     assert "time_tracking" in json.loads(settings.enabled_modules_json)
     assert "time_tracking" in json.loads(settings.main_menu_modules_json)
+
+
+def test_delete_removes_only_one_interval_and_frees_time_range(client):
+    first = client.post("/time-tracking/manual", json=manual_data()).json()
+    second = client.post(
+        "/time-tracking/manual",
+        json=manual_data(start="2026-01-10T09:00:00+01:00", end="2026-01-10T10:00:00+01:00"),
+    ).json()
+    response = client.delete(f"/time-tracking/{first['id']}")
+    assert response.status_code == 204 and response.content == b""
+    assert [row["id"] for row in client.get("/time-tracking").json()] == [second["id"]]
+    assert client.delete(f"/time-tracking/{first['id']}").status_code == 404
+    assert client.post("/time-tracking/manual", json=manual_data()).status_code == 201
+
+
+def test_delete_rejects_running_interval(client):
+    running = client.post("/time-tracking/start", json={"ticket": "T", "customer": "K"}).json()
+    assert client.delete(f"/time-tracking/{running['id']}").status_code == 409
+    assert client.get("/time-tracking").json()[0]["running"]
+    client.post(f"/time-tracking/{running['id']}/pause")
+    assert client.delete(f"/time-tracking/{running['id']}").status_code == 204
+    assert client.get("/time-tracking").json() == []

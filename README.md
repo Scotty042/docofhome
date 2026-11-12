@@ -150,3 +150,7 @@ Verlauf mit letzten 30 Tagen, Schnellauswahl und freiem Zeitraum. Arbeitsläufe 
 ## Tagesgruppen 1.10.2
 
 Zeiterfassungsverlauf nach Tagen mit Datumsüberschriften und Tagessummen. Tätigkeit/Ticketnr und Kunde nebeneinander erfassen; Wiederaufnahmeliste nur mit Tätigkeiten von heute. [Anleitung](docs/TIME_TRACKING.md).
+
+## Arbeitsläufe löschen 1.10.3
+
+Einzelne Arbeitsläufe nach Bestätigung entfernen; Summen werden aktualisiert. Laufende Timer sind geschützt. MCP-Löschzugriff mit admin-Berechtigung. [Anleitung](docs/TIME_TRACKING.md).
