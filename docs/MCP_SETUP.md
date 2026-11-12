@@ -126,3 +126,8 @@ Vor Start die aktiven Arbeitsläufe prüfen. Ein neuer Start stoppt niemals eine
 ### Manuelle Zeiten und Korrekturen ab 1.10.1
 
 `save_work_interval` benötigt write und ergänzt einen abgeschlossenen Arbeitslauf. Mit `interval_id` wird der bestehende Lauf bearbeitet. Pflichtangaben: `ticket`, `customer`, `started_at`, `ended_at`; optional `info`. Zeiten als ISO-8601 mit Zeitzone. Es gelten dieselben Regeln wie in der Oberfläche: Ende nach Anfang, keine Zukunft, keine Überschneidung und keine Änderung laufender Timer. Vor Anlegen `list_work_intervals` einschließlich weiterer Seiten nach Dubletten durchsuchen. Insgesamt jetzt **54 Werkzeuge**; Werkzeugliste im Client neu laden.
+
+
+### Oberflächenbezeichnung ab 1.10.2
+
+Das Feld `ticket` wird in der Oberfläche als **Tätigkeit/Ticketnr** bezeichnet und kann auch eine Tätigkeitsbezeichnung enthalten. MCP-Feldnamen und die 54 Werkzeuge bleiben unverändert. Tagesgruppen und die heutige Wiederaufnahmeliste betreffen die Oberfläche; `list_work_intervals` kann weiterhin frühere Arbeitsläufe lesen.

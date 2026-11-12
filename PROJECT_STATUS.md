@@ -1,12 +1,14 @@
 # DocOfHome – Projektstatus
 
 Stand: 12. November 2026  
-Release: **1.10.1**  
+Release: **1.10.2**  
 Alembic-Head: **`0062`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.
 
 ## Aktueller technischer Stand
+
+- Zeiterfassungsverlauf mit Datumsüberschriften und Tagessummen; Tätigkeit/Ticketnr und Kunde nebeneinander; Wiederaufnahme nur für Tätigkeiten mit Arbeitszeit heute.
 
 - Verlauf der Zeiterfassung mit Standard letzte 30 Tage, Schnellauswahl und Von/Bis; manuelle Arbeitsläufe und nachträgliche Änderungen samt Überschneidungsprüfung.
 

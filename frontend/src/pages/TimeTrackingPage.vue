@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { intervalSeconds, formatDuration as duration, rangeOptions, quickRange, rangeBounds, localDateTime } from '../services/timeTracking'
+import { intervalSeconds, formatDuration as duration, rangeOptions, quickRange, rangeBounds, localDateTime, groupByDay, activitiesToday } from '../services/timeTracking'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 interface Interval { id: string; ticket: string; customer: string; info: string; started_at: number; ended_at: number | null; running: boolean; completed: boolean }
 const items = ref<Interval[]>([])
@@ -27,7 +27,10 @@ const groups = computed(() => {
   return [...result.values()]
 })
 const total = computed(() => visible.value.reduce((sum, i) => sum + seconds(i), 0))
-const recent = computed(() => [...new Map(items.value.map(i => [i.ticket, i])).keys()].map(t => items.value.find(i => i.ticket === t)!))
+const recent = computed(() => activitiesToday(items.value, now.value))
+const days = computed(() => groupByDay(items.value, bounds.value, now.value))
+const dayTitle = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+const clock = (value: number) => new Date(value * 1000).toLocaleTimeString('de-DE')
 const stamp = (value: number) => new Date(value*1000).toLocaleString('de-DE')
 async function request(path = '', body?: unknown, method = 'POST'): Promise<unknown> {
   const response = await fetch(`/api/v1/time-tracking${path}`, body === undefined ? undefined : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -98,14 +101,16 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
     <v-card title="Neue Tätigkeit" class="mb-4">
       <v-card-text>
         <v-form @submit.prevent="act('/start', { ticket, customer, info })">
-          <v-text-field v-model="ticket" label="Ticketnummer" maxlength="100" required :disabled="!!active || busy" />
-          <v-text-field v-model="customer" label="Kundenname" maxlength="200" required :disabled="!!active || busy" />
+          <v-row>
+            <v-col cols="12" sm="6"><v-text-field v-model="ticket" label="Tätigkeit/Ticketnr" maxlength="100" required :disabled="!!active || busy" /></v-col>
+            <v-col cols="12" sm="6"><v-text-field v-model="customer" label="Kundenname" maxlength="200" required :disabled="!!active || busy" /></v-col>
+          </v-row>
           <v-textarea v-model="info" label="Weitere Info" maxlength="4000" rows="2" :disabled="!!active || busy" />
           <v-btn type="submit" color="primary" :disabled="busy || !!active || !ticket.trim() || !customer.trim()">Start</v-btn>
         </v-form>
       </v-card-text>
     </v-card>
-    <v-card v-if="recent.length" title="Tickets wieder aufnehmen" class="mb-4">
+    <v-card v-if="recent.length" title="Tätigkeiten von heute wieder aufnehmen" class="mb-4">
       <v-card-text class="d-flex flex-wrap ga-2">
         <v-btn v-for="i in recent" :key="i.ticket" :disabled="busy || !!active" @click="resume(i)">{{ i.ticket }} · {{ i.customer }}</v-btn>
       </v-card-text>
@@ -126,23 +131,29 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
       <v-card-text>
         <p class="text-h5 mb-4">Gesamtzeit im Zeitraum: {{ duration(total) }}</p>
         <p v-if="!groups.length">In diesem Zeitraum sind keine Arbeitszeiten vorhanden.</p>
-        <div class="d-flex flex-wrap ga-2 mb-4" aria-label="Ticketsummen">
+        <div class="d-flex flex-wrap ga-2 mb-4" aria-label="Summen je Tätigkeit/Ticketnr">
           <v-chip v-for="group in groups" :key="group.ticket">{{ group.ticket }} · {{ duration(group.total) }}</v-chip>
         </div>
-        <v-table v-if="visible.length" class="history-table">
-          <thead><tr><th>Ticketnummer</th><th>Kundenname / weitere Info</th><th>Anfang</th><th>Ende</th><th>Dauer im Zeitraum</th><th>Status</th><th>Aktionen</th></tr></thead>
-          <tbody>
-            <tr v-for="slot in visible" :key="slot.id">
-              <td>{{ slot.ticket }}</td>
-              <td><strong>{{ slot.customer }}</strong><p class="history-info">{{ slot.info }}</p></td>
-              <td class="text-no-wrap">{{ stamp(slot.started_at) }}</td>
-              <td class="text-no-wrap">{{ slot.ended_at === null ? 'läuft' : stamp(slot.ended_at) }}</td>
-              <td>{{ duration(seconds(slot)) }}</td>
-              <td>{{ slot.running ? 'Läuft' : slot.completed ? 'Beendet' : 'Pausiert' }}</td>
-              <td><v-btn v-if="!slot.running" variant="text" :disabled="busy" :aria-label="`Arbeitslauf ${slot.ticket} vom ${stamp(slot.started_at)} bearbeiten`" @click="openEditor(slot)">Bearbeiten</v-btn></td>
-            </tr>
-          </tbody>
-        </v-table>
+        <section v-for="day in days" :key="day.day" class="day-group" :aria-label="dayTitle(day.day)">
+          <div class="day-heading">
+            <h2 class="text-h6">{{ dayTitle(day.day) }}</h2>
+            <strong>Gesamtzeit: {{ duration(day.total) }}</strong>
+          </div>
+          <v-table class="history-table">
+            <thead><tr><th>Tätigkeit/Ticketnr</th><th>Kundenname / weitere Info</th><th>Anfang</th><th>Ende</th><th>Dauer</th><th>Status</th><th>Aktionen</th></tr></thead>
+            <tbody>
+              <tr v-for="slice in day.slots" :key="slice.interval.id">
+                <td>{{ slice.interval.ticket }}</td>
+                <td><strong>{{ slice.interval.customer }}</strong><p class="history-info">{{ slice.interval.info }}</p></td>
+                <td class="text-no-wrap">{{ clock(slice.start) }}</td>
+                <td class="text-no-wrap">{{ slice.interval.running && slice.end === now ? 'läuft' : slice.end === day.end ? '24:00:00' : clock(slice.end) }}</td>
+                <td>{{ duration(slice.seconds) }}</td>
+                <td>{{ slice.interval.running ? 'Läuft' : slice.interval.completed ? 'Beendet' : 'Pausiert' }}</td>
+                <td><v-btn v-if="!slice.interval.running" variant="text" :disabled="busy" :aria-label="`Arbeitslauf ${slice.interval.ticket} vom ${stamp(slice.interval.started_at)} bearbeiten`" @click="openEditor(slice.interval)">Bearbeiten</v-btn></td>
+              </tr>
+            </tbody>
+          </v-table>
+        </section>
       </v-card-text>
     </v-card>
     <v-dialog v-model="editor" max-width="640" :persistent="busy">
@@ -150,8 +161,10 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
         <v-form @submit.prevent="saveInterval">
           <v-card-text>
             <v-alert v-if="editError" type="error" class="mb-4" role="alert">{{ editError }}</v-alert>
-            <v-text-field v-model="draft.ticket" label="Ticketnummer" maxlength="100" required :disabled="busy" />
-            <v-text-field v-model="draft.customer" label="Kundenname" maxlength="200" required :disabled="busy" />
+            <v-row>
+            <v-col cols="12" sm="6"><v-text-field v-model="draft.ticket" label="Tätigkeit/Ticketnr" maxlength="100" required :disabled="busy" /></v-col>
+            <v-col cols="12" sm="6"><v-text-field v-model="draft.customer" label="Kundenname" maxlength="200" required :disabled="busy" /></v-col>
+          </v-row>
             <v-textarea v-model="draft.info" label="Weitere Info" maxlength="4000" rows="2" :disabled="busy" />
             <v-text-field v-model="draft.start" type="datetime-local" step="1" label="Anfangszeit" required :disabled="busy" />
             <v-text-field v-model="draft.end" type="datetime-local" step="1" label="Endzeit" required :disabled="busy" />
@@ -169,6 +182,8 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
 </template>
 
 <style scoped>
+.day-group + .day-group { margin-top: 28px; }
+.day-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
 .history-table { overflow-x: auto; }
 .history-info { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 180px; }
 </style>

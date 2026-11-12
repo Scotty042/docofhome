@@ -2,6 +2,27 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.10.2 – 2026-11-12
+
+### Tagesgruppen und kompakte Tätigkeitseingabe
+
+- Verlauf nach lokalen Kalendertagen gruppiert, neuester Tag zuerst. Jeder Tag erhält eine Datumsüberschrift und Tagessumme; Gesamtsumme und Tätigkeitssummen für den gewählten Zeitraum bleiben erhalten. Timeslots innerhalb eines Tages nach Anfangszeit absteigend.
+- Arbeitsläufe über Mitternacht werden für die Anzeige auf Tagesanteile aufgeteilt. Kalendergrenzen berücksichtigen Sommer-/Winterzeit; keine doppelte Zählung. Bearbeiten verwendet weiterhin die unveränderte ID des ursprünglichen vollständigen Arbeitslaufs.
+- Feldbezeichnung in Eingabe, Bearbeitung und Verlauf: Tätigkeit/Ticketnr. Tätigkeit und Kundenname stehen ab kleinen Tabletbreiten nebeneinander, auf schmalen Mobilgeräten untereinander.
+- Tätigkeiten von heute wieder aufnehmen enthält nur Tätigkeiten mit Arbeitszeit am aktuellen lokalen Kalendertag, je Tätigkeit einmal mit den zuletzt verwendeten Angaben. Unabhängig vom Verlaufsfilter; aktive Arbeitsläufe über Mitternacht sind enthalten. Die Liste aktualisiert sich auch beim Tageswechsel.
+- Backend, Datenbankmodell und MCP-Protokoll unverändert gegenüber 1.10.1. Intern heißt das Feld weiter `ticket`. 54 MCP-Werkzeuge, Head 0062; keine zusätzliche Migration.
+- Anleitung, Handbuch, MCP-Hinweise, Versionsquellen und Publisher-kompatibles Paket aktualisiert.
+
+### Validierung und Grenzen
+
+233 Frontendtests bestanden; darunter Tagesgruppierung, Reihenfolge, Tagessummen, Mitternacht, Zeitumstellungen, Filtergrenzen und Wiederaufnahme nur heute. Produktionsbuild, Typprüfung, Symbolprüfung und lokale Browserprüfung mit Beispieldaten erfolgreich. Einzelheiten stehen in AUDIT.md. Backend-Quellen unverändert; bestehende Gesamtprüfgrenzen bleiben bestehen. Keine produktive Installation oder GitHub-Veröffentlichung verändert.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.2","base_version":"1.10.1","built_on":"2026-11-12","alembic_head":"0062","database_migration_required":false,"backup_format_version":2,"mcp_tools":54,"full_quality_gate_passed":false}
+```
+
 ## 1.10.1 – 2026-11-12
 
 ### Verlauf, Datumsfilter und manuelle Arbeitsläufe

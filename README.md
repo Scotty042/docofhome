@@ -146,3 +146,7 @@ Arbeitszeiten pro Ticket und Kunde mit Start, Pause, Ende und Wiederaufnahme. Ei
 ## Verlauf und Zeitkorrekturen 1.10.1
 
 Verlauf mit letzten 30 Tagen, Schnellauswahl und freiem Zeitraum. Arbeitsläufe manuell ergänzen oder nachträglich bearbeiten, auch über MCP. [Anleitung](docs/TIME_TRACKING.md).
+
+## Tagesgruppen 1.10.2
+
+Zeiterfassungsverlauf nach Tagen mit Datumsüberschriften und Tagessummen. Tätigkeit/Ticketnr und Kunde nebeneinander erfassen; Wiederaufnahmeliste nur mit Tätigkeiten von heute. [Anleitung](docs/TIME_TRACKING.md).

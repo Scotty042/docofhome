@@ -1,3 +1,14 @@
+# Prüfung 1.10.2 – Tagesgruppen – 12. November 2026
+
+- 233 Frontendtests in 68 Dateien bestanden (TZ=Europe/Berlin). Neue Fälle: Tagesreihenfolge, Tagessummen, mehrere Arbeitsläufe, Mitternachtsanteile, Original-ID beim Bearbeiten, Datumsfilter, Zeitumstellungen und Wiederaufnahme nur heute mit neuesten Angaben.
+- Vue-/TypeScript-Typprüfung, Produktionsbuild und Prüfung aller 289 MDI-Symbole bestanden. Bekannte Bundlegrößenwarnung bleibt bestehen.
+- Lokale Browserprüfung des Produktionsbundles mit isolierten Beispieldaten: Tätigkeit/Ticketnr und Kunde nebeneinander, Wiederaufnahme ausschließlich heutiger Tätigkeiten, Datum als Tagesüberschrift, Tagessummen und Zeiten ohne wiederholtes Datum. Gestrige Tätigkeit bleibt im Verlauf, fehlt aber in der Wiederaufnahme.
+- Sämtliche Backend-Python-Dateien einschließlich Migrationen und Tests bytegleich mit 1.10.1; nur Projektversion in pyproject.toml aktualisiert. Kein erneuter Backend-Gesamtlauf; bestehende Prüfgrenzen bleiben erhalten. Keine neue Migration, Head 0062, weiterhin 54 MCP-Werkzeuge.
+- Doku, Handbuch, MCP-Begriffserklärung, Versionsquellen und Releasevertrag aktualisiert. Publisher-kompatibles ZIP mit VERSION und Dockerfile direkt auf oberster Ebene; byteweiser Archivvergleich und SHA-256.
+- Kein Dockerbuild, kein produktives Update, keine GitHub-Veröffentlichung.
+
+---
+
 # Prüfung 1.10.1 – Verlauf und Zeitkorrekturen – 12. November 2026
 
 - 229 Frontendtests in 68 Dateien bestanden. Vue-Typprüfung, Produktionsbuild und Prüfung aller 289 MDI-Symbole bestanden; bekannte Bundlegrößenwarnung.
