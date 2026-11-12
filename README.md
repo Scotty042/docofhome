@@ -142,3 +142,7 @@ Weniger Platzbedarf bei unveränderten Funktionen und Einstellungen. Details und
 ## Zeiterfassung 1.10.0
 
 Arbeitszeiten pro Ticket und Kunde mit Start, Pause, Ende und Wiederaufnahme. Einzelne Timeslots und Tagesauswertung; vier MCP-Werkzeuge. [Anleitung](docs/TIME_TRACKING.md).
+
+## Verlauf und Zeitkorrekturen 1.10.1
+
+Verlauf mit letzten 30 Tagen, Schnellauswahl und freiem Zeitraum. Arbeitsläufe manuell ergänzen oder nachträglich bearbeiten, auch über MCP. [Anleitung](docs/TIME_TRACKING.md).

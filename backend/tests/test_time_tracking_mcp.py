@@ -14,6 +14,7 @@ from app.services.release import PortabilityService
 
 database = release_tests.database
 
+
 def test_mcp_timer_lifecycle_export_and_permissions(database):
     session, token = database
     with TestClient(app) as client:
@@ -66,3 +67,43 @@ def test_day_summary_handles_clock_changes(database, day, hours):
         summary = call(client, token, "get_work_day", {"day": day})
         assert summary["seconds"] == hours * 3600
         assert summary["tickets"][0]["seconds"] == hours * 3600
+
+
+def test_mcp_manual_and_edit(database):
+    session, token = database
+    with TestClient(app) as client:
+        data = {
+            "ticket": "M-1",
+            "customer": "K",
+            "info": "Manuell",
+            "started_at": "2026-01-10T08:00:00+01:00",
+            "ended_at": "2026-01-10T09:00:00+01:00",
+        }
+        first = call(client, token, "save_work_interval", data)
+        updated = call(
+            client,
+            token,
+            "save_work_interval",
+            {**data, "interval_id": first["id"], "ended_at": "2026-01-10T10:00:00+01:00"},
+        )
+        assert updated["id"] == first["id"]
+        assert updated["ended_at"] - updated["started_at"] == 7200
+        assert call(client, token, "get_work_day", {"day": "2026-01-10"})["seconds"] == 7200
+        McpSettingsService(session).update(McpSettingsWrite(enabled=True, permission="read"))
+        response = client.post(
+            "/mcp",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json, text/event-stream",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "save_work_interval",
+                    "arguments": {**data, "interval_id": first["id"]},
+                },
+            },
+        )
+        assert response.json()["result"]["isError"]

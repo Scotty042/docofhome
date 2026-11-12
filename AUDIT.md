@@ -1,3 +1,14 @@
+# Prüfung 1.10.1 – Verlauf und Zeitkorrekturen – 12. November 2026
+
+- 229 Frontendtests in 68 Dateien bestanden. Vue-Typprüfung, Produktionsbuild und Prüfung aller 289 MDI-Symbole bestanden; bekannte Bundlegrößenwarnung.
+- 22 gezielte Backendtests bestanden: Start/Pause/Ende, Wiederaufnahme, manuelle Zeiten, Änderungen mit stabiler ID, Überschneidungen, angrenzende Intervalle, ungültige/future/zeitzonenlose Eingaben, Schutz laufender Timer, MCP-Berechtigungen, beide Authentifizierungswege, Sommer-/Winterzeit, Export/Backup-Regression und Modulstandard bei Neuinstallation.
+- Neue/geänderte Zeiterfassungsdateien und MCP-Server bestehen Ruff. Mypy weiterhin 80 Bestandsmeldungen in 15 Dateien; keine neue Diagnose gegenüber 1.10.0.
+- Lokale Browserprüfung mit isoliertem Testbestand und Produktionsbundle: 30-Tage-Vorauswahl, Von/Bis-Felder, chronologischer Verlauf, Ticketsummen, Bearbeitungsdialog, gespeicherte Infoänderung und manueller Dialog geprüft. Keine Änderung produktiver Daten. Automatisierte API-Tests prüfen die Zeitkorrektur und Neuberechnung.
+- Keine neue Migration; Head 0062. Kein erneuter vollständiger Backend-Gesamtlauf; die offenen Gesamtprüfgrenzen aus 1.10.0 gelten weiter. Kein Docker-/Linux-/Python-3.13-Build. Kein GitHub-Push/Release.
+- ZIP folgt dem Publisher-Vertrag: VERSION und Dockerfile direkt auf oberster Ebene, keine lokalen Abhängigkeiten, Datenbanken, Secrets oder Cacheverzeichnisse. Jede enthaltene Datei wird nach Paketbau byteweise geprüft; SHA-256 wird neu erzeugt.
+
+---
+
 # Prüfung 1.10.0 – Zeiterfassung – 12. November 2026
 
 Paketkorrektur: ZIP enthält die Quellen direkt auf oberster Ebene, insbesondere `VERSION`, `Dockerfile`, `compose.yaml` und `.github/`. Der zusätzliche Versionsordner wurde entfernt. Der Paketbau prüft diese Publisher-Vorgabe künftig automatisch.

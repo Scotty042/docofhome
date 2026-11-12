@@ -1,10 +1,11 @@
 """Server-clock timers survive refreshes and application restarts."""
 
 import time
+from datetime import datetime
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -37,6 +38,7 @@ def list_intervals(session: SessionDep) -> list[WorkInterval]:
 
 @router.post("/start", response_model=WorkInterval, status_code=201)
 def start(data: StartRequest, session: SessionDep) -> WorkInterval:
+    session.connection().exec_driver_sql("BEGIN IMMEDIATE")
     interval = WorkInterval(**data.model_dump(), started_at=time.time())
     session.add(interval)
     try:
@@ -69,3 +71,63 @@ def stop(interval_id: str, action: Literal["pause", "end"], session: SessionDep)
     interval = session.get(WorkInterval, interval_id)
     assert interval is not None
     return interval
+
+
+class IntervalWrite(StartRequest):
+    started_at: datetime
+    ended_at: datetime
+
+    @model_validator(mode="after")
+    def valid_times(self) -> "IntervalWrite":
+        if self.started_at.tzinfo is None or self.ended_at.tzinfo is None:
+            raise ValueError("Anfang und Ende müssen eine Zeitzone enthalten.")
+        if self.ended_at <= self.started_at:
+            raise ValueError("Ende muss nach Anfang liegen.")
+        if self.ended_at.timestamp() > time.time():
+            raise ValueError("Arbeitszeiten dürfen nicht in der Zukunft liegen.")
+        return self
+
+
+def save_interval(
+    data: IntervalWrite, session: Session, interval_id: str | None = None
+) -> WorkInterval:
+    # Reserve the SQLite writer before checking overlaps, including concurrent requests.
+    session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+    row = session.get(WorkInterval, interval_id) if interval_id else None
+    if interval_id and row is None:
+        raise HTTPException(404, "Arbeitslauf nicht gefunden.")
+    if row is not None and row.running:
+        raise HTTPException(409, "Bitte den laufenden Arbeitslauf zuerst pausieren oder beenden.")
+    start, end = data.started_at.timestamp(), data.ended_at.timestamp()
+    overlap = select(WorkInterval).where(
+        col(WorkInterval.started_at) < end,
+        (col(WorkInterval.ended_at).is_(None)) | (col(WorkInterval.ended_at) > start),
+    )
+    if row is not None:
+        overlap = overlap.where(col(WorkInterval.id) != row.id)
+    if session.exec(overlap).first() is not None:
+        raise HTTPException(409, "Der Zeitraum überschneidet sich mit einem anderen Arbeitslauf.")
+    if row is None:
+        row = WorkInterval(
+            ticket=data.ticket,
+            customer=data.customer,
+            started_at=start,
+            running=False,
+            completed=True,
+        )
+    row.ticket, row.customer, row.info = data.ticket, data.customer, data.info
+    row.started_at, row.ended_at = start, end
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+@router.post("/manual", response_model=WorkInterval, status_code=201)
+def create_manual(data: IntervalWrite, session: SessionDep) -> WorkInterval:
+    return save_interval(data, session)
+
+
+@router.put("/{interval_id}", response_model=WorkInterval)
+def edit_interval(interval_id: str, data: IntervalWrite, session: SessionDep) -> WorkInterval:
+    return save_interval(data, session, interval_id)

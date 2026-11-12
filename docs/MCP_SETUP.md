@@ -121,3 +121,8 @@ Nach dem Update die Werkzeugliste im MCP-Client neu laden. Insgesamt 53 Werkzeug
 | `get_work_day` | read | `day` als YYYY-MM-DD: Gesamtsumme, Ticketsummen und Timeslots in Installationszeitzone |
 
 Vor Start die aktiven Arbeitsläufe prüfen. Ein neuer Start stoppt niemals einen bestehenden Timer. Wiederaufnahme erzeugt einen neuen Timeslot. Summen werden in Sekunden geliefert. Beide Authentifizierungswege bleiben unterstützt.
+
+
+### Manuelle Zeiten und Korrekturen ab 1.10.1
+
+`save_work_interval` benötigt write und ergänzt einen abgeschlossenen Arbeitslauf. Mit `interval_id` wird der bestehende Lauf bearbeitet. Pflichtangaben: `ticket`, `customer`, `started_at`, `ended_at`; optional `info`. Zeiten als ISO-8601 mit Zeitzone. Es gelten dieselben Regeln wie in der Oberfläche: Ende nach Anfang, keine Zukunft, keine Überschneidung und keine Änderung laufender Timer. Vor Anlegen `list_work_intervals` einschließlich weiterer Seiten nach Dubletten durchsuchen. Insgesamt jetzt **54 Werkzeuge**; Werkzeugliste im Client neu laden.

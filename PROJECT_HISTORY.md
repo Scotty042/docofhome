@@ -2,6 +2,26 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.10.1 – 2026-11-12
+
+### Verlauf, Datumsfilter und manuelle Arbeitsläufe
+
+- Verlauf als chronologische Tabelle unten auf der Seite; Standard letzte 30 Kalendertage einschließlich heute. Alle Timeslots mit Ticket, Kunde, Info, Anfang, Ende, Dauer und Status direkt sichtbar. Ticketsummen und Gesamtsumme beziehen sich auf den gewählten Zeitraum.
+- Schnellauswahl wie gewünscht: Heute, Gestern, letzte 7/30/90/365 Tage, diesen/letzten Monat und dieses/letztes Jahr. Eigener Zeitraum über Von und Bis einschließlich. Kalendergrenzen statt fixer 24-Stunden-Addition; Mitternacht und Zeitumstellungen bleiben berücksichtigt.
+- Manuelle abgeschlossene Arbeitsläufe und nachträgliche Änderung von Zeiten, Ticket, Kunde und Info. Endzeit nach Anfang, keine Zukunft, keine Überschneidung; direkt angrenzende Zeiten bleiben erlaubt. Aktive Timer zuerst pausieren oder beenden. SQLite-Schreibreservierung vor der Überschneidungsprüfung schützt vor konkurrierenden Schreibzugriffen. Bestehende Lauf-ID und Status bleiben bei Bearbeitung erhalten.
+- MCP ergänzt `save_work_interval` mit write-Berechtigung für manuelle Einträge und Änderungen; insgesamt 54 Werkzeuge. Bestehende Authentifizierung und Backups/Export bleiben erhalten. Nach Update MCP-Werkzeugliste neu laden.
+- Modulstandard für neu angelegte Einstellungen ergänzt, damit die Zeiterfassung auch nach einer Neuinstallation angeboten wird. Handbuch, Anleitung, Status, MCP-Dokumentation und Versionsquellen aktualisiert. Keine neue Datenbankmigration; Head 0062. Publisher-kompatibles flaches ZIP mit VERSION und Dockerfile auf oberster Ebene.
+
+### Prüfungen und Grenzen
+
+229 Frontendtests bestanden. 22 gezielte Backendtests für Zeiterfassung/MCP und bestehende Transportverträge bestanden; Einzelheiten und weitere Prüfungen in AUDIT.md. Bestehende Backend-Gesamtprüfgrenzen aus 1.10.0 bleiben bestehen; kein vollständiger grüner Gesamtlauf oder Dockerbuild behauptet. Keine produktiven Daten oder GitHub-Veröffentlichung geändert.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.1","base_version":"1.10.0","built_on":"2026-11-12","alembic_head":"0062","database_migration_required":false,"backup_format_version":2,"mcp_tools":54,"full_quality_gate_passed":false}
+```
+
 ## 1.10.0 – 2026-11-12
 
 ### Ticketbasierte Zeiterfassung

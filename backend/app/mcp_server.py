@@ -15,7 +15,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.recipes import apply as apply_recipe
 from app.api.v1.recipes import read_model as read_recipe
-from app.api.v1.time_tracking import StartRequest
+from app.api.v1.time_tracking import IntervalWrite, StartRequest, save_interval
 from app.api.v1.time_tracking import start as start_interval
 from app.api.v1.time_tracking import stop as stop_interval
 from app.core.settings import settings
@@ -1315,6 +1315,26 @@ def get_work_day(day: str) -> dict[str, Any]:
         }
 
 
+@mcp_server.tool()
+def save_work_interval(
+    ticket: str, customer: str, started_at: str, ended_at: str,
+    info: str = "", interval_id: str | None = None,
+) -> dict[str, Any]:
+    """Ergänzt manuell einen abgeschlossenen Arbeitslauf oder bearbeitet interval_id.
+
+    Anfang und Ende als ISO-8601 mit Zeitzone. Vor Anlegen nach Dubletten suchen.
+    Keine Zukunftszeiten oder Überschneidungen; laufende Timer zuerst pausieren/beenden.
+    """
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        data = IntervalWrite.model_validate({"ticket": ticket, "customer": customer, "info": info,
+                                            "started_at": started_at, "ended_at": ended_at})
+        try:
+            return save_interval(data, session, interval_id).model_dump(mode="json")
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
+
+
 class McpBearerAuthMiddleware:
     """Small ASGI bearer gate backed by the persistent DocOfHome MCP token.
 
@@ -1388,6 +1408,7 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         start_work_interval,
         stop_work_interval,
         get_work_day,
+        save_work_interval,
         search_subjects,
         create_subject,
         update_subject,
