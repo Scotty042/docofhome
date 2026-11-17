@@ -154,3 +154,15 @@ Zeiterfassungsverlauf nach Tagen mit Datumsüberschriften und Tagessummen. Täti
 ## Arbeitsläufe löschen 1.10.3
 
 Einzelne Arbeitsläufe nach Bestätigung entfernen; Summen werden aktualisiert. Laufende Timer sind geschützt. MCP-Löschzugriff mit admin-Berechtigung. [Anleitung](docs/TIME_TRACKING.md).
+
+## Parallele Tätigkeiten 1.10.4
+
+Manuelle Arbeitsläufe und nachträgliche Zeitänderungen dürfen sich überschneiden. Summen zählen die Dauer jeder Tätigkeit einzeln. [Anleitung](docs/TIME_TRACKING.md).
+
+## Nächste Tätigkeit 1.10.5
+
+Ende leert nach erfolgreichem Speichern Tätigkeit/Ticketnr, Kundenname und weitere Info. [Anleitung](docs/TIME_TRACKING.md).
+
+## Kundengruppen und BCS 1.10.6
+
+Spalten innerhalb der Tage sortieren, Einträge optional nach Kunde gruppieren und BCS pro Arbeitslauf speichern. Tätigkeitssummen enthalten den Kunden. Migration 0063, insgesamt 56 MCP-Werkzeuge. [Anleitung](docs/TIME_TRACKING.md).

@@ -125,7 +125,7 @@ Vor Start die aktiven Arbeitsläufe prüfen. Ein neuer Start stoppt niemals eine
 
 ### Manuelle Zeiten und Korrekturen ab 1.10.1
 
-`save_work_interval` benötigt write und ergänzt einen abgeschlossenen Arbeitslauf. Mit `interval_id` wird der bestehende Lauf bearbeitet. Pflichtangaben: `ticket`, `customer`, `started_at`, `ended_at`; optional `info`. Zeiten als ISO-8601 mit Zeitzone. Es gelten dieselben Regeln wie in der Oberfläche: Ende nach Anfang, keine Zukunft, keine Überschneidung und keine Änderung laufender Timer. Vor Anlegen `list_work_intervals` einschließlich weiterer Seiten nach Dubletten durchsuchen. Insgesamt jetzt **54 Werkzeuge**; Werkzeugliste im Client neu laden.
+`save_work_interval` benötigt write und ergänzt einen abgeschlossenen Arbeitslauf. Mit `interval_id` wird der bestehende Lauf bearbeitet. Pflichtangaben: `ticket`, `customer`, `started_at`, `ended_at`; optional `info`. Zeiten als ISO-8601 mit Zeitzone. Es gelten dieselben Regeln wie in der Oberfläche: Ende nach Anfang, keine Zukunft und keine Änderung laufender Timer. Ab 1.10.4 sind überschneidende Zeiträume für parallele Tätigkeiten erlaubt; ihre Dauer wird je Tätigkeit mitgezählt. Vor Anlegen `list_work_intervals` einschließlich weiterer Seiten nach Dubletten durchsuchen. Insgesamt jetzt **54 Werkzeuge**; Werkzeugliste im Client neu laden.
 
 
 ### Oberflächenbezeichnung ab 1.10.2
@@ -136,3 +136,11 @@ Das Feld `ticket` wird in der Oberfläche als **Tätigkeit/Ticketnr** bezeichnet
 ### Arbeitslauf löschen ab 1.10.3
 
 `delete_work_interval(interval_id)` benötigt **admin** und löscht genau einen abgeschlossenen oder pausierten Arbeitslauf endgültig, einschließlich aller Tagesanteile. read und write reichen nicht aus. Laufende Timer sind geschützt; zuerst pausieren oder beenden. Vorher die konkrete ID und Zeitspanne mit `list_work_intervals` prüfen. Insgesamt **55 Werkzeuge**; Werkzeugliste nach Update neu laden.
+
+
+### BCS und Kundensummen ab 1.10.6
+
+- `set_work_interval_bcs(interval_id, bcs)` benötigt write. `bcs` ist true oder false. Es ändert nur die Markierung, auch bei aktivem Timer.
+- `save_work_interval` unterstützt optional `bcs`. Beim Bearbeiten bleibt ein nicht übergebener Wert erhalten; neue Arbeitsläufe starten mit false.
+- Lesewerkzeuge liefern das Feld `bcs`. `get_work_day` liefert je Tätigkeit/Ticketnr **und Kunde** eine Summe mit `customer`, damit identische Ticketnummern verschiedener Kunden nicht verschmelzen.
+- Insgesamt **56 Werkzeuge**; nach Update die Werkzeugliste neu laden. Bearer und Tokenpfad bleiben unterstützt. read darf keine BCS-Markierung ändern; Löschen benötigt weiterhin admin.

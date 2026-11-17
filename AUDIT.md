@@ -1,3 +1,36 @@
+# Prüfung 1.10.6 – Kundengruppen, Sortierung, BCS – 17. November 2026
+
+- 244 Frontendtests in 69 Dateien bestanden: unter anderem Sortierrichtungen und numerische Ticketreihenfolge, Kundengruppen und Summen, getrennte Tage, Kunden in Zusammenfassungen, BCS-Speichern und Fehlerfall sowie das Leeren nach Ende.
+- 34 gezielte Backendtests bestanden: Zeiterfassungs- und MCP-Regression, BCS-Standard false, Setzen/Entfernen, Erhalt bei Zeitkorrektur, aktiver Timer, read-/write-Rechte, getrennte Kundensummen, JSON-/CSV-Export und tatsächliche BCS-Wiederherstellung aus vollständigem Backup. Beide MCP-Authentifizierungswege, Werkzeugbestand (56) und drei Migrationsverträge mit neuem Head 0063 geprüft.
+- Migrationstest 0063: frische Datenbank bis 0062, Bestandsdatensatz, Upgrade auf 0063, false-Default ohne Zeitänderung, gespeicherter Haken, Downgrade und Wiederupgrade, eindeutiger aktiver Timerindex erhalten. Ein Downgrade entfernt bestimmungsgemäß die neue BCS-Spalte.
+- Vue-/TypeScript-Typprüfung und Produktionsbuild bestanden; bekannte Bundlegrößenwarnung. 289 MDI-Symbole geprüft. Geänderte Backenddateien und Tests bestehen Ruff. Gezieltes Mypy des Zeiterfassungs-API-Moduls mit follow-imports=silent erfolgreich.
+- Browserprüfung mit isolierten Beispieldaten am Produktionsbundle: beide Sortierrichtungen; Tage bleiben getrennt; Keine/Nach Kunde mit Kundensummen; gleiche Ticketnummer bei unterschiedlichen Kunden als eigene Tätigkeitssumme; BCS gesetzt und nach Seiten-Neuladen weiterhin gesetzt. Keine produktiven Daten geändert.
+- Kein erneuter vollständiger Backend-Gesamtlauf, kein Docker-/Python-3.13-Build. Die bestehenden Backend-Gesamtprüfgrenzen gelten weiter. Kein GitHub-Push/Release oder produktives Update.
+- Doku, Handbuch, MCP-Anleitung, Status, Versionen und Service Worker aktualisiert. Flaches ZIP mit VERSION und Dockerfile auf oberster Ebene; byteweiser Archivvergleich und SHA-256.
+
+---
+
+# Prüfung 1.10.5 – Eingabefelder nach Ende – 17. November 2026
+
+- 238 Frontendtests in 69 Dateien bestanden. Vier neue Verhaltenstests führen das tatsächliche Vue-Seitenskript mit isoliertem Netzwerk aus: alle drei Felder nach gespeichertem Ende leer; bei fehlgeschlagenem Ende erhalten; Pause erhält die Felder; bestätigtes Ende trotz anschließend fehlgeschlagener Aktualisierung leert und entsperrt das Formular. Der gespeicherte Arbeitslauf bleibt im lokalen Verlauf erhalten.
+- Vue-/TypeScript-Typprüfung, Produktionsbuild und 289 MDI-Symbole geprüft. Bekannte Bundlegrößenwarnung. 226 TypeScript-/Vue-Skripteinheiten sowie Versionen, Releasevertrag und Branding geprüft.
+- Backend-Python-Quellen, Migrationen und MCP bytegleich mit 1.10.4; keine neue Migration, Head 0062 und 55 MCP-Werkzeuge. Kein erneuter Backend-Gesamtlauf; bestehende Gesamtprüfgrenzen bleiben erhalten.
+- Keine Layoutänderung und kein zusätzlicher Browserlauf; Formularverhalten durch die neuen Regressionstests geprüft. Kein Dockerbuild, kein produktives Update und kein GitHub-Push/Release.
+- Anleitung, Handbuch, aktuelle Projektdokumentation und Versionsquellen aktualisiert. Publisher-kompatibles flaches ZIP mit VERSION und Dockerfile auf oberster Ebene; byteweiser Archivvergleich und SHA-256.
+
+---
+
+# Prüfung 1.10.4 – Parallele Arbeitszeiten – 16. November 2026
+
+- 27 gezielte Backendtests für Zeiterfassung, MCP und bestehende Transportverträge bestanden. Die Regression verlängert die Endzeit eines vorhandenen Arbeitslaufs über einen anderen hinaus, erhält ID und andere Einträge und prüft die neue Dauer. Weitere neue Fälle: manuelle Überschneidungen, Überschneidung mit aktivem Timer, MCP-Korrektur und getrennte Ticketsummen. Bestehende Prüfungen für ungültige Zeitspannen, Zeitzonen, Zukunftszeiten, aktive Timer und Löschrechte bleiben grün.
+- 234 Frontendtests in 68 Dateien bestanden (TZ=Europe/Berlin). Ein neuer Test belegt, dass 08:00–09:30 und 08:30–10:00 zusammen 03:00 Stunden Tätigkeitszeit ergeben.
+- Vue-/TypeScript-Typprüfung, Produktionsbuild, alle 289 MDI-Symbole, TypeScript-/Vue-Syntax, Branding-, Versions- und Releaseprüfung bestanden. Bekannte Bundlegrößenwarnung bleibt bestehen.
+- Geänderte Backenddateien und Tests bestehen Ruff. Gezielte Mypy-Prüfung des Zeiterfassungs-API-Moduls mit follow-imports=silent: keine Fehler. Kein erneuter vollständiger Backend-/Mypy-Gesamtlauf; bestehende Gesamtprüfgrenzen bleiben erhalten.
+- Keine neue Migration; Head 0062, weiterhin 55 MCP-Werkzeuge. Keine vorhandenen Zeiten geändert, kein produktives Update oder GitHub-Push/Release, kein Dockerbuild. Kein zusätzlicher Browserlauf für die reine Validierungs- und Textkorrektur.
+- Doku, Handbuch, MCP-Hinweise und Versionen aktualisiert. Flaches Publisher-ZIP mit VERSION und Dockerfile im Hauptverzeichnis; sämtliche Archivdateien byteweise geprüft und SHA-256 neu erzeugt.
+
+---
+
 # Prüfung 1.10.3 – Arbeitsläufe löschen – 12. November 2026
 
 - 233 Frontendtests in 68 Dateien bestanden. Die Tagesgruppierung und Wiederaufnahmeliste bleiben abgedeckt.

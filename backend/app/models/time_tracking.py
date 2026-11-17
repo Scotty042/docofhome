@@ -20,3 +20,4 @@ class WorkInterval(SQLModel, table=True):
     ended_at: float | None = None
     running: bool = True
     completed: bool = False
+    bcs: bool = False

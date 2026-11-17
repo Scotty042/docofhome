@@ -24,7 +24,7 @@ with Session(engine) as session:
     session.commit()
 '''
     subprocess.run([sys.executable, '-c', seed], cwd=ROOT/'backend', env=env, check=True)
-    migrate('head')
+    migrate('0062')
     with sqlite3.connect(database) as db:
         assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '0062'
         values = db.execute('SELECT enabled_modules_json, main_menu_modules_json FROM application_settings').fetchone()
@@ -40,5 +40,5 @@ with Session(engine) as session:
     migrate('0061', 'downgrade')
     with sqlite3.connect(database) as db:
         assert json.loads(db.execute('SELECT enabled_modules_json FROM application_settings').fetchone()[0]) == ['assets']
-    migrate('head')
+    migrate('0062')
 print('Migration 0062: upgrade, downgrade, module decisions and single timer verified.')

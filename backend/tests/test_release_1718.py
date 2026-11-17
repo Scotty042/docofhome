@@ -83,7 +83,7 @@ def test_mcp_auth_and_tool_inventory_survive_repeated_lifespans(database):
             assert client.post("/mcp", headers=headers, json=request).status_code == 401
             response = client.post(f"/mcp/{token}", headers=headers, json=request)
             names = {tool["name"] for tool in response.json()["result"]["tools"]}
-            assert len(names) == 55
+            assert len(names) == 56
             assert {"search_recipes", "save_recipe", "get_recipe", "delete_recipe"} <= names
             McpSettingsService(session).update(McpSettingsWrite(enabled=True, permission="read"))
             denied = client.post(
@@ -173,6 +173,19 @@ def test_full_backup_restores_images_config_and_database(database, tmp_path, mon
     private_key = tmp_path / "secrets/docker-ssh/test-host"
     private_key.parent.mkdir(parents=True)
     private_key.write_text("private ssh test key")
+    from app.models.time_tracking import WorkInterval
+
+    session.add(
+        WorkInterval(
+            ticket="BCS",
+            customer="K",
+            started_at=100,
+            ended_at=200,
+            running=False,
+            completed=True,
+            bcs=True,
+        )
+    )
     session.add(Recipe(title="Rezept mit Bild", image_url="/api/v1/recipes/images/test.webp"))
     session.commit()
     service = BackupService(session)
@@ -195,6 +208,7 @@ def test_full_backup_restores_images_config_and_database(database, tmp_path, mon
     assert (fresh / "secrets/docker-ssh/test-host").stat().st_mode & 0o777 == 0o600
     with sqlite3.connect(settings.database_path) as conn:
         assert conn.execute("SELECT title FROM recipes").fetchone()[0] == "Rezept mit Bild"
+        assert conn.execute("SELECT bcs FROM work_intervals").fetchone()[0] == 1
     assert not apply_pending_restore()
 
 

@@ -92,18 +92,40 @@ def test_manual_entry_and_edit_preserve_id_and_recalculate(client):
     assert len(client.get("/time-tracking").json()) == 1
 
 
-def test_overlap_rejected_but_adjacent_entries_allowed(client):
-    row = client.post("/time-tracking/manual", json=manual_data()).json()
-    assert client.post("/time-tracking/manual", json=manual_data()).status_code == 409
-    adjacent = manual_data(start="2026-01-10T09:00:00+01:00", end="2026-01-10T10:00:00+01:00")
-    assert client.post("/time-tracking/manual", json=adjacent).status_code == 201
-    assert (
-        client.put(
-            f"/time-tracking/{row['id']}", json=manual_data(end="2026-01-10T09:30:00+01:00")
-        ).status_code
-        == 409
+def test_overlapping_entries_and_extended_end_time_are_allowed(client):
+    first = client.post("/time-tracking/manual", json=manual_data()).json()
+    second = client.post(
+        "/time-tracking/manual",
+        json={
+            **manual_data(start="2026-01-10T08:30:00+01:00", end="2026-01-10T10:00:00+01:00"),
+            "ticket": "parallel",
+        },
     )
-    assert client.get("/time-tracking").json()[-1]["ended_at"] == row["ended_at"]
+    assert second.status_code == 201
+    changed = client.put(
+        f"/time-tracking/{first['id']}", json=manual_data(end="2026-01-10T09:30:00+01:00")
+    )
+    assert changed.status_code == 200
+    assert changed.json()["id"] == first["id"]
+    assert changed.json()["ended_at"] - changed.json()["started_at"] == 5400
+    rows = client.get("/time-tracking").json()
+    assert len(rows) == 2
+    assert sum(row["ended_at"] - row["started_at"] for row in rows) == 10800
+    assert next(row for row in rows if row["id"] == second.json()["id"]) == second.json()
+
+
+def test_manual_entry_may_overlap_an_active_timer(client):
+    from datetime import UTC, datetime
+
+    running = client.post("/time-tracking/start", json={"ticket": "live", "customer": "K"}).json()
+    data = manual_data(
+        datetime.fromtimestamp(running["started_at"] - 60, UTC).isoformat(),
+        datetime.now(UTC).isoformat(),
+    )
+    assert client.post("/time-tracking/manual", json=data).status_code == 201
+    rows = client.get("/time-tracking").json()
+    assert next(row for row in rows if row["id"] == running["id"])["running"]
+    assert len(rows) == 2
 
 
 @pytest.mark.parametrize(
@@ -157,3 +179,30 @@ def test_delete_rejects_running_interval(client):
     client.post(f"/time-tracking/{running['id']}/pause")
     assert client.delete(f"/time-tracking/{running['id']}").status_code == 204
     assert client.get("/time-tracking").json() == []
+
+
+def test_bcs_persists_and_time_edits_do_not_clear_it(client):
+    row = client.post("/time-tracking/manual", json=manual_data()).json()
+    assert row["bcs"] is False
+    marked = client.patch(f"/time-tracking/{row['id']}/bcs", json={"bcs": True})
+    assert marked.status_code == 200 and marked.json()["bcs"] is True
+    assert marked.json()["started_at"] == row["started_at"]
+    assert client.get("/time-tracking").json()[0]["bcs"] is True
+    edited = client.put(
+        f"/time-tracking/{row['id']}", json=manual_data(end="2026-01-10T10:00:00+01:00")
+    )
+    assert edited.status_code == 200 and edited.json()["bcs"] is True
+    assert (
+        client.patch(f"/time-tracking/{row['id']}/bcs", json={"bcs": False}).json()["bcs"] is False
+    )
+    assert client.get("/time-tracking").json()[0]["bcs"] is False
+
+
+def test_bcs_on_active_timer_does_not_stop_or_change_it(client):
+    row = client.post("/time-tracking/start", json={"ticket": "BCS", "customer": "K"}).json()
+    marked = client.patch(f"/time-tracking/{row['id']}/bcs", json={"bcs": True}).json()
+    assert marked["running"] and marked["ended_at"] is None
+    assert marked["started_at"] == row["started_at"] and marked["bcs"]
+    assert client.post(f"/time-tracking/{row['id']}/end").json()["bcs"]
+    assert client.patch("/time-tracking/unknown/bcs", json={"bcs": True}).status_code == 404
+    assert client.patch(f"/time-tracking/{row['id']}/bcs", json={"bcs": "yes"}).status_code == 422

@@ -2,6 +2,69 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.10.6 – 2026-11-17
+
+### Kundengruppen, Sortierung und BCS
+
+- Klickbare Spaltenüberschriften sortieren Tätigkeit/Ticketnr, Kundenname/Info, Anfang, Ende, Dauer, Status und BCS auf- oder absteigend. Die Tage bleiben getrennt und absteigend nach Datum; Sortierung gilt nur innerhalb des jeweiligen Tages beziehungsweise der Kundengruppe. Anzeige der Richtung und Tastaturbedienung ergänzt.
+- Gruppierung Keine/Nach Kunde. Innerhalb jedes Tages erscheinen Kunden alphabetisch mit eigener Summe und ihren Arbeitsläufen. Die Tages- und Gesamtsummen bleiben erhalten.
+- Tätigkeitssummen enthalten den Kundennamen. Kombinationen von Tätigkeit/Ticketnr und Kunde werden getrennt summiert und auch in der Wiederaufnahme getrennt behandelt.
+- BCS-Checkbox je Arbeitslauf, unmittelbar gespeichert. PATCH ändert ausschließlich BCS, erhält Zeiten und Timerstatus und ist auch für aktive Timer möglich. Tagesanteile desselben Arbeitslaufs teilen dieselbe Markierung; neue Arbeitsläufe beginnen unmarkiert. Zeit-/Infoänderungen ohne BCS-Feld behalten die Markierung. Fehlgeschlagene Schreibzugriffe setzen keinen dauerhaften Haken; ältere Ladeantworten dürfen einen bestätigten BCS-Stand nicht überschreiben.
+- Migration `0063` ergänzt bcs als nicht-nullbaren Boolean mit false als Bestands-/Neuwert. Keine bestehenden Zeiten oder Module verändert. Upgrade, Downgrade und Wiederupgrade mit Bestandsdaten und Erhalt des eindeutigen Timerindex geprüft.
+- MCP ergänzt set_work_interval_bcs mit write-Berechtigung; save_work_interval erhält optional bcs. Insgesamt 56 Werkzeuge. Lesewerkzeuge, JSON-/CSV-Export und vollständige Backups enthalten BCS. get_work_day ergänzt den Kunden in getrennten Tätigkeitssummen. Authentifizierungswege und Löschrechte unverändert.
+- Anleitung, Handbuch, Status und Versionsquellen aktualisiert. Publisher-kompatibles flaches Paket, keine produktive Installation oder GitHub-Veröffentlichung verändert.
+
+### Validierung und Update
+
+244 Frontendtests und 34 gezielte Backendtests bestanden. Vue-Typprüfung, Produktionsbuild, Symbolprüfung, gezielte Mypy- und Ruff-Prüfungen sowie Migration 0063 erfolgreich. Browserprüfung mit isolierten Daten: beide Sortierrichtungen, getrennte Tage, Kundengruppen, Kunden in Summen und BCS-Speicherung nach Neuladen. BCS auch im vollständig wiederhergestellten Backup geprüft. Details und bestehende Gesamtprüfgrenzen in AUDIT.md; kein vollständiger grüner Backend-Gesamtlauf oder Dockerbuild behauptet.
+
+Vor Update vollständiges Backup erstellen. Paket in der bestehenden Installation übernehmen, data und .env erhalten und docker compose up -d --build ausführen. Migration 0063 läuft beim Start. Anschließend MCP-Werkzeugliste neu laden. Ein Downgrade auf 0062 entfernt BCS-Markierungen; Arbeitszeiten bleiben erhalten.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.6","base_version":"1.10.5","built_on":"2026-11-17","alembic_head":"0063","database_migration_required":true,"backup_format_version":2,"mcp_tools":56,"full_quality_gate_passed":false}
+```
+
+## 1.10.5 – 2026-11-17
+
+### Eingabefelder nach Ende leeren
+
+- Nach erfolgreichem Ende werden Tätigkeit/Ticketnr, Kundenname und weitere Info geleert, damit die nächste Aufgabe direkt eingegeben werden kann.
+- Erst die erfolgreiche Serverantwort löst das Leeren aus. Bei fehlgeschlagenem Speichern bleiben die Eingaben erhalten. Pause behält die Eingaben ebenfalls.
+- Bestätigte Start-/Pause-/Ende-Ergebnisse werden sofort in den lokalen Arbeitsläufen übernommen. Ein Fehler beim anschließenden Neuladen blockiert nach einem gespeicherten Ende die neue Eingabe nicht; der gespeicherte Arbeitslauf bleibt im Verlauf erhalten.
+- Backend, Datenmodell, Datenbankmigrationen und MCP unverändert; Head 0062, 55 Werkzeuge. Handbuch, Anleitung, Versionsquellen und Publisher-Paket aktualisiert.
+
+### Validierung und Grenzen
+
+238 Frontendtests in 69 Dateien bestanden. Vier neue Regressionstests für erfolgreiches Ende, fehlgeschlagenes Speichern, Pause und bestätigtes Ende trotz fehlgeschlagener Aktualisierung. Weitere Ergebnisse in AUDIT.md. Bestehende Gesamtprüfgrenzen bleiben erhalten; kein produktives Update, kein GitHub-Push/Release.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.5","base_version":"1.10.4","built_on":"2026-11-17","alembic_head":"0062","database_migration_required":false,"backup_format_version":2,"mcp_tools":55,"full_quality_gate_passed":false}
+```
+
+## 1.10.4 – 2026-11-16
+
+### Parallele Arbeitszeiten erlauben
+
+- Fehler behoben: Die Endzeit eines abgeschlossenen Arbeitslaufs kann verlängert werden, auch wenn sie sich mit einem anderen Arbeitslauf überschneidet. Die gespeicherte ID bleibt erhalten und andere Einträge werden nicht verändert.
+- Überschneidungssperre für manuelle Einträge und Zeitkorrekturen entfernt; gilt gleichermaßen für REST und MCP `save_work_interval`. Überschneidungen mit einem laufenden Timer sind bei manuellen Einträgen ebenfalls zulässig.
+- Positive Zeitspanne, Zeitzone, keine zukünftige Endzeit und Schutz laufender Arbeitsläufe beim direkten Bearbeiten bleiben erhalten. Der Start-/Pause-/Ende-Timer erlaubt weiterhin einen gleichzeitig laufenden automatischen Timer.
+- Tages-, Tätigkeits- und Gesamtsummen zählen weiterhin die Dauer jedes Arbeitslaufs einzeln. Parallele Tätigkeiten können eine größere Summe als die verstrichene Uhrzeit ergeben. Ein Hinweis im Verlauf und die Anleitung erklären diese Bedeutung.
+- Veralteten Überschneidungshinweis im Bearbeitungsformular und in der MCP-Beschreibung korrigiert; Handbuch und aktuelle Dokumentation aktualisiert. Keine Datenmigration, keine Änderung bestehender Zeiten. Head 0062 und 55 MCP-Werkzeuge bleiben erhalten.
+
+### Validierung und Grenzen
+
+Regressionstests bilden das Verlängern einer bestehenden Endzeit über einen anderen Arbeitslauf ab. Weitere Tests für parallele manuelle Einträge, Überschneidung mit aktivem Timer, unveränderte andere Einträge sowie REST-/MCP-Summen. 27 gezielte Backendtests und 234 Frontendtests bestanden. Vue-Typprüfung, Produktionsbuild, Symbol-, Syntax- und Releaseprüfungen bestanden. Weitere Ergebnisse stehen in AUDIT.md. Bestehende Backend-Gesamtprüfgrenzen bleiben erhalten; kein Dockerbuild oder produktives Update behauptet. Keine GitHub-Veröffentlichung.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.10.4","base_version":"1.10.3","built_on":"2026-11-16","alembic_head":"0062","database_migration_required":false,"backup_format_version":2,"mcp_tools":55,"full_quality_gate_passed":false}
+```
+
 ## 1.10.3 – 2026-11-12
 
 ### Arbeitsläufe löschen

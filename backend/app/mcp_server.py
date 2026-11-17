@@ -15,7 +15,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.recipes import apply as apply_recipe
 from app.api.v1.recipes import read_model as read_recipe
-from app.api.v1.time_tracking import IntervalWrite, StartRequest, delete_interval, save_interval
+from app.api.v1.time_tracking import (
+    BcsWrite,
+    IntervalWrite,
+    StartRequest,
+    delete_interval,
+    save_interval,
+    set_interval_bcs,
+)
 from app.api.v1.time_tracking import start as start_interval
 from app.api.v1.time_tracking import stop as stop_interval
 from app.core.settings import settings
@@ -1291,7 +1298,7 @@ def get_work_day(day: str) -> dict[str, Any]:
         start = datetime.combine(selected, time.min, zone).timestamp()
         end = datetime.combine(selected + timedelta(days=1), time.min, zone).timestamp()
         current = datetime.now(UTC).timestamp()
-        tickets: dict[str, dict[str, Any]] = {}
+        tickets: dict[tuple[str, str], dict[str, Any]] = {}
         for row in session.exec(
             select(WorkInterval).where(WorkInterval.started_at < end)
         ).all():
@@ -1301,7 +1308,8 @@ def get_work_day(day: str) -> dict[str, Any]:
             if duration <= 0:
                 continue
             group = tickets.setdefault(
-                row.ticket, {"ticket": row.ticket, "seconds": 0.0, "intervals": []}
+                (row.ticket, row.customer),
+                {"ticket": row.ticket, "customer": row.customer, "seconds": 0.0, "intervals": []},
             )
             group["seconds"] += duration
             group["intervals"].append(
@@ -1318,17 +1326,19 @@ def get_work_day(day: str) -> dict[str, Any]:
 @mcp_server.tool()
 def save_work_interval(
     ticket: str, customer: str, started_at: str, ended_at: str,
-    info: str = "", interval_id: str | None = None,
+    info: str = "", interval_id: str | None = None, bcs: bool | None = None,
 ) -> dict[str, Any]:
     """Ergänzt manuell einen abgeschlossenen Arbeitslauf oder bearbeitet interval_id.
 
     Anfang und Ende als ISO-8601 mit Zeitzone. Vor Anlegen nach Dubletten suchen.
-    Keine Zukunftszeiten oder Überschneidungen; laufende Timer zuerst pausieren/beenden.
+    Keine Zukunftszeiten; Überschneidungen sind erlaubt. Laufende Timer zuerst pausieren/beenden.
     """
     with Session(engine) as session:
         _permission(session, McpPermission.WRITE)
-        data = IntervalWrite.model_validate({"ticket": ticket, "customer": customer, "info": info,
-                                            "started_at": started_at, "ended_at": ended_at})
+        data = IntervalWrite.model_validate({
+            "ticket": ticket, "customer": customer, "info": info,
+            "started_at": started_at, "ended_at": ended_at, "bcs": bcs,
+        })
         try:
             return save_interval(data, session, interval_id).model_dump(mode="json")
         except HTTPException as exc:
@@ -1349,6 +1359,17 @@ def delete_work_interval(interval_id: str) -> dict[str, str]:
         except HTTPException as exc:
             raise ValueError(str(exc.detail)) from exc
         return {"status": "deleted", "interval_id": interval_id}
+
+
+@mcp_server.tool()
+def set_work_interval_bcs(interval_id: str, bcs: bool) -> dict[str, Any]:
+    """Setzt oder entfernt die BCS-Markierung eines Arbeitslaufs. Schreibzugriff erforderlich."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        try:
+            return set_interval_bcs(interval_id, BcsWrite(bcs=bcs), session).model_dump(mode="json")
+        except HTTPException as exc:
+            raise ValueError(str(exc.detail)) from exc
 
 
 class McpBearerAuthMiddleware:
@@ -1426,6 +1447,7 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         get_work_day,
         save_work_interval,
         delete_work_interval,
+        set_work_interval_bcs,
         search_subjects,
         create_subject,
         update_subject,

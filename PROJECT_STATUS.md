@@ -1,20 +1,26 @@
 # DocOfHome – Projektstatus
 
-Stand: 12. November 2026  
-Release: **1.10.3**  
-Alembic-Head: **`0062`**
+Stand: 17. November 2026  
+Release: **1.10.6**  
+Alembic-Head: **`0063`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.
 
 ## Aktueller technischer Stand
 
+- Zeiterfassung mit Sortierung innerhalb der Tagesgruppen, optionaler Kundengruppierung mit Kundensummen, Kundenname in den Tätigkeitssummen und gespeicherter BCS-Markierung. Migration `0063`.
+
+- Nach erfolgreich gespeichertem Ende werden die drei Eingabefelder für die nächste Tätigkeit geleert. Pause und fehlgeschlagenes Speichern erhalten die Eingaben.
+
+- Parallele Tätigkeiten können bei manuellen Arbeitsläufen und nachträglichen Zeitänderungen überlappen. Tätigkeitsdauern werden einzeln summiert.
+
 - Arbeitsläufe über Löschen mit Bestätigungsdialog entfernen; laufende Timer geschützt, Summen und Wiederaufnahme aktualisiert. MCP-Löschen erfordert admin.
 
 - Zeiterfassungsverlauf mit Datumsüberschriften und Tagessummen; Tätigkeit/Ticketnr und Kunde nebeneinander; Wiederaufnahme nur für Tätigkeiten mit Arbeitszeit heute.
 
-- Verlauf der Zeiterfassung mit Standard letzte 30 Tage, Schnellauswahl und Von/Bis; manuelle Arbeitsläufe und nachträgliche Änderungen samt Überschneidungsprüfung.
+- Verlauf der Zeiterfassung mit Standard letzte 30 Tage, Schnellauswahl und Von/Bis; manuelle Arbeitsläufe und nachträgliche Änderungen mit erlaubten Überschneidungen.
 
-- Ticketbasierte Zeiterfassung mit einzelnen Arbeitsläufen, Start/Pause/Ende, Wiederaufnahme, Ticket- und Tagessummen; sechs MCP-Werkzeuge und Datenexport. Migration `0062`.
+- Ticketbasierte Zeiterfassung mit einzelnen Arbeitsläufen, Start/Pause/Ende, Wiederaufnahme, Ticket- und Tagessummen; sieben MCP-Werkzeuge und Datenexport. Migration `0062`.
 
 - AMS-Karten mit Lagerrollendetails; gemeinsamer Abruf eindeutig passender Bambu-Originalbilder für Rollen ohne Bild;
 
@@ -22,11 +28,11 @@ DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, E
 - responsives Salbei-Design mit neuer Navigation, Dashboard, Inventarliste und gegliederten Gerätedetails;
 
 - Filament-Sammlung für beliebige Hersteller mit optionaler direkter Bambu-Cloud-/AMS-Anbindung, lokalem Archiv, Nachkaufliste, Bildern und 40 × 30 mm QR-Etiketten;
-- insgesamt 55 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
+- insgesamt 56 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
 
 - optionale tägliche Push-Erinnerungen über Pushover und ntfy mit Testversand, Kategorien und dauerhaftem Versandstatus;
 
-- LEGO-Sammlung mit Bilddashboard, Kaufkosten/Teilezahlen, manueller Bearbeitung, Modellmaßen und sechs MCP-Werkzeugen;
+- LEGO-Sammlung mit Bilddashboard, Kaufkosten/Teilezahlen, manueller Bearbeitung, Modellmaßen und fünf MCP-Werkzeugen;
 
 - zentrale Versions- und Implementierungshistorie in `PROJECT_HISTORY.md`;
 - FastAPI/SQLModel/Alembic-Backend und Vue/Vuetify-Frontend;

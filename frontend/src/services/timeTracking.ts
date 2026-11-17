@@ -39,7 +39,7 @@ export function localDateTime(seconds: number): string {
   return `${localDay(d)}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
 }
 
-export interface TimedActivity { ticket: string; started_at: number; ended_at: number | null }
+export interface TimedActivity { ticket: string; customer?: string; started_at: number; ended_at: number | null }
 export interface DaySlice<T> { interval: T; start: number; end: number; seconds: number }
 export interface ActivityDay<T> { day: string; start: number; end: number; total: number; slots: DaySlice<T>[] }
 
@@ -77,7 +77,54 @@ export function activitiesToday<T extends TimedActivity>(intervals: readonly T[]
   const result = new Map<string, T>()
   for (const interval of [...intervals].sort((a, b) => b.started_at - a.started_at)) {
     if (interval.started_at < bounds[1] && (interval.ended_at ?? now) > bounds[0]
-        && !result.has(interval.ticket)) result.set(interval.ticket, interval)
+        && !result.has(activityKey(interval))) result.set(activityKey(interval), interval)
   }
   return [...result.values()]
+}
+
+export interface HistoryActivity extends TimedActivity {
+  id: string; customer: string; info: string; bcs: boolean; running: boolean; completed: boolean
+}
+export type HistorySort = 'ticket' | 'customer' | 'start' | 'end' | 'seconds' | 'status' | 'bcs'
+export type SortDirection = 'asc' | 'desc'
+export const activityKey = (row: { ticket: string; customer?: string }) => JSON.stringify([row.ticket, row.customer ?? ''])
+const compareText = (a: string, b: string) => a.localeCompare(b, 'de', { numeric: true, sensitivity: 'base' })
+export function sortHistory<T extends HistoryActivity>(slots: readonly DaySlice<T>[], key: HistorySort, direction: SortDirection): DaySlice<T>[] {
+  const status = (row: T) => row.running ? 'Läuft' : row.completed ? 'Beendet' : 'Pausiert'
+  return [...slots].sort((a, b) => {
+    let order = 0
+    switch (key) {
+      case 'ticket': order = compareText(a.interval.ticket, b.interval.ticket); break
+      case 'customer': order = compareText(a.interval.customer, b.interval.customer) || compareText(a.interval.info, b.interval.info); break
+      case 'start': order = a.start - b.start; break
+      case 'end': order = (a.interval.running ? Infinity : a.end) - (b.interval.running ? Infinity : b.end); break
+      case 'seconds': order = a.seconds - b.seconds; break
+      case 'status': order = compareText(status(a.interval), status(b.interval)); break
+      case 'bcs': order = Number(Boolean(a.interval.bcs)) - Number(Boolean(b.interval.bcs)); break
+    }
+    return (direction === 'asc' ? order : -order) || compareText(a.interval.id, b.interval.id)
+  })
+}
+export function customerSections<T extends HistoryActivity>(slots: readonly DaySlice<T>[], grouped: boolean, key: HistorySort, direction: SortDirection) {
+  if (!grouped) return [{ key: '', customer: '', total: slots.reduce((n, row) => n + row.seconds, 0), slots: sortHistory(slots, key, direction) }]
+  const groups = new Map<string, { key: string; customer: string; total: number; slots: DaySlice<T>[] }>()
+  for (const slot of slots) {
+    const customer = slot.interval.customer
+    const group = groups.get(customer) ?? { key: customer, customer, total: 0, slots: [] }
+    group.total += slot.seconds; group.slots.push(slot); groups.set(customer, group)
+  }
+  return [...groups.values()].sort((a, b) => compareText(a.customer, b.customer)).map(group => ({
+    ...group, slots: sortHistory(group.slots, key, direction)
+  }))
+}
+export function summarizeActivities<T extends HistoryActivity>(rows: readonly T[], bounds: [number, number] | null, now: number) {
+  const groups = new Map<string, { key: string; ticket: string; customer: string; total: number }>()
+  if (!bounds) return []
+  for (const row of rows) {
+    const key = activityKey(row)
+    const group = groups.get(key) ?? { key, ticket: row.ticket, customer: row.customer, total: 0 }
+    group.total += intervalSeconds(row.started_at, row.ended_at ?? now, bounds[0], bounds[1])
+    groups.set(key, group)
+  }
+  return [...groups.values()]
 }

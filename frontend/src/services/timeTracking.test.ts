@@ -91,3 +91,53 @@ describe('daily history and resuming today', () => {
     }
   })
 })
+
+it('counts overlapping activity durations independently in daily totals', () => {
+  const at = (value: string) => new Date(value).getTime()/1000
+  const days = groupByDay([
+    { ticket: 'A', started_at: at('2026-11-12T08:00:00'), ended_at: at('2026-11-12T09:30:00') },
+    { ticket: 'B', started_at: at('2026-11-12T08:30:00'), ended_at: at('2026-11-12T10:00:00') }
+  ], rangeBounds('2026-11-12', '2026-11-12'), at('2026-11-12T12:00:00'))
+  expect(days).toHaveLength(1)
+  expect(days[0]!.slots).toHaveLength(2)
+  expect(formatDuration(days[0]!.total)).toBe('03:00:00')
+})
+
+import { customerSections, sortHistory, summarizeActivities } from './timeTracking'
+describe('customer grouping and sorting', () => {
+  const slots = [
+    { interval: { id:'a', ticket:'T-10', customer:'KD', info:'A', bcs:false, running:false, completed:true, started_at:100, ended_at:200 }, start:100, end:200, seconds:100 },
+    { interval: { id:'b', ticket:'T-2', customer:'KD', info:'B', bcs:true, running:false, completed:false, started_at:300, ended_at:350 }, start:300, end:350, seconds:50 },
+    { interval: { id:'c', ticket:'T-3', customer:'KD2', info:'C', bcs:false, running:false, completed:true, started_at:400, ended_at:600 }, start:400, end:600, seconds:200 }
+  ]
+  it('sorts numerically by ticket and reverses direction without changing source rows', () => {
+    expect(sortHistory(slots,'ticket','asc').map(s=>s.interval.id)).toEqual(['b','c','a'])
+    expect(sortHistory(slots,'ticket','desc').map(s=>s.interval.id)).toEqual(['a','c','b'])
+    expect(slots.map(s=>s.interval.id)).toEqual(['a','b','c'])
+    expect(sortHistory(slots,'seconds','asc').map(s=>s.interval.id)).toEqual(['b','a','c'])
+    expect(sortHistory(slots,'bcs','desc')[0]!.interval.id).toBe('b')
+    expect(sortHistory(slots,'end','desc')[0]!.interval.id).toBe('c')
+  })
+  it('groups per customer with correct totals and sorts inside each group', () => {
+    const sections = customerSections(slots,true,'ticket','asc')
+    expect(sections.map(g=>g.customer)).toEqual(['KD','KD2'])
+    expect(sections.map(g=>g.total)).toEqual([150,200])
+    expect(sections[0]!.slots.map(s=>s.interval.id)).toEqual(['b','a'])
+    expect(customerSections(slots,false,'ticket','asc')).toHaveLength(1)
+  })
+  it('keeps days separated when applying customer grouping and sorting', () => {
+    const at = (v:string)=>new Date(v).getTime()/1000
+    const days = groupByDay([
+      {...slots[0]!.interval, started_at:at('2026-11-16T08:00:00'), ended_at:at('2026-11-16T09:00:00')},
+      {...slots[1]!.interval, started_at:at('2026-11-17T08:00:00'), ended_at:at('2026-11-17T09:00:00')}
+    ],rangeBounds('2026-11-16','2026-11-17'),at('2026-11-17T12:00:00'))
+    expect(days.map(d=>d.day)).toEqual(['2026-11-17','2026-11-16'])
+    expect(days.map(d=>customerSections(d.slots,true,'ticket','asc')[0]!.slots[0]!.interval.id)).toEqual(['b','a'])
+  })
+  it('includes the customer in summaries and keeps identical tickets for different customers separate', () => {
+    const rows = [slots[0]!.interval, {...slots[1]!.interval,ticket:'T-10'}, {...slots[2]!.interval,ticket:'T-10'}]
+    const totals = summarizeActivities(rows,[0,1000],1000)
+    expect(totals.map(g=>[g.ticket,g.customer,g.total])).toEqual([['T-10','KD',150],['T-10','KD2',200]])
+    expect(new Set(totals.map(g=>g.key)).size).toBe(2)
+  })
+})

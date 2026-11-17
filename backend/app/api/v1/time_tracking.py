@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
 from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -74,6 +74,7 @@ def stop(interval_id: str, action: Literal["pause", "end"], session: SessionDep)
 
 
 class IntervalWrite(StartRequest):
+    bcs: StrictBool | None = None
     started_at: datetime
     ended_at: datetime
 
@@ -91,7 +92,7 @@ class IntervalWrite(StartRequest):
 def save_interval(
     data: IntervalWrite, session: Session, interval_id: str | None = None
 ) -> WorkInterval:
-    # Reserve the SQLite writer before checking overlaps, including concurrent requests.
+    # Serialize updates so active-timer protection and the saved state stay consistent.
     session.connection().exec_driver_sql("BEGIN IMMEDIATE")
     row = session.get(WorkInterval, interval_id) if interval_id else None
     if interval_id and row is None:
@@ -99,14 +100,6 @@ def save_interval(
     if row is not None and row.running:
         raise HTTPException(409, "Bitte den laufenden Arbeitslauf zuerst pausieren oder beenden.")
     start, end = data.started_at.timestamp(), data.ended_at.timestamp()
-    overlap = select(WorkInterval).where(
-        col(WorkInterval.started_at) < end,
-        (col(WorkInterval.ended_at).is_(None)) | (col(WorkInterval.ended_at) > start),
-    )
-    if row is not None:
-        overlap = overlap.where(col(WorkInterval.id) != row.id)
-    if session.exec(overlap).first() is not None:
-        raise HTTPException(409, "Der Zeitraum überschneidet sich mit einem anderen Arbeitslauf.")
     if row is None:
         row = WorkInterval(
             ticket=data.ticket,
@@ -117,6 +110,8 @@ def save_interval(
         )
     row.ticket, row.customer, row.info = data.ticket, data.customer, data.info
     row.started_at, row.ended_at = start, end
+    if data.bcs is not None:
+        row.bcs = data.bcs
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -144,3 +139,21 @@ def delete_interval(interval_id: str, session: SessionDep) -> None:
         raise HTTPException(409, "Bitte den laufenden Arbeitslauf zuerst pausieren oder beenden.")
     session.delete(row)
     session.commit()
+
+
+class BcsWrite(BaseModel):
+    bcs: StrictBool
+
+
+@router.patch("/{interval_id}/bcs", response_model=WorkInterval)
+def set_interval_bcs(interval_id: str, data: BcsWrite, session: SessionDep) -> WorkInterval:
+    """Update only BCS, including for an active timer, without replacing time fields."""
+    session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+    row = session.get(WorkInterval, interval_id)
+    if row is None:
+        raise HTTPException(404, "Arbeitslauf nicht gefunden.")
+    row.bcs = data.bcs
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
