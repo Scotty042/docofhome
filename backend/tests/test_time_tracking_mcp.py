@@ -253,3 +253,30 @@ def test_mcp_day_totals_include_customer_and_separate_identical_tickets(database
             "KD": 3600,
             "KD2": 3600,
         }
+
+
+def test_monthly_export_mcp_permissions_and_configuration(database):
+    session, token = database
+    with TestClient(app) as client:
+        initial = call(client, token, "get_time_exports", {})
+        assert not initial["configuration"]["enabled"]
+        saved = call(client, token, "configure_time_exports", {"enabled": True})
+        assert saved["enabled"] and not saved["upload_to_nextcloud"]
+        result = call(client, token, "run_time_export", {}, path=True)
+        assert result["last_error"] is None
+        assert call(client, token, "get_time_exports", {})["files"]
+        McpSettingsService(session).update(McpSettingsWrite(enabled=True, permission="read"))
+        response = client.post(
+            "/mcp",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json, text/event-stream",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "configure_time_exports", "arguments": {"enabled": False}},
+            },
+        )
+        assert response.json()["result"]["isError"]

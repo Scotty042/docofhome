@@ -29,10 +29,15 @@ Ein laufender Timer muss vor dem Löschen pausiert oder beendet werden. Es gibt 
 
 Ein Klick auf eine Spaltenüberschrift sortiert aufsteigend; ein weiterer Klick auf dieselbe Überschrift kehrt die Richtung um. Pfeile zeigen die Auswahl. Sortierbar sind Tätigkeit/Ticketnr, Kundenname/Info, Anfang, Ende, Dauer, Status und BCS. Die Tage bleiben immer getrennt, neuester Tag zuerst. Standard: Anfang absteigend.
 
-Unter **Gruppierung** zwischen **Keine** und **Nach Kunde** wählen. Bei Nach Kunde stehen innerhalb jedes Tages die Kunden mit eigener Kundensumme und darunter ihre einzelnen Arbeitsläufe. Kunden werden alphabetisch angezeigt, die Spaltensortierung gilt innerhalb jeder Kundengruppe. Gleichheit richtet sich nach dem gespeicherten Kundennamen; die Gruppierung ändert keine Daten.
+Die Checkbox **Nach Kunde gruppieren** schaltet die Kundengruppierung ein oder aus. Die Spaltenüberschriften erscheinen nur einmal pro Tag, auch bei mehreren Kundengruppen. Bei Nach Kunde stehen innerhalb jedes Tages die Kunden mit eigener Kundensumme und darunter ihre einzelnen Arbeitsläufe. Kunden werden alphabetisch angezeigt, die Spaltensortierung gilt innerhalb jeder Kundengruppe. Gleichheit richtet sich nach dem gespeicherten Kundennamen; die Gruppierung ändert keine Daten.
 
 Die Zusammenfassungen unter Gesamtzeit im Zeitraum zeigen jetzt Tätigkeit/Ticketnr, Kundenname und Dauer. Gleiche Tätigkeit/Ticketnr bei verschiedenen Kunden wird separat summiert. Auch die heutige Wiederaufnahmeliste unterscheidet solche Kombinationen.
 
 Die Spalte **BCS** hat pro Arbeitslauf eine Checkbox. Setzen oder Entfernen speichert unmittelbar; bei einem Fehler erscheint eine Meldung und es wird kein erfolgreicher Haken vorgetäuscht. Zeiten, Kunde, Info und Timerstatus bleiben unverändert. BCS ist auch für aktive Timer setzbar. Ein neuer Arbeitslauf beginnt ohne BCS-Haken; bei einem Arbeitslauf über Mitternacht zeigen beide Tagesanteile denselben gespeicherten Status. Änderungen an Zeit oder Info erhalten den Haken. BCS ist eine freie Markierung ohne automatische weitere Aktion.
 
 Migration **0063** ergänzt die BCS-Spalte; vorhandene Zeiten und Modulentscheidungen bleiben erhalten, bestehende Arbeitsläufe starten ohne Haken. Vor dem Update vollständig sichern. Die Migration erfolgt regulär beim Containerstart. Ein Downgrade auf 0062 entfernt die BCS-Markierungen, erhält jedoch die Arbeitszeiten. Vollständige Backups sowie JSON-/CSV-Export enthalten BCS; der allgemeine Datenimport von Arbeitsläufen bleibt gesperrt.
+
+
+## Monatlicher Export und externer Zugang ab 1.11.0
+
+Optionaler monatlicher CSV-Export unter dem Verlauf, standardmäßig ausgeschaltet. Lokal und auf Wunsch zusätzlich nach Nextcloud. [Exportanleitung](TIME_EXPORTS.md). Für die spätere öffentliche Bereitstellung liegen optionale [SWAG-/Authentik-Vorlagen](SWAG_AUTHENTIK.md) bei; sie werden nicht automatisch aktiviert.

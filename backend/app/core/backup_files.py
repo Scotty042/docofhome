@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import stat
 import zipfile
 from pathlib import PurePosixPath
@@ -19,6 +20,10 @@ def allowed_file(name: str) -> bool:
         and all(part not in {"", ".", ".."} for part in name.split("/"))
         and (
             name == "backups/config.json"
+            or re.fullmatch(
+                r"exports/time-tracking/(?:config\.json|docofhome-zeiten-\d{4}-\d{2}\.csv)", name
+            )
+            is not None
             or (len(path.parts) > 1 and path.parts[0] == "uploads")
             or (len(path.parts) > 2 and path.parts[:2] == ("secrets", "docker-ssh"))
         )

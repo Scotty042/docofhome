@@ -1,0 +1,85 @@
+# Optional template; replace docofhome.example.com everywhere before activation.
+# Upstreams must be reachable by SWAG on the dedicated Docker proxy network.
+# The Authentik application uses Forward auth (single application).
+# Browser cookies must not authorize writes originating from another application.
+map $http_origin $doh_same_origin {
+    default 0;
+    "" 1;
+    "https://docofhome.example.com" 1;
+}
+map "$request_method:$doh_same_origin" $doh_reject_origin {
+    default 0;
+    ~^(POST|PUT|PATCH|DELETE):0$ 1;
+}
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name docofhome.example.com;
+    include /config/nginx/ssl.conf;
+    include /config/nginx/resolver.conf;
+    client_max_body_size 512m;
+    proxy_buffers 8 16k;
+    proxy_buffer_size 32k;
+
+    # Machine access has its own narrowly scoped optional vhost.
+    location = /mcp { return 404; }
+    location ^~ /mcp/ { return 404; }
+
+    location / {
+        if ($doh_reject_origin) { return 403; }
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @docofhome_login;
+        auth_request_set $doh_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $doh_cookie always;
+        include /config/nginx/proxy.conf;
+        set $doh_upstream docofhome;
+        proxy_pass http://$doh_upstream:8000;
+        # DocOfHome does not derive permissions from identity headers.
+        proxy_set_header X-authentik-username "";
+        proxy_set_header X-authentik-groups "";
+        proxy_set_header X-authentik-email "";
+        proxy_set_header X-authentik-name "";
+        proxy_set_header X-authentik-uid "";
+        proxy_set_header X-Original-URI "";
+    }
+
+    # Exact auth check is internal; it cannot be called directly from the internet.
+    location = /outpost.goauthentik.io/auth/nginx {
+        internal;
+        set $doh_auth authentik-server;
+        proxy_pass http://$doh_auth:9000/outpost.goauthentik.io/auth/nginx;
+        proxy_pass_request_body off;
+        proxy_pass_request_headers off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host docofhome.example.com;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header User-Agent $http_user_agent;
+        proxy_set_header X-Original-URL https://docofhome.example.com$request_uri;
+        proxy_set_header X-Original-URI "";
+        proxy_set_header X-Forwarded-Host docofhome.example.com;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Method $request_method;
+    }
+
+    # Only Authentik's own callback/start paths bypass the application login.
+    location ^~ /outpost.goauthentik.io/ {
+        set $doh_auth authentik-server;
+        proxy_pass http://$doh_auth:9000;
+        proxy_set_header Host docofhome.example.com;
+        proxy_set_header X-Original-URL https://docofhome.example.com$request_uri;
+        proxy_set_header X-Original-URI "";
+        proxy_set_header X-Forwarded-Host docofhome.example.com;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-authentik-username "";
+        proxy_set_header X-authentik-groups "";
+    }
+
+    location @docofhome_login {
+        internal;
+        set_escape_uri $doh_return https://docofhome.example.com$request_uri;
+        add_header Set-Cookie $doh_cookie always;
+        return 302 /outpost.goauthentik.io/start?rd=$doh_return;
+    }
+}

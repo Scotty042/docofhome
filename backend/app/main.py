@@ -19,6 +19,7 @@ from app.services.docker_sync_schedule import docker_sync_scheduler_loop
 from app.services.filament_schedule import filament_scheduler_loop
 from app.services.notification_schedule import notification_scheduler_loop
 from app.services.quality_schedule import quality_scheduler_loop
+from app.services.time_exports import time_export_scheduler_loop
 
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
     (settings.data_dir / "uploads" / "product-images").mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "uploads" / "recipe-images").mkdir(parents=True, exist_ok=True)
     scheduler_task = asyncio.create_task(backup_scheduler_loop())
+    export_task = asyncio.create_task(time_export_scheduler_loop())
     quality_task = asyncio.create_task(quality_scheduler_loop())
     docker_task = asyncio.create_task(docker_sync_scheduler_loop())
     push_task = asyncio.create_task(notification_scheduler_loop())
@@ -38,11 +40,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
         async with server.session_manager.run():
             yield {"mcp_http_app": transport}
     finally:
+        export_task.cancel()
         scheduler_task.cancel()
         quality_task.cancel()
         docker_task.cancel()
         push_task.cancel()
         filament_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await export_task
         with suppress(asyncio.CancelledError):
             await scheduler_task
         with suppress(asyncio.CancelledError):

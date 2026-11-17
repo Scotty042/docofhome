@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TimeExportCard from '../components/TimeExportCard.vue'
 import { intervalSeconds, formatDuration as duration, rangeOptions, quickRange, rangeBounds, localDateTime, groupByDay, activitiesToday, activityKey, customerSections, summarizeActivities } from '../services/timeTracking'
 import type { HistorySort, SortDirection } from '../services/timeTracking'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -23,7 +24,7 @@ const groups = computed(() => summarizeActivities(visible.value, bounds.value, n
 const total = computed(() => visible.value.reduce((sum, i) => sum + seconds(i), 0))
 const recent = computed(() => activitiesToday(items.value, now.value))
 const days = computed(() => groupByDay(items.value, bounds.value, now.value))
-const grouping = ref('none'), sortKey = ref<HistorySort>('start'), sortDirection = ref<SortDirection>('desc')
+const grouping = ref(false), sortKey = ref<HistorySort>('start'), sortDirection = ref<SortDirection>('desc')
 const columns: { key: HistorySort; title: string }[] = [
   { key: 'ticket', title: 'Tätigkeit/Ticketnr' }, { key: 'customer', title: 'Kundenname / weitere Info' },
   { key: 'start', title: 'Anfang' }, { key: 'end', title: 'Ende' }, { key: 'seconds', title: 'Dauer' },
@@ -34,7 +35,7 @@ function sortBy(key: HistorySort) {
   else { sortKey.value = key; sortDirection.value = 'asc' }
 }
 const historyDays = computed(() => days.value.map(day => ({ ...day,
-  sections: customerSections(day.slots, grouping.value === 'customer', sortKey.value, sortDirection.value)
+  sections: customerSections(day.slots, grouping.value, sortKey.value, sortDirection.value)
 })))
 async function updateBcs(slot: Interval, checked: boolean | null) {
   if (busy.value) return
@@ -184,21 +185,20 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
         <div class="d-flex flex-wrap ga-2 mb-4" aria-label="Summen je Tätigkeit/Ticketnr">
           <v-chip v-for="group in groups" :key="group.key">{{ group.ticket }} · {{ group.customer }} · {{ duration(group.total) }}</v-chip>
         </div>
-        <v-select v-model="grouping" :items="[{ title: 'Keine', value: 'none' }, { title: 'Nach Kunde', value: 'customer' }]" label="Gruppierung" class="grouping-select" />
+        <v-checkbox v-model="grouping" label="Nach Kunde gruppieren" hide-details class="mb-4" />
         <section v-for="day in historyDays" :key="day.day" class="day-group" :aria-label="dayTitle(day.day)">
           <div class="day-heading">
             <h2 class="text-h6">{{ dayTitle(day.day) }}</h2>
             <strong>Gesamtzeit: {{ duration(day.total) }}</strong>
           </div>
-          <div v-for="section in day.sections" :key="section.key" class="customer-section">
-          <h3 v-if="grouping === 'customer'" class="text-subtitle-1 my-3">{{ section.customer }} · Gesamtzeit: {{ duration(section.total) }}</h3>
           <v-table class="history-table">
             <thead><tr>
               <th v-for="column in columns" :key="column.key" :aria-sort="sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-heading" @click="sortBy(column.key)">{{ column.title }} <span aria-hidden="true">{{ sortKey === column.key ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span></button>
               </th><th>Aktionen</th>
             </tr></thead>
-            <tbody>
+            <tbody v-for="section in day.sections" :key="section.key">
+              <tr v-if="grouping" class="customer-row"><th colspan="8" scope="rowgroup">{{ section.customer }} · Gesamtzeit: {{ duration(section.total) }}</th></tr>
               <tr v-for="slice in section.slots" :key="slice.interval.id">
                 <td>{{ slice.interval.ticket }}</td>
                 <td><strong>{{ slice.interval.customer }}</strong><p class="history-info">{{ slice.interval.info }}</p></td>
@@ -213,10 +213,10 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
               </tr>
             </tbody>
           </v-table>
-          </div>
         </section>
       </v-card-text>
     </v-card>
+    <TimeExportCard />
     <v-dialog v-model="editor" max-width="640" :persistent="busy">
       <v-card :title="editingId ? 'Arbeitslauf bearbeiten' : 'Manueller Arbeitslauf'">
         <v-form @submit.prevent="saveInterval">
@@ -261,7 +261,7 @@ onUnmounted(() => { clearInterval(tick); clearInterval(poll) })
 </template>
 
 <style scoped>
-.grouping-select { max-width: 320px; }
+.customer-row th { background: rgba(var(--v-theme-primary), 0.06); font-weight: 600; }
 .sort-heading { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 .sort-heading:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .day-group + .day-group { margin-top: 28px; }

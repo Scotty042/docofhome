@@ -166,3 +166,10 @@ Ende leert nach erfolgreichem Speichern Tätigkeit/Ticketnr, Kundenname und weit
 ## Kundengruppen und BCS 1.10.6
 
 Spalten innerhalb der Tage sortieren, Einträge optional nach Kunde gruppieren und BCS pro Arbeitslauf speichern. Tätigkeitssummen enthalten den Kunden. Migration 0063, insgesamt 56 MCP-Werkzeuge. [Anleitung](docs/TIME_TRACKING.md).
+
+## Monatsexport und Authentik-Vorbereitung 1.11.0
+
+- Monatlichen CSV-Export der Zeiterfassung optional aktivieren, lokal und zusätzlich nach Nextcloud: [Anleitung](docs/TIME_EXPORTS.md).
+- Kundengruppierung als Checkbox, Tabellenüberschriften einmal je Tag.
+- Separate, optional aktivierbare SWAG-/Authentik-Vorlagen und Compose-Datei ohne veröffentlichten App-Port: [Einrichtung](docs/SWAG_AUTHENTIK.md). Authentik wird unabhängig eingerichtet; keine bestehende Installation wird automatisch umgestellt.
+- Head weiterhin 0063, keine neue Datenbankmigration. Insgesamt 59 MCP-Werkzeuge.

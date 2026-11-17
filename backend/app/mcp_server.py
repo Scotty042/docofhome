@@ -88,6 +88,7 @@ from app.services.knowledge import NoteService, WikiService
 from app.services.lego import LegoService
 from app.services.mcp_settings import McpSettingsService
 from app.services.network import NetworkService
+from app.services.time_exports import TimeExportService, TimeExportWrite
 from app.services.work import WorkConflictError, WorkService
 
 mcp_server = MCPServer(
@@ -1372,6 +1373,45 @@ def set_work_interval_bcs(interval_id: str, bcs: bool) -> dict[str, Any]:
             raise ValueError(str(exc.detail)) from exc
 
 
+@mcp_server.tool()
+def get_time_exports() -> dict[str, Any]:
+    """Liest Konfiguration, Status und lokale monatliche CSV-Exporte der Zeiterfassung."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.READ)
+        service = TimeExportService(session)
+        return {"configuration": service.read().model_dump(mode="json"), "files": service.files()}
+
+
+@mcp_server.tool()
+def configure_time_exports(
+    enabled: bool,
+    upload_to_nextcloud: bool = False,
+    nextcloud_folder: str = "DocOfHome/Zeiterfassung",
+) -> dict[str, Any]:
+    """Konfiguriert monatliche CSV-Exporte, optional nach Nextcloud. Schreibzugriff."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        return (
+            TimeExportService(session)
+            .write(
+                TimeExportWrite(
+                    enabled=enabled,
+                    upload_to_nextcloud=upload_to_nextcloud,
+                    nextcloud_folder=nextcloud_folder,
+                )
+            )
+            .model_dump(mode="json")
+        )
+
+
+@mcp_server.tool()
+def run_time_export() -> dict[str, Any]:
+    """Exportiert den Vormonat erneut, optional nach Nextcloud. Schreibzugriff."""
+    with Session(engine) as session:
+        _permission(session, McpPermission.WRITE)
+        return TimeExportService(session).run_once(force=True).model_dump(mode="json")
+
+
 class McpBearerAuthMiddleware:
     """Small ASGI bearer gate backed by the persistent DocOfHome MCP token.
 
@@ -1448,6 +1488,9 @@ def create_mcp_runtime() -> tuple[MCPServer, ASGIApp]:
         save_work_interval,
         delete_work_interval,
         set_work_interval_bcs,
+        get_time_exports,
+        configure_time_exports,
+        run_time_export,
         search_subjects,
         create_subject,
         update_subject,

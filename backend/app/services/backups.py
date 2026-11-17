@@ -92,6 +92,10 @@ class BackupService:
             ) as archive:
                 archive.write(snapshot_path, "database.sqlite3")
                 candidates = list((settings.data_dir / "uploads").rglob("*"))
+                export_dir = settings.data_dir / "exports" / "time-tracking"
+                candidates.extend(export_dir.glob("docofhome-zeiten-????-??.csv"))
+                if (export_dir / "config.json").is_file():
+                    candidates.append(export_dir / "config.json")
                 candidates.extend((settings.data_dir / "secrets" / "docker-ssh").glob("*"))
                 config = self.backup_dir / "config.json"
                 if config.is_file():
@@ -200,13 +204,18 @@ class BackupService:
                     response = client.request("MKCOL", current)
                     if response.status_code not in {201, 405}:
                         raise BackupError(
-                            f"Nextcloud folder could not be created ({response.status_code})"
+                            f"Nextcloud folder could not be created ({response.status_code}). "
+                            "WebDAV-Ordneranlage abgewiesen; Ziel und Schreibrechte prüfen."
                         )
                 target = f"{current}/{quote(archive_path.name, safe='')}"
                 with archive_path.open("rb") as handle:
                     response = client.put(target, content=handle)
                 if response.status_code not in {200, 201, 204}:
-                    raise BackupError(f"Nextcloud upload failed ({response.status_code})")
+                    raise BackupError(
+                        f"Nextcloud upload failed ({response.status_code}). "
+                        "Datei-Upload per WebDAV abgewiesen; Schreibrechte im Zielordner prüfen. "
+                        "Die lokale Datei bleibt erhalten."
+                    )
         except httpx.HTTPError as exc:
             raise BackupError("Nextcloud could not be reached") from exc
 

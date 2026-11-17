@@ -1,12 +1,16 @@
 # DocOfHome – Projektstatus
 
 Stand: 17. November 2026  
-Release: **1.10.6**  
+Release: **1.11.0**  
 Alembic-Head: **`0063`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.
 
 ## Aktueller technischer Stand
+
+- Monatlicher CSV-Export mit eigenem Schalter, lokal und optional Nextcloud; Status, Downloads, Wiederholung und Backup/Wiederherstellung der Exporte.
+- Gruppierung nach Kunde als Checkbox, gemeinsame Tabellenüberschriften einmal je Tag.
+- Optionale separate Compose-/SWAG-/Authentik-Vorlagen vorbereitet; keine automatische Freigabe und kein Authentik-Dienst installiert.
 
 - Zeiterfassung mit Sortierung innerhalb der Tagesgruppen, optionaler Kundengruppierung mit Kundensummen, Kundenname in den Tätigkeitssummen und gespeicherter BCS-Markierung. Migration `0063`.
 
@@ -20,7 +24,7 @@ DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, E
 
 - Verlauf der Zeiterfassung mit Standard letzte 30 Tage, Schnellauswahl und Von/Bis; manuelle Arbeitsläufe und nachträgliche Änderungen mit erlaubten Überschneidungen.
 
-- Ticketbasierte Zeiterfassung mit einzelnen Arbeitsläufen, Start/Pause/Ende, Wiederaufnahme, Ticket- und Tagessummen; sieben MCP-Werkzeuge und Datenexport. Migration `0062`.
+- Ticketbasierte Zeiterfassung mit einzelnen Arbeitsläufen, Start/Pause/Ende, Wiederaufnahme, Ticket- und Tagessummen; zehn MCP-Werkzeuge und Datenexport. Migration `0062`.
 
 - AMS-Karten mit Lagerrollendetails; gemeinsamer Abruf eindeutig passender Bambu-Originalbilder für Rollen ohne Bild;
 
@@ -28,7 +32,7 @@ DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, E
 - responsives Salbei-Design mit neuer Navigation, Dashboard, Inventarliste und gegliederten Gerätedetails;
 
 - Filament-Sammlung für beliebige Hersteller mit optionaler direkter Bambu-Cloud-/AMS-Anbindung, lokalem Archiv, Nachkaufliste, Bildern und 40 × 30 mm QR-Etiketten;
-- insgesamt 56 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
+- insgesamt 59 MCP-Werkzeuge, davon acht für Filament; Lese-, Schreib- und Vollzugriff weiterhin getrennt;
 
 - optionale tägliche Push-Erinnerungen über Pushover und ntfy mit Testversand, Kategorien und dauerhaftem Versandstatus;
 

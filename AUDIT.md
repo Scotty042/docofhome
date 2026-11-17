@@ -1,3 +1,14 @@
+# Prüfung 1.11.0 – Monats-CSV und Authentik-Vorbereitung – 17. November 2026
+
+- 49 gezielte Backendtests bestanden: Zeiterfassung und MCP-Rechte, Export/Monatsgrenzen in mehreren Zeitzonen, automatische Wiederholung und Nachholung, Nextcloud-Fehler mit unveränderter Wiederholungsdatei, API/Download, Backup und Wiederherstellung einschließlich alter Backups. Proxy-Konfigurationsverträge nach Ergänzung der Origin-Prüfung erneut bestanden.
+- 246 Frontendtests in 70 Dateien bestanden. Vue-/TypeScript-Typprüfung und Produktionsbuild erfolgreich; bekannte Bundlegrößenwarnung. Gezieltes Mypy für die zwei neuen Exportmodule ohne Fehler; geänderte Backenddateien und Tests mit Ruff geprüft.
+- Browserprüfung am Produktionsbundle mit isolierten Beispieldaten: Gruppierung per Checkbox, zwei Kunden innerhalb eines Tages mit nur acht Spaltenüberschriften insgesamt, Tage weiterhin getrennt. Monatsautomatik standardmäßig aus; Aktivieren und Speichern sowie manueller Vormonatsexport erfolgreich, CSV für 2026-10 als Download vorhanden. Kein Nextcloud-Upload und keine produktiven Daten geändert.
+- Monatskonfiguration und CSV-Dateien im vollständigen Backup enthalten. Wiederherstellung eines älteren Backups aktiviert keine erst später konfigurierte Exportautomatik. Keine neue Migration; Head 0063. MCP-Bestand 59 mit unveränderten Token-Rollen.
+- SWAG-/Authentik- und separates MCP-Template statisch geprüft: kein veröffentlichter App-Port im alternativen Compose, Forward Auth vor Browser-API, Origin-Prüfung für Schreibzugriffe, Headerkontrolle und eigener tokenbasierter MCP-Zugang. Docker und nginx lokal nicht verfügbar; kein nginx -t, Dockerbuild oder Ende-zu-Ende-Test mit echtem Authentik. Diese Prüfung ist nach der separaten Einrichtung erforderlich.
+- Bestehende Backend-Gesamtprüfgrenzen gelten weiter; kein vollständiger grüner Quality-Gate-Lauf behauptet. Kein GitHub-Push/Release, kein produktives Update und keine öffentliche Freigabe. Dokumentation, Handbuch, Versionsquellen und flaches Publisher-Paket aktualisiert; Archiv byteweise und mit SHA-256 geprüft.
+
+---
+
 # Prüfung 1.10.6 – Kundengruppen, Sortierung, BCS – 17. November 2026
 
 - 244 Frontendtests in 69 Dateien bestanden: unter anderem Sortierrichtungen und numerische Ticketreihenfolge, Kundengruppen und Summen, getrennte Tage, Kunden in Zusammenfassungen, BCS-Speichern und Fehlerfall sowie das Leeren nach Ende.

@@ -1,0 +1,33 @@
+# Standalone alternative: use -f compose.swag.yaml, not merged with compose.yaml.
+# Authentik and SWAG are managed separately and join this existing external network.
+services:
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scotty042/docofhome:1.11.0
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      TZ: "${TZ:-Europe/Berlin}"
+      JARVIS_LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      JARVIS_DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    networks:
+      proxy:
+        aliases:
+          - docofhome
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+networks:
+  proxy:
+    external: true
+    name: "${SWAG_NETWORK:-proxy}"

@@ -144,3 +144,10 @@ Das Feld `ticket` wird in der Oberfläche als **Tätigkeit/Ticketnr** bezeichnet
 - `save_work_interval` unterstützt optional `bcs`. Beim Bearbeiten bleibt ein nicht übergebener Wert erhalten; neue Arbeitsläufe starten mit false.
 - Lesewerkzeuge liefern das Feld `bcs`. `get_work_day` liefert je Tätigkeit/Ticketnr **und Kunde** eine Summe mit `customer`, damit identische Ticketnummern verschiedener Kunden nicht verschmelzen.
 - Insgesamt **56 Werkzeuge**; nach Update die Werkzeugliste neu laden. Bearer und Tokenpfad bleiben unterstützt. read darf keine BCS-Markierung ändern; Löschen benötigt weiterhin admin.
+
+
+## Monatliche Exporte und optionale Authentik-Absicherung ab 1.11.0
+
+Zusätzlich `get_time_exports` (read), `configure_time_exports` (write; enabled, upload_to_nextcloud, nextcloud_folder) und `run_time_export` (write). Der Lauf exportiert den Vormonat erneut und nutzt die gespeicherte Upload-Einstellung. Insgesamt **59 Werkzeuge**. Nach Update Werkzeugliste neu laden. Exportanleitung: [TIME_EXPORTS.md](TIME_EXPORTS.md).
+
+Für eine Absicherung der Browseroberfläche mit Authentik bleibt MCP ein eigener Tokenzugang. Die optionale separate SWAG-Vorlage lässt ausschließlich MCP-Pfade passieren und sperrt UI/API-Routen; Downloads erfolgen über die geschützte Browser-Domain. Beide bisherigen MCP-Authentifizierungswege bleiben erhalten. Einrichtung und Abnahmetests: [SWAG_AUTHENTIK.md](SWAG_AUTHENTIK.md).

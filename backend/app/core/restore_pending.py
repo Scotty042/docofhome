@@ -58,6 +58,14 @@ def apply_pending_restore() -> bool:
         safety_copy = safety_dir / f"jarvis-before-restore-{stamp}.sqlite3"
         shutil.copy2(settings.database_path, safety_copy)
 
+    # Backups made before monthly exports existed must not inherit a later upload job.
+    export_config = settings.data_dir / "exports" / "time-tracking" / "config.json"
+    if not manifest or "exports/time-tracking/config.json" not in manifest.get("files", {}):
+        if export_config.exists():
+            saved_config = safety_dir / stamp / "exports" / "time-tracking" / "config.json"
+            saved_config.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(export_config), saved_config)
+
     replacement = settings.database_path.with_suffix(".restore.tmp")
     shutil.copy2(pending, replacement)
     _assert_integrity(replacement)

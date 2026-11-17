@@ -2,6 +2,31 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.11.0 – 2026-11-17
+
+### Monatsexport und Authentik-Vorbereitung
+
+- Checkbox Nach Kunde gruppieren ersetzt das Dropdown. Eine gemeinsame Tabellenkopfzeile je Tag; Kunden erscheinen darunter als Gruppenzeilen mit eigenen Summen. Tagesgrenzen, Sortierung und BCS bleiben erhalten.
+- Zuschaltbarer monatlicher CSV-Export, standardmäßig aus. Exportiert den abgeschlossenen Vormonat in der Installationszeitzone, stündliche Prüfung und begrenztes Nachholen fehlender Monate. Dauerhafter Fortschritt verhindert wiederholtes automatisches Erzeugen abgeschlossener Monate. Manuelle Wiederholung des Vormonats verfügbar.
+- CSV lokal mit Downloadliste, optional zusätzlich nach Nextcloud. UTF-8-BOM/Semikolon; ID, Tätigkeit, Kunde, Info, Monatsanteil von Anfang/Ende, Dauer, BCS und Status. Monatsgrenzen inklusive Zeitumstellung; Originalzeiten bleiben unverändert. Parallele Tätigkeiten separat, gängige Formelpräfixe als Text geschützt.
+- Fehlgeschlagene Nextcloud-Uploads behalten die lokale CSV und werden mit derselben Datei erneut versucht. Backup-Schreibfehler unterscheiden Ordneranlage und Datei-Upload deutlicher, ohne Zugangsdaten auszugeben.
+- Vollständige Backups enthalten Exportkonfiguration und CSV-Dateien. Alte Backups ohne Exportkonfiguration übernehmen keine später eingeschaltete Upload-Automatik; bisherige Konfiguration bleibt in der Pre-Restore-Sicherung erhalten. Format weiterhin 2; Backups mit neuen Exportdateien benötigen App-Version 1.11.0 oder neuer.
+- Drei neue MCP-Werkzeuge für Lesen, Konfiguration und manuellen Export; insgesamt 59. Bestehende Token-Authentifizierung und Berechtigungen erhalten.
+- Optionaler standalone Compose-Entwurf ohne App-Portfreigabe sowie SWAG-Vorlagen für Authentik Forward Auth und einen separaten MCP-Zugang. Headerkontrolle, geschützte Browser-API und geschlossenes Verhalten bei fehlgeschlagener Auth-Prüfung vorbereitet. Kein Authentik installiert und keine öffentliche Freigabe aktiviert. Gemeinsame App-Daten bleiben ohne Benutzertrennung.
+- Handbuch, Anleitungen, Status, Versionsquellen und Publisher-Paket aktualisiert. Keine neue Datenbankmigration; Head 0063.
+
+### Validierung und Betrieb
+
+49 gezielte Backendtests und 246 Frontendtests in 70 Dateien bestanden. Vue-Typprüfung, Produktionsbuild, gezieltes Mypy und Ruff erfolgreich. Browserprüfung bestätigt Checkbox-Gruppierung mit einmaligen Tagesüberschriften sowie Speichern und erfolgreichen Vormonatsexport. Details in AUDIT.md. Bestehende Gesamtprüfgrenzen bleiben bestehen; kein Docker-/nginx-Ende-zu-Ende-Test oder produktives Update behauptet.
+
+Authentik separat mit verpflichtendem MFA-Flow und eigener Application einrichten. Die vorbereiteten Templates sind in docs/SWAG_AUTHENTIK.md beschrieben und müssen vor externer Nutzung mit der echten Installation geprüft werden. Normale lokale Compose-Installation bleibt unverändert. Monatliche Exporte sind explizit zu aktivieren, Anleitung docs/TIME_EXPORTS.md.
+
+### Release-Manifest
+
+```json
+{"name":"DocOfHome","version":"1.11.0","base_version":"1.10.6","built_on":"2026-11-17","alembic_head":"0063","database_migration_required":false,"backup_format_version":2,"mcp_tools":59,"full_quality_gate_passed":false}
+```
+
 ## 1.10.6 – 2026-11-17
 
 ### Kundengruppen, Sortierung und BCS
