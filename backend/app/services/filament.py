@@ -61,7 +61,7 @@ class FilamentService:
         return {
             **self.config().model_dump(),
             "token_configured": bool(self.value("token")),
-            "last_sync": self.value("last_sync"),
+            "last_sync": self.value("last_complete_sync") or None,
             "last_error": self.value("last_error"),
             "last_mqtt": self.value("last_mqtt"),
             "mqtt_error": self.value("mqtt_error"),
@@ -95,10 +95,14 @@ class FilamentService:
                 )
         cloud.token = token
         uid = cloud.uid()
+        account = hashlib.sha256(f"{data.region}:{uid}".encode()).hexdigest()
+        if self.value("account") != account:
+            self.store("last_complete_sync", "")
+            self.store("last_error", "")
         self.store("token", token)
         self.store("uid", uid)
         self.store("region", data.region)
-        self.store("account", hashlib.sha256(f"{data.region}:{uid}".encode()).hexdigest())
+        self.store("account", account)
         config = self.config().model_copy(update={"region": data.region, "enabled": False})
         self.store("config", config.model_dump_json())
         self.session.commit()
@@ -367,7 +371,8 @@ class FilamentService:
                 account=self.value("account") or "legacy",
                 complete=snapshot["complete"],
             )
-            self.store("last_sync", datetime.now(UTC).isoformat())
+            if snapshot["complete"]:
+                self.store("last_complete_sync", datetime.now(UTC).isoformat())
             self.store("last_error", snapshot["warning"] or "")
             self.session.commit()
             result["warning"] = snapshot["warning"]

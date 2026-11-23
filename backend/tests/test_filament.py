@@ -488,7 +488,10 @@ def test_migration_upgrade_downgrade_and_module_choices(tmp_path, monkeypatch):
     command.upgrade(cfg, "head")
 
 
-def test_store_image_resolves_original_cloud_sku_via_official_catalog(session, monkeypatch, tmp_path):
+@pytest.mark.parametrize("jp_catalog_redirect", [False, True])
+def test_store_image_resolves_original_cloud_sku_via_official_catalog(
+    session, monkeypatch, tmp_path, jp_catalog_redirect
+):
     monkeypatch.setattr(settings, "data_dir", tmp_path)
     service = FilamentService(session)
     saved = service.save(SpoolWrite(material="PLA", variant="PLA Basic", manufacturer="Bambu Lab"))
@@ -502,7 +505,11 @@ def test_store_image_resolves_original_cloud_sku_via_official_catalog(session, m
 
     def response(req):
         calls.append(str(req.url))
-        if req.url.host == "bambu-lab-jp.myshopify.com":
+        if req.url.host == "bambu-lab-jp.myshopify.com" and jp_catalog_redirect:
+            return httpx.Response(302, headers={
+                "location": "https://jp.store.bambulab.com/products/pla-basic-filament.js"
+            })
+        if req.url.host in {"bambu-lab-jp.myshopify.com", "jp.store.bambulab.com"}:
             return httpx.Response(200, json={"variants": [
                 {"sku": "A00-P6-1.75-1000-SPLFREE", "option1": "Magenta (10202)"},
                 {"sku": "A00-P60-1.75-1000-SPL", "option1": "Other (10203)"},
@@ -516,7 +523,7 @@ def test_store_image_resolves_original_cloud_sku_via_official_catalog(session, m
     assert result.image_verified and result.shop_code == "10202"
     assert result.color_name == "Magenta"
     assert result.image_source_url.endswith("/de/products/pla-basic-filament")
-    assert len(calls) == 3
+    assert len(calls) == (4 if jp_catalog_redirect else 3)
     # Existing manual color names survive a later explicit image refresh.
     spool.color_name = "Mein Magenta"
     session.add(spool)
@@ -534,3 +541,77 @@ def test_store_cloud_sku_refuses_missing_ambiguous_or_prefix_matches():
         with httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"variants": variants}))) as client:
             with pytest.raises(ValueError):
                 resolve_shop_code(client, "pla-basic-filament", "A00-P6", cache=False)
+
+
+@pytest.mark.parametrize("include_total", [False, True])
+def test_cloud_recovers_full_inventory_when_offset_is_ignored(include_total):
+    records = [cloud_row(i) for i in range(1, 98)]
+    requests = []
+
+    def response(req):
+        limit = int(req.url.params["limit"])
+        requests.append(limit)
+        if include_total:
+            return httpx.Response(200, json={"hits": records[:limit], "total": "97"})
+        return httpx.Response(200, json={"hits": records})
+
+    result = BambuCloud("secret", transport=httpx.MockTransport(response)).spools()
+    assert result == {"spools": records, "complete": True, "warning": None}
+    assert requests[:3] == [20, 20, 100]
+
+
+def test_cloud_empty_page_does_not_override_expected_count():
+    def response(req):
+        if req.url.params["offset"] == "0":
+            return httpx.Response(200, json={"hits": [cloud_row()], "total": 2})
+        return httpx.Response(200, json={"hits": []})
+
+    result = BambuCloud("secret", transport=httpx.MockTransport(response)).spools()
+    assert not result["complete"] and "1 von 2" in result["warning"]
+
+
+def test_last_complete_sync_is_preserved_after_partial_import(session, monkeypatch):
+    service = FilamentService(session)
+    service.store("last_sync", "legacy timestamp")
+    session.commit()
+    assert service.settings()["last_sync"] is None
+    snapshot = {"spools": [cloud_row()], "complete": True, "warning": None}
+
+    class Cloud:
+        def spools(self):
+            return snapshot
+
+    monkeypatch.setattr(service, "cloud", Cloud)
+    assert service.sync()["complete"]
+    verified = service.settings()["last_sync"]
+    assert verified
+    snapshot.update(spools=[], complete=False, warning="Cloud-Teilabruf")
+    assert not service.sync()["complete"]
+    assert service.settings()["last_sync"] == verified
+    assert service.settings()["last_error"] == "Cloud-Teilabruf"
+
+
+def test_store_image_recovers_with_official_shopify_variant(session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    spool = FilamentService(session).save(
+        SpoolWrite(material="PLA", variant="PLA Basic", manufacturer="Bambu Lab", shop_code="10101")
+    )
+    picture = BytesIO()
+    Image.new("RGB", (10, 10), "black").save(picture, format="PNG")
+
+    def response(req):
+        if req.url.host == "eu.store.bambulab.com":
+            return httpx.Response(302, headers={"location": "https://example.invalid/blocked"})
+        if req.url.host == "bambulab-eu.myshopify.com":
+            if not req.url.path.endswith(".js"):
+                return httpx.Response(404)
+            return httpx.Response(200, json={"variants": [
+                {"option1": "Schwarz (10101)", "featured_image": {"src": "//cdn.shopify.com/a.png"}},
+                {"option1": "Weiß (10100)", "featured_image": {"src": "//cdn.shopify.com/b.png"}},
+            ]})
+        assert str(req.url) == "https://cdn.shopify.com/a.png"
+        return httpx.Response(200, content=picture.getvalue())
+
+    result = store_image(session, spool.id, transport=httpx.MockTransport(response))
+    assert result.image_verified and result.color_name == "Schwarz"
+    assert result.image_source_url.endswith("/de/products/pla-basic-filament-de")

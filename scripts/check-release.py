@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.11.0"
+VERSION = "1.11.1"
 
 assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == VERSION
 assert f'"version": "{VERSION}"' in (ROOT / "frontend/package.json").read_text(encoding="utf-8")
@@ -11,12 +11,13 @@ assert f'docofhome-shell-{VERSION}' in (ROOT / "frontend/public/service-worker.j
 
 source = json.loads((ROOT / "SOURCE_INFO.json").read_text(encoding="utf-8"))
 assert source["version"] == VERSION
-assert source["base_version"] == "1.10.6"
+assert source["base_version"] == "1.11.0"
 assert source["alembic_head"] == "0063"
 assert source["release_notes"] == "PROJECT_HISTORY.md"
 
 history = (ROOT / "PROJECT_HISTORY.md").read_text(encoding="utf-8")
 for marker in (
+    "## 1.11.1 – 2026-11-23",
     "## 1.11.0 – 2026-11-17",
     "Monatsexport und Authentik-Vorbereitung",
     "## 1.10.6 – 2026-11-17",

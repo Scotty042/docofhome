@@ -2,6 +2,14 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.11.1 – 2026-11-23
+
+### Filament-Sammlung
+
+- Bambu-Cloud-Abgleich versucht bei wiederholten Seiten einen größeren Abruf und zeigt den letzten vollständigen Abgleich an.
+- Store-Bilder werden bei Bedarf über alternative offizielle Bambu-Kataloge anhand der exakten Farbnummer gesucht.
+- Keine neue Datenbankmigration. Alembic-Head bleibt `0063`.
+
 ## 1.11.0 – 2026-11-17
 
 ### Monatsexport und Authentik-Vorbereitung

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import ssl
+from dataclasses import dataclass
 from threading import Event
 from typing import Any
 
@@ -10,6 +11,16 @@ import httpx
 
 class BambuError(ValueError):
     pass
+
+
+@dataclass
+class SpoolPages:
+    spools: list[dict[str, Any]]
+    complete: bool = False
+    warning: str | None = None
+    repeated: bool = False
+    unpaginated: bool = False
+    total: int | None = None
 
 
 class BambuCloud:
@@ -70,12 +81,59 @@ class BambuCloud:
         return value
 
     def spools(self) -> dict[str, Any]:
+        snapshot = self._spool_pages(20)
+        if snapshot.repeated:
+            # Restart at zero so a larger page can fetch additional IDs even
+            # when the cloud ignores nonzero offsets.
+            try:
+                retry = self._spool_pages(100)
+            except BambuError:
+                retry = None
+            first_ids = {str(row["id"]) for row in snapshot.spools}
+            retry_ids = {str(row["id"]) for row in retry.spools} if retry else set()
+            if (
+                retry
+                and retry.complete
+                and first_ids <= retry_ids
+                and (snapshot.total is None or snapshot.total == len(retry_ids))
+            ):
+                snapshot = retry
+            elif (
+                retry
+                and snapshot.unpaginated
+                and retry.repeated
+                and snapshot.total is None
+                and retry.total is None
+                and first_ids == retry_ids
+            ):
+                # Studio reads the stock list at offset=0, limit=20 as a snapshot.
+                # Require an oversized first response and identical IDs on the
+                # larger retry before accepting a response that ignores paging.
+                snapshot = SpoolPages(retry.spools, complete=True)
+            else:
+                if retry:
+                    by_id = {str(row["id"]): row for row in snapshot.spools + retry.spools}
+                    snapshot.spools = list(by_id.values())
+                snapshot.warning = (
+                    f"Bambu-Cloud-Abgleich unvollständig: {len(snapshot.spools)} Rollen empfangen. "
+                    "Die Cloud liefert beim Blättern dieselben Rollen."
+                )
+        return {
+            "spools": snapshot.spools,
+            "complete": snapshot.complete,
+            "warning": snapshot.warning,
+        }
+
+    def _spool_pages(self, limit: int) -> SpoolPages:
         items: dict[str, dict[str, Any]] = {}
         offset = 0
         warning = None
+        expected_total = None
+        repeated = False
+        unpaginated = False
         for _page in range(250):
             try:
-                result = self.request("GET", self.path, params={"offset": offset, "limit": 20})
+                result = self.request("GET", self.path, params={"offset": offset, "limit": limit})
             except BambuError as exc:
                 if not items:
                     raise
@@ -87,34 +145,58 @@ class BambuCloud:
             ):
                 warning = "Unbekanntes Cloud-Datenformat; Vollständigkeit nicht bestätigt"
                 break
-            if not hits:
-                return {"spools": list(items.values()), "complete": True, "warning": None}
+            total = result.get("total")
+            if isinstance(total, dict):
+                total = total.get("value")
+            if (
+                isinstance(total, str)
+                and total.isascii()
+                and total.isdecimal()
+                and len(total) <= 12
+            ):
+                total = int(total)
+            if type(total) is int and total >= 0:
+                if expected_total is not None and total != expected_total:
+                    warning = "Cloud-Rollenanzahl änderte sich während des Abgleichs"
+                    break
+                expected_total = total
             new = 0
             for row in hits:
                 key = str(row["id"])
                 if key not in items:
                     items[key] = row
                     new += 1
-            total = result.get("total")
-            if isinstance(total, dict):
-                total = total.get("value")
-            if isinstance(total, int) and len(items) >= total:
-                return {"spools": list(items.values()), "complete": True, "warning": None}
+            if expected_total is not None and len(items) > expected_total:
+                warning = "Cloud-Rollenanzahl widerspricht den gelieferten Daten"
+                break
+            if len(items) == expected_total or (not hits and expected_total is None):
+                return SpoolPages(list(items.values()), complete=True)
+            if not hits:
+                warning = f"Bambu lieferte nur {len(items)} von {expected_total} Cloud-Rollen"
+                break
+            if offset == 0:
+                unpaginated = len(items) == len(hits) and len(hits) > limit
             if not new:
-                warning = (
-                    "Wiederholte Cloud-Seite erkannt; Teilbestand übernommen, "
-                    "Vollständigkeit unbestätigt"
+                repeated = True
+                unpaginated = (
+                    unpaginated
+                    and len(hits) == len(items) == offset
+                    and len({str(row["id"]) for row in hits}) == len(items)
                 )
                 break
+            if offset:
+                unpaginated = False
             offset += len(hits)
             if len(items) >= 5000:
                 warning = "Bestandsgrenze erreicht; Vollständigkeit nicht bestätigt"
                 break
-        return {
-            "spools": list(items.values()),
-            "complete": False,
-            "warning": warning or "Seitenlimit erreicht",
-        }
+        return SpoolPages(
+            list(items.values()),
+            warning=warning or "Seitenlimit erreicht",
+            repeated=repeated,
+            unpaginated=unpaginated,
+            total=expected_total,
+        )
 
     def delete_spool(self, cloud_id: str) -> None:
         self.request("DELETE", self.path + "/batch", json={"ids": [cloud_id]})
