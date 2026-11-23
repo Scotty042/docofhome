@@ -14,13 +14,13 @@ function page() {
   const config = { ...emptyFilamentConfig(), token_configured: false, last_sync: null, last_error: null, last_mqtt: null, mqtt_error: null }
   const storeImage = vi.fn(async (id: string) => ({id, image_url: '/local-image.png'})), create = vi.fn(async () => ({})), loginApi = vi.fn(async () => ({ connected: true, verification_required: false }))
   let leave = () => true
-  const sandbox = { ref, computed, watch() {}, onMounted() {}, onBeforeUnmount() {}, onBeforeRouteLeave(fn: () => boolean) { leave = fn }, useRoute: () => ({ params: {} }),
+  const sandbox = { Error, ref, computed, watch() {}, onMounted() {}, onBeforeUnmount() {}, onBeforeRouteLeave(fn: () => boolean) { leave = fn }, useRoute: () => ({ params: {} }),
     window: { addEventListener() {},removeEventListener() {},confirm:vi.fn(() => false) },
     emptySpool,editableSpool,emptyFilamentConfig,editableFilamentConfig,
     filamentApi: { create,storeImage,login:loginApi,list:async () => [],slots:async () => [],settings:async () => config }, locationApi: {} }
   vm.createContext(sandbox)
   const compiled=ts.transpileModule(script,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
-  const state=vm.runInContext(compiled+'\n({ form, items, material, manufacturer, archive, reorder, visible, loading, savedConfig, config, dirty, open, save, login, connect, unload, fillStoreImages, imageIssues })',sandbox)
+  const state=vm.runInContext(compiled+'\n({ form, items, material, manufacturer, archive, reorder, visible, loading, savedConfig, config, dirty, open, save, login, connect, unload, fillStoreImages, imageIssues, detail, error, showDetail, detailError, detailInfo, storeImage })',sandbox)
   state.loading.value=false; state.savedConfig.value=JSON.stringify(state.config.value)
   return {state,create,storeImage,loginApi,leave:() => leave()}
 }
@@ -76,6 +76,23 @@ describe('filament collection',() => {
     expect(storeImage).toHaveBeenCalledTimes(2)
     expect(state.imageIssues.value[0]).toContain('FIL-a')
     expect(state.items.value.find((v: FilamentSpool)=>v.id==='b').image_url).toBe('/local-image.png')
+  })
+  it('shows image errors and successful retries inside the open detail dialog', async () => {
+    const { state, storeImage } = page()
+    const row = { ...emptySpool(), id: 'a', manufacturer: 'Bambu Lab' }
+    state.items.value = [row]
+    state.showDetail(row)
+    storeImage.mockRejectedValueOnce(new Error('Cloud-Produktcode unbekannt'))
+    await state.storeImage(row)
+    expect(state.detailError.value).toBe('Cloud-Produktcode unbekannt')
+    expect(state.error.value).toBe('')
+    await state.storeImage(row)
+    expect(state.detailError.value).toBe('')
+    expect(state.detailInfo.value).toBe('Farbbild lokal gespeichert')
+    expect(state.detail.value.image_url).toBe('/local-image.png')
+    expect(state.items.value[0].image_url).toBe('/local-image.png')
+    state.showDetail({ ...row, id: 'b' })
+    expect(state.detailInfo.value).toBe('')
   })
   it('loads all inventory pages',async () => {
     const fetch=vi.fn().mockResolvedValueOnce({ok:true,status:200,json:async () => ({items:[{id:'a'}],has_more:true,next_offset:1})}).mockResolvedValueOnce({ok:true,status:200,json:async () => ({items:[{id:'b'}],has_more:false,next_offset:null})})

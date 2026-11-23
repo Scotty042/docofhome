@@ -2,6 +2,14 @@
 
 Diese Datei bündelt Changelog, Release Notes, Implementation Summaries, Release-Manifeste und Validierungsnotizen. Seit Version 1.7.14 werden keine separaten Dateien pro Release mehr angelegt.
 
+## 1.11.2 – 2026-11-23
+
+### Filament-Sammlung
+
+- Lokale Zuordnung anhand der Bambu-Studio-Farbdaten, wenn der Shop die Cloud-Produktnummer nicht auflösen kann.
+- Bildmeldungen erscheinen im kompakten Rollendialog. Ein erfolgreich geladenes Bild wird sofort angezeigt.
+- Keine neue Datenbankmigration. Alembic-Head bleibt `0063`.
+
 ## 1.11.1 – 2026-11-23
 
 ### Filament-Sammlung

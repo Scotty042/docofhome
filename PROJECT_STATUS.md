@@ -1,7 +1,7 @@
 # DocOfHome – Projektstatus
 
 Stand: 23. November 2026  
-Release: **1.11.1**  
+Release: **1.11.2**  
 Alembic-Head: **`0063`**
 
 DocOfHome ist als selbst gehostete Hausdokumentation mit den Bereichen Assets, Elektro, Netzwerk, Verbrauch, Wartung, Kochbuch, Bilder, Dokumente und Dienste/Container aufgebaut. Die Module sind separat aktivierbar. Aktivierte Module bleiben in der gruppierten Navigation erreichbar; die Hauptmenü-Auswahl steuert den Schnellzugriff.

@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 import time
+from functools import lru_cache
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
@@ -116,12 +117,20 @@ def product_variants(client: httpx.Client, url: str, *, cache: bool) -> list[dic
     return variants
 
 
+@lru_cache(maxsize=1)
+def studio_color_codes() -> dict[str, list[str]]:
+    # Bambu Studio combines its filament ID (without GF) with the color code.
+    path = Path(__file__).with_name("bambu_color_codes.json")
+    return dict(json.loads(path.read_text(encoding="utf-8"))["codes"])
+
+
 def resolve_shop_code(client: httpx.Client, handle: str, product_code: str, *, cache: bool) -> str:
     # The Japanese catalog exposes the manufacturer SKU instead of a numeric SKU.
     if not re.fullmatch(r"[A-Z]\d{2}-[A-Z]\d{1,2}", product_code):
         raise ValueError("Keine eindeutige Shop-Farbnummer; Farbnummer bitte ergänzen")
     error = None
     found_catalog = False
+    codes: set[str] = set()
     for host in ("bambu-lab-jp.myshopify.com", "jp.store.bambulab.com"):
         try:
             variants = product_variants(client, f"https://{host}/products/{handle}.js", cache=cache)
@@ -129,7 +138,7 @@ def resolve_shop_code(client: httpx.Client, handle: str, product_code: str, *, c
             error = exc
             continue
         found_catalog = True
-        codes = set()
+        codes.clear()
         for variant in variants:
             if str(variant.get("sku", "")).upper().startswith(product_code + "-"):
                 match = re.search(r"\((\d{5})\)", str(variant.get("option1", "")))
@@ -139,8 +148,16 @@ def resolve_shop_code(client: httpx.Client, handle: str, product_code: str, *, c
             return codes.pop()
         if codes:
             break
+    if not codes:
+        family, color = product_code.split("-")
+        normalized = f"{family}-{color[0]}{int(color[1:])}"
+        studio_matches = studio_color_codes().get(normalized, [])
+        if len(studio_matches) == 1:
+            return studio_matches[0]
     if not found_catalog:
-        raise ValueError(f"Cloud-Produktcode konnte nicht aufgelöst werden ({error})")
+        raise ValueError(
+            f"Cloud-Produktcode {product_code} unbekannt ({error}). Shop-Farbnummer ergänzen."
+        )
     raise ValueError("Cloud-Produktcode nicht eindeutig im Store; Shop-Farbnummer bitte ergänzen")
 
 

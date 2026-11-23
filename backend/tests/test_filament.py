@@ -534,13 +534,13 @@ def test_store_image_resolves_original_cloud_sku_via_official_catalog(
 
 def test_store_cloud_sku_refuses_missing_ambiguous_or_prefix_matches():
     from app.services.filament_images import resolve_shop_code
-    for variants in [[], [{"sku": "A00-P60-1.75-1000-SPL", "option1": "Wrong (10203)"}], [
-        {"sku": "A00-P6-1.75-1000-SPL", "option1": "Magenta (10202)"},
-        {"sku": "A00-P6-1.75-1000-SPLFREE", "option1": "Different (10203)"},
+    for variants in [[], [{"sku": "A99-P60-1.75-1000-SPL", "option1": "Wrong (10203)"}], [
+        {"sku": "A99-P6-1.75-1000-SPL", "option1": "Magenta (10202)"},
+        {"sku": "A99-P6-1.75-1000-SPLFREE", "option1": "Different (10203)"},
     ]]:
         with httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"variants": variants}))) as client:
             with pytest.raises(ValueError):
-                resolve_shop_code(client, "pla-basic-filament", "A00-P6", cache=False)
+                resolve_shop_code(client, "pla-basic-filament", "A99-P6", cache=False)
 
 
 @pytest.mark.parametrize("include_total", [False, True])
@@ -615,3 +615,32 @@ def test_store_image_recovers_with_official_shopify_variant(session, monkeypatch
     result = store_image(session, spool.id, transport=httpx.MockTransport(response))
     assert result.image_verified and result.color_name == "Schwarz"
     assert result.image_source_url.endswith("/de/products/pla-basic-filament-de")
+
+
+def test_store_image_resolves_bambu_studio_code_when_japanese_stores_return_404(
+    session, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    service = FilamentService(session)
+    saved = service.save(SpoolWrite(material="PLA", variant="PLA Basic", manufacturer="Bambu Lab"))
+    spool = service.get(saved.id)
+    spool.cloud_product_code = "A00-P06"
+    session.commit()
+    picture = BytesIO()
+    Image.new("RGB", (10, 10), "magenta").save(picture, format="PNG")
+
+    def response(req):
+        if req.url.host in {"bambu-lab-jp.myshopify.com", "jp.store.bambulab.com"}:
+            return httpx.Response(404)
+        if req.url.host == "eu.store.bambulab.com":
+            product = {"hasVariant": [
+                {"name": "PLA Basic - Magenta (10202)", "image": "https://store.bblcdn.eu/p.png"}
+            ]}
+            return httpx.Response(
+                200, text='<script id="product-jsonld">' + json.dumps(product) + '</script>'
+            )
+        assert req.url.host == "store.bblcdn.eu"
+        return httpx.Response(200, content=picture.getvalue())
+
+    result = store_image(session, spool.id, transport=httpx.MockTransport(response))
+    assert result.image_verified and result.shop_code == "10202" and result.color_name == "Magenta"
